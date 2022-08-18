@@ -1,0 +1,343 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {
+            "name": "IBXC Official Website",
+            "url": "https://ibax.io",
+            "email": "support@ibax.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "https://github.com/IBAX-io/go-ibax/blob/main/LICENSE"
+        }
+    },
+    "paths": {
+        "/api/get_wallettotal": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    ""
+                ],
+                "summary": "Find a list of all currencies under the account",
+                "responses": {
+                    "200": {
+                        "description": "{\"code\":200,\"data\":{\"id\":1,\"name\":\"admin\",\"alias\":\"\",\"email\":\"admin@block.vc\",\"password\":\"\",\"roles\":[],\"openid\":\"\",\"active\":true,\"is_admin\":true},\"message\":\"success\"}}",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v2/dashboard": {
+            "get": {
+                "description": "get dashboard statistical data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "get dashboard",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/controllers.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ScanOutRet"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/admin/{id}": {
+            "get": {
+                "description": "common_transaction_search",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "common_transaction_search"
+                ],
+                "summary": "common_transaction_search",
+                "responses": {
+                    "200": {
+                        "description": "{\"code\":200,\"data\":{\"id\":1,\"name\":\"admin\",\"alias\":\"\",\"email\":\"admin@block.vc\",\"password\":\"\",\"roles\":[],\"openid\":\"\",\"active\":true,\"is_admin\":true},\"message\":\"success\"}}",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/getmanagefile/{file}": {
+            "get": {
+                "responses": {}
+            }
+        }
+    },
+    "definitions": {
+        "controllers.Response": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "any"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.BlockRet": {
+            "type": "object",
+            "properties": {
+                "block_id": {
+                    "type": "integer"
+                },
+                "max_block_size": {
+                    "type": "string"
+                },
+                "max_block_size_id": {
+                    "type": "integer"
+                },
+                "max_tps": {
+                    "type": "integer"
+                },
+                "max_tps_id": {
+                    "type": "integer"
+                },
+                "storage_capacitys": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CandidateHonorNodeRet": {
+            "type": "object",
+            "properties": {
+                "candidate_node": {
+                    "type": "integer"
+                },
+                "node_stake_amounts": {
+                    "type": "string"
+                },
+                "node_vote": {
+                    "type": "integer"
+                },
+                "twenty_four_node": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.CastNodeRet": {
+            "type": "object",
+            "properties": {
+                "bandwidth_traffic": {
+                    "type": "string"
+                },
+                "cast_capacitys": {
+                    "type": "string"
+                },
+                "cast_nodes": {
+                    "type": "integer"
+                },
+                "distribution_region": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.CirculationsRet": {
+            "type": "object",
+            "properties": {
+                "circulations_amount": {
+                    "type": "string"
+                },
+                "today_circulations_amount": {
+                    "type": "number"
+                },
+                "total_amount": {
+                    "type": "string"
+                },
+                "twenty_four_amount": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.EcoLibsRet": {
+            "type": "object",
+            "properties": {
+                "contract": {
+                    "type": "integer"
+                },
+                "dao_govern": {
+                    "type": "integer"
+                },
+                "eco_token_total": {
+                    "type": "integer"
+                },
+                "ecosystems": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.KeysRet": {
+            "type": "object",
+            "properties": {
+                "has_token_key": {
+                    "type": "integer"
+                },
+                "key_count": {
+                    "type": "integer"
+                },
+                "month_active_key": {
+                    "type": "integer"
+                },
+                "twenty_four_key": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.NftMinerRet": {
+            "type": "object",
+            "properties": {
+                "block_reward": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "halve_number": {
+                    "type": "integer"
+                },
+                "stake_amounts": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ScanOutRet": {
+            "type": "object",
+            "properties": {
+                "block_id": {
+                    "description": "Block Id",
+                    "type": "integer"
+                },
+                "block_info": {
+                    "$ref": "#/definitions/models.BlockRet"
+                },
+                "block_sizes": {
+                    "description": "Block Size",
+                    "type": "integer"
+                },
+                "block_transcation_size": {
+                    "type": "integer"
+                },
+                "block_transcations": {
+                    "type": "integer"
+                },
+                "candidate_node_info": {
+                    "$ref": "#/definitions/models.CandidateHonorNodeRet"
+                },
+                "cast_node_info": {
+                    "description": "todo:Need Add",
+                    "$ref": "#/definitions/models.CastNodeRet"
+                },
+                "circulations_info": {
+                    "$ref": "#/definitions/models.CirculationsRet"
+                },
+                "clb_nodes": {
+                    "type": "integer"
+                },
+                "consensus_mode": {
+                    "type": "integer"
+                },
+                "current_version": {
+                    "type": "string"
+                },
+                "eco_libs_info": {
+                    "$ref": "#/definitions/models.EcoLibsRet"
+                },
+                "ecosystem_id": {
+                    "type": "integer"
+                },
+                "guardian_nodes": {
+                    "type": "integer"
+                },
+                "hash": {
+                    "type": "string"
+                },
+                "key_id": {
+                    "type": "string"
+                },
+                "keys_info": {
+                    "$ref": "#/definitions/models.KeysRet"
+                },
+                "mint_amount": {
+                    "type": "string"
+                },
+                "nft_miner_info": {
+                    "$ref": "#/definitions/models.NftMinerRet"
+                },
+                "node_position": {
+                    "type": "integer"
+                },
+                "rollbacks_hash": {
+                    "type": "string"
+                },
+                "sub_nodes": {
+                    "type": "integer"
+                },
+                "time": {
+                    "type": "integer"
+                },
+                "total_counts": {
+                    "description": "total count",
+                    "type": "integer"
+                },
+                "tx_info": {
+                    "$ref": "#/definitions/models.TxRet"
+                }
+            }
+        },
+        "models.TxRet": {
+            "type": "object",
+            "properties": {
+                "single_day_max_tx": {
+                    "type": "integer"
+                },
+                "total_tx": {
+                    "type": "integer"
+                },
+                "twenty_four_tx": {
+                    "type": "integer"
+                },
+                "week_average_tx": {
+                    "type": "integer"
+                }
+            }
+        }
+    }
+}
