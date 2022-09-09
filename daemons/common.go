@@ -62,7 +62,6 @@ func StartDaemons(ctx context.Context) {
 		if err != nil {
 			ExitCh <- fmt.Errorf("Init transaction data err:%s\n", err.Error())
 		}
-		models.LoadContractsReceive()
 	}()
 	err := models.InitCountryLocator()
 	if err != nil {
@@ -73,5 +72,7 @@ func StartDaemons(ctx context.Context) {
 	if err != nil {
 		ExitCh <- fmt.Errorf("GeoIp Database Init err:%s\n", err.Error())
 	}
+
+	models.InitEcosystemInfo()
 
 }

@@ -7,6 +7,7 @@ package controllers
 
 import (
 	"github.com/IBAX-io/go-explorer/models"
+	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 )
@@ -26,6 +27,29 @@ func GetAccountList(c *gin.Context) {
 	}
 	ts := &models.Key{}
 	rets, err := ts.GetAccountList(req.Page, req.Limit, req.Order, req.Ecosystem)
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+
+	ret.Return(rets, CodeSuccess)
+	JsonResponse(c, ret)
+	return
+
+}
+
+func GetAccountListChartHandler(c *gin.Context) {
+	ret := &Response{}
+	idStr := c.Param("ecosystem")
+	ecosystem := converter.StrToInt64(idStr)
+	if ecosystem <= 0 {
+		ret.ReturnFailureString("request params invalid")
+		JsonResponse(c, ret)
+		return
+	}
+
+	rets, err := models.GetAccountListChart(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)

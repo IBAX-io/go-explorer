@@ -21,6 +21,8 @@ const (
 	SysTokenSymbol   = "IBXC"
 	SysEcosystemName = "platform ecosystem"
 	TotalSupplyToken = "2100000000000000000000"
+	UtxoTx           = "UTXO_Tx"
+	UtxoTransfer     = "UTXO_Transfer"
 )
 
 var (

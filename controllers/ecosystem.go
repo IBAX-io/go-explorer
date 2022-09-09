@@ -51,7 +51,7 @@ func GetPlatformEcosystemParam(c *gin.Context) {
 		return
 	}
 
-	var ap models.SystemParameter
+	var ap models.PlatformParameter
 	num, rs, err := ap.FindAppParameters(req.Page, req.Limit, req.Search, req.Order)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
@@ -206,7 +206,7 @@ func GetEcosystemDetailTxHandler(c *gin.Context) {
 		txList[i].Time = models.MsToSeconds(ts[i].Timestamp)
 		txList[i].Contract = ts[i].ContractName
 		if txList[i].Contract == "" {
-			txList[i].Contract = models.GetTxContractNameByHash(ts[i].Hash)
+			txList[i].Contract = models.GetUtxoTxContractNameByHash(ts[i].Hash)
 		}
 		txList[i].Address = converter.AddressToString(ts[i].Address)
 		txList[i].Hash = hex.EncodeToString(ts[i].Hash)

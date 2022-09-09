@@ -52,6 +52,7 @@ type ScanOut struct {
 	TwentyFourTx    int64
 	WeekAverageTx   int64
 	MaxActiveEcoLib string
+	SingleDayMaxTx  int64
 
 	Circulations            string
 	TodayCirculationsAmount float64
@@ -62,7 +63,9 @@ type ScanOut struct {
 	HalveNumber     int64
 	NftStakeAmounts string
 
-	EcosystemCount int64
+	EcoLibsInfo       EcoLibsRet
+	KeysInfo          KeysRet
+	CandidateNodeInfo CandidateHonorNodeRet
 }
 
 type ScanOutRet struct {
@@ -275,12 +278,6 @@ func (m *ScanOut) Insert_Redis() error {
 		return err
 	}
 
-	//rd = RedisParams{
-	//	Key:   ScanOutStPrefix + strconv.FormatInt(m.Blockid, 10),
-	//	Value: string(val),
-	//}
-	//err = rd.Set()
-
 	return err
 }
 
@@ -308,23 +305,13 @@ func GetScanOutDataToRedis() error {
 	return err
 }
 
-func initGlobalSwitch() {
+func InitGlobalSwitch() {
 	NodeReady = CandidateTableExist()
 	NftMinerReady = NftMinerTableIsExist()
 	VotingReady = VotingTableExist()
 }
 
 func (ret *ScanOut) Changes() error {
-	//var mh MineIncomehistory
-	//f, err := mh.GetID(ret.Blockid)
-	//if err != nil {
-	//	return err
-	//}
-	//if f {
-	//	ret.TotalCounts = mh.Nonce
-	//}
-	initGlobalSwitch()
-
 	var ne NftMinerItems
 	powerCount, err := ne.GetAllPower()
 	if err != nil {
@@ -350,11 +337,9 @@ func (ret *ScanOut) Changes() error {
 	ret.Circulations = tm.String()
 	ret.NftStakeAmounts = nftStaking.String()
 
-	systemCount, err := GetAllSystemCount()
-	if err != nil {
-		return errors.New("GetAllSystemCount failed:" + err.Error())
-	}
-	ret.EcosystemCount = systemCount
+	ret.EcoLibsInfo = getEcoLibsInfo()
+	ret.KeysInfo = getScanOutKeyInfo(1)
+	ret.CandidateNodeInfo = getScanOutNodeInfo()
 
 	var mst MinePledgeStatus
 	honor, casts, nftCount, err := mst.GetCastNodeandGuardianNode()
@@ -391,6 +376,7 @@ func (ret *ScanOut) Changes() error {
 	ret.TwentyFourTx = getTwentyFourTx()
 	ret.WeekAverageTx = getWeekAverageValueTx()
 	ret.MaxActiveEcoLib = GetActiveEcoLibs()
+	ret.SingleDayMaxTx = getSingleDayMaxTx()
 
 	return nil
 }
@@ -514,26 +500,17 @@ func (m *ScanOut) GetRedisdashboard() (*ScanOutRet, error) {
 		return &rets, nil
 	}
 
-	//var bc BlockID
-	//fc, _ := bc.GetbyName(consts.TransactionsMax)
-	//if fc {
-	//	rets.QueueTranscations = bc.ID
-	//}
-
 	rets.NodePosition = m.NodePosition
 	rets.ConsensusMode = m.ConsensusMode
 
 	rets.Blockid = m.Blockid
 	rets.Hash = m.Hash
 	rets.RollbacksHash = m.RollbacksHash
-	//rets.Tx    = m.Blockid
 	rets.KeyID = m.KeyID
-	//rets.NodePosition = m.NodePosition
 	rets.Time = m.Time
 	rets.CurrentVersion = m.CurrentVersion
 
 	rets.TotalCounts = m.TotalCounts
-	//rets.TotalCapacitys = m.b
 	rets.BlockSizes = m.BlockSizes
 	rets.BlockTranscations = m.BlockTransactions
 	rets.BlockTranscationSize = m.BlockTransactionSize
@@ -551,7 +528,7 @@ func (m *ScanOut) GetRedisdashboard() (*ScanOutRet, error) {
 
 	rets.TxInfo.TotalTx = m.TotalTx
 	rets.TxInfo.TwentyFourTx = m.TwentyFourTx
-	rets.TxInfo.SingleDayMaxTx = getSingleDayMaxTx()
+	rets.TxInfo.SingleDayMaxTx = m.SingleDayMaxTx
 	rets.TxInfo.WeekAverageTx = m.WeekAverageTx
 
 	rets.CirculationsInfo.Circulations = m.Circulations
@@ -563,12 +540,9 @@ func (m *ScanOut) GetRedisdashboard() (*ScanOutRet, error) {
 	rets.NftMinerInfo.BlockReward = m.NftBlockReward
 	rets.NftMinerInfo.HalveNumber = m.HalveNumber
 	rets.NftMinerInfo.StakeAmounts = m.NftStakeAmounts
-
-	rets.EcoLibsInfo.Ecosystems = m.EcosystemCount
-	rets.EcoLibsInfo.EcoTokenTotal, rets.EcoLibsInfo.Contract, rets.EcoLibsInfo.DaoGovern = getEcoLibsInfo()
-
-	rets.KeysInfo = getScanOutKeyInfo(1)
-	rets.CandidateNodeInfo.CandidateNode, rets.CandidateNodeInfo.NodeVote, rets.CandidateNodeInfo.TwentyFourNode, rets.CandidateNodeInfo.NodeStakeAmounts = getScanOutNodeInfo()
+	rets.EcoLibsInfo = m.EcoLibsInfo
+	rets.KeysInfo = m.KeysInfo
+	rets.CandidateNodeInfo = m.CandidateNodeInfo
 
 	return &rets, err
 }
@@ -833,29 +807,40 @@ func getHalveNumber() (int64, float64) {
 
 }
 
-func getEcoLibsInfo() (int64, int64, int64) {
-	contractNum := getAllContracts()
+func getEcoLibsInfo() EcoLibsRet {
+	var rets EcoLibsRet
 
 	var ecosystems Ecosystem
+	if !HasTableOrView(nil, ecosystems.TableName()) {
+		return rets
+	}
+
+	contractNum := getAllContracts()
 	var symbolTotal int64
 	var daoGovern int64
-	if !HasTableOrView(nil, ecosystems.TableName()) {
-		return 0, 0, 0
+	var total int64
+
+	if err := GetDB(nil).Table(ecosystems.TableName()).Count(&total).Error; err != nil {
+		return rets
 	}
 
 	err := GetDB(nil).Table(ecosystems.TableName()).Where("id = 1 or token_symbol != ''").Count(&symbolTotal).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getAllTokenCount symbolTotal failed")
-		return 0, 0, 0
+		return rets
 	}
 
 	err = GetDB(nil).Table(ecosystems.TableName()).Where("control_mode = 2").Count(&daoGovern).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getAllTokenCount daoGovern failed")
-		return 0, 0, 0
+		return rets
 	}
+	rets.DaoGovern = daoGovern
+	rets.Contract = contractNum
+	rets.EcoTokenTotal = symbolTotal
+	rets.Ecosystems = total
 
-	return symbolTotal, contractNum, daoGovern
+	return rets
 }
 
 func getScanOutKeyInfo(ecosystem int64) KeysRet {
@@ -918,42 +903,43 @@ func idIsRepeat(id int64, list []int64) bool {
 	return false
 }
 
-func getScanOutNodeInfo() (candidate, nodeVote, twentyFour int64, stakeAmounts string) {
+func getScanOutNodeInfo() CandidateHonorNodeRet {
+	var rets CandidateHonorNodeRet
 	if !NodeReady {
-		return
+		return rets
 	}
 	var nodeStakeAmounts SumAmount
 	var vote SumAmount
 
 	var cn CandidateNodeRequests
 	var ds CandidateNodeDecisions
-	if err := GetDB(nil).Table(cn.TableName()).Where("deleted = 0").Count(&candidate).Error; err != nil {
+	if err := GetDB(nil).Table(cn.TableName()).Where("deleted = 0").Count(&rets.CandidateNode).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get candidate failed")
-		return
+		return rets
 	}
 
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	nowDay := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
-	if err := GetDB(nil).Table(cn.TableName()).Where("deleted = 0 AND date_created > ?", nowDay.Unix()).Count(&twentyFour).Error; err != nil {
+	if err := GetDB(nil).Table(cn.TableName()).Where("deleted = 0 AND date_created > ?", nowDay.Unix()).Count(&rets.TwentyFourNode).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get twenty Four failed")
-		return
+		return rets
 	}
 
 	if err := GetDB(nil).Table(cn.TableName()).Select("sum(earnest_total)").Where("deleted = 0").Take(&nodeStakeAmounts).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get node Stake Amounts failed")
-		return
+		return rets
 	}
-	stakeAmounts = nodeStakeAmounts.Sum.String()
+	rets.NodeStakeAmounts = nodeStakeAmounts.Sum.String()
 
 	if err := GetDB(nil).Table(ds.TableName()).Select("sum(earnest)").Where(`decision_type = 1 AND decision <> 3 
 		AND request_id IN (SELECT id FROM "1_candidate_node_requests" WHERE deleted = 0)`).Take(&vote).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get node Vote failed")
-		return
+		return rets
 	}
 	moneyDec := decimal.NewFromInt(1e12)
-	nodeVote = vote.Sum.Div(moneyDec).IntPart()
+	rets.NodeVote = vote.Sum.Div(moneyDec).IntPart()
 
-	return
+	return rets
 }
 
 func getDatabaseSize() (size string, err error) {

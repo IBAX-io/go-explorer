@@ -34,6 +34,10 @@ type DaysActiveReport struct {
 	TxAmount decimal.Decimal `gorm:"column:tx_amount"`
 }
 
+var (
+	getDailyActiveReportListEnd bool = true
+)
+
 func (dt *DailyActiveReport) TableName() string {
 	return "daily_active_report"
 }
@@ -51,25 +55,10 @@ func (p *DailyActiveReport) CreateTable() (err error) {
 func InitDailyActiveReport() error {
 	var (
 		dt DailyActiveReport
-		f  bool
 	)
 	err := dt.CreateTable()
 	if err != nil {
 		return err
-	}
-	f, err = dt.GetLast()
-	if err != nil {
-		return err
-	}
-	if !f {
-		//InsertList
-		list, err := GetDailyActiveReportList()
-		if err != nil {
-			return err
-		}
-		if len(list) > 0 {
-			return dt.InsertList(list)
-		}
 	}
 	return nil
 }
@@ -124,12 +113,9 @@ func InsertDailyActiveReport() {
 		lastTime := time.Unix(dt.Time, 0)
 		diffDay := int(now.Sub(lastTime).Hours() / 24)
 		var lastTotalKey = dt.TotalKey
-		//diffHour := now.Hour() - lastTime.Hour()
-		//fmt.Printf("dt time:%d,now time:%d\n", lastTime.Unix(), now.Unix())
-		//if diffHour > 24 {
-		//	diffDay = diffHour / 24
-		//}
+		//fmt.Printf("dt time:%s,now time:%s\n", lastTime.String(), now.String())
 		//fmt.Printf("diffDay:%d\n", diffDay)
+
 		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		if diffDay > 1 {
 			for i := 0; i < diffDay; i++ {
@@ -200,10 +186,19 @@ func InsertDailyActiveReport() {
 		getActiveReportToRedis("one_year")
 		getActiveReportToRedis("all")
 	} else {
-		err := InitDailyActiveReport()
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Init Daily Active Report List Failed")
-			return
+		if getDailyActiveReportListEnd {
+			list, err := GetDailyActiveReportList()
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Get Daily Active Report List Failed")
+				return
+			}
+			if len(list) > 0 {
+				err = dt.InsertList(list)
+				if err != nil {
+					log.WithFields(log.Fields{"error": err}).Error("Daily Active Report Insert List Failed")
+					return
+				}
+			}
 		}
 	}
 }
@@ -223,16 +218,19 @@ func GetTimeLineDaysActiveReport(st, ed int64) (DaysActiveReport, bool, error) {
 		return ratio, f, nil
 	}
 
-	f, err = isFound(GetDB(nil).Raw(fmt.Sprintf(`SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+3,0) AS total_key,CASE WHEN (h2.num > 0 AND h3.num > 0) THEN 
+	f, err = isFound(GetDB(nil).Raw(fmt.Sprintf(`
+SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+3,0) AS total_key,CASE WHEN (h2.num > 0 AND h3.num > 0) THEN 
 	round(
 		h3.num * 100 / h2.num , 2) 
 	ELSE 
 		0
 	END AS ratio,h2.tx_number,h2.tx_amount
-	
+
 	FROM (
-		(SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS ds,count(1) tx_number,sum(amount) tx_amount FROM "1_history" WHERE 
-		created_at >= %d AND created_at < %d GROUP BY ds) AS h1
+			(
+				SELECT to_char(to_timestamp(tx_time),'yyyy-MM-dd') AS ds,sum(amount)tx_amount
+				FROM transaction_data WHERE ecosystem = 1 AND tx_time >= %d AND tx_time < %d GROUP BY ds ORDER BY ds desc
+			)AS h1
 		
 			LEFT JOIN(
 				WITH rollback_tx AS(
@@ -245,61 +243,10 @@ func GetTimeLineDaysActiveReport(st, ed int64) (DaysActiveReport, bool, error) {
 					(SELECT SUM(num) FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
 				FROM rollback_tx AS rk1 
 			) AS rk ON (h1.ds = rk.days)
-	
-		) AS h2 
-		
-	LEFT JOIN(
-			SELECT h1.days,count(1)as num FROM(
-					SELECT sender_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" 
-					WHERE sender_id <> 0 AND ecosystem = 1 AND created_at >= %d AND created_at < %d GROUP BY sender_id,days
-					 UNION 
-					SELECT recipient_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" 
-					WHERE recipient_id <> 0 AND ecosystem = 1 AND created_at >= %d AND created_at < %d GROUP BY recipient_id,days
-			) AS h1 GROUP BY h1.days
-			
-	) AS h3 ON(h3.days = h2.ds)
-	
-	ORDER BY h2.ds DESC`, st, ed, st, ed, st, ed)).First(&ratio))
-	return ratio, f, err
-}
 
-func GetTimeLineDaysActiveAccount(st, ed int64) (DaysActiveReport, bool, error) {
-	//fmt.Printf("st:%d,ed:%d\n", st, ed)
-	var (
-		ratio DaysActiveReport
-		his   History
-		total int64
-	)
-	f, err := isFound(GetDB(nil).Table(his.TableName()).Where("created_at < ?", ed).Count(&total))
-	if err != nil {
-		return ratio, f, err
-	}
-	if !f {
-		return ratio, f, nil
-	}
-
-	f, err = isFound(GetDB(nil).Debug().Raw(fmt.Sprintf(`SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+3,0) AS total_key,CASE WHEN (h2.num > 0 AND h3.num > 0) THEN 
-	round(
-		h3.num * 100 / h2.num , 2) 
-	ELSE 
-		0
-	END AS ratio,h2.tx_number,h2.tx_amount
-	
-	FROM (
-		(SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS ds,count(1) tx_number,sum(amount) tx_amount FROM "1_history" WHERE 
-		created_at >= %d AND created_at < %d GROUP BY ds) AS h1
-		
 			LEFT JOIN(
-				WITH rollback_tx AS(
-					SELECT to_char(to_timestamp(log.time), 'yyyy-mm-dd') AS days,count(1) num
-					FROM (SELECT tx_hash,table_id FROM rollback_tx WHERE table_name = '1_keys' AND table_id like '%%,1' AND data = '') AS rb LEFT JOIN(
-						SELECT timestamp/1000 as time,hash FROM log_transactions 
-					)AS log ON (log.hash = rb.tx_hash) GROUP BY days
-				)
-				SELECT rk1.days,
-					(SELECT SUM(num) FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
-				FROM rollback_tx AS rk1 
-			) AS rk ON (h1.ds = rk.days)
+				SELECT count(1)AS tx_number,to_char(to_timestamp(timestamp/1000), 'yyyy-mm-dd') AS days FROM log_transactions WHERE ecosystem_id = 1 GROUP BY days
+			)AS v1 ON(v1.days = h1.ds)
 	
 		) AS h2 
 		
@@ -310,11 +257,19 @@ func GetTimeLineDaysActiveAccount(st, ed int64) (DaysActiveReport, bool, error) 
 					 UNION 
 					SELECT recipient_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" 
 					WHERE recipient_id <> 0 AND ecosystem = 1 AND created_at >= %d AND created_at < %d GROUP BY recipient_id,days
+					 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.input_tx_hash = v2.hash) WHERE 
+						v1.ecosystem = 1 AND v2."timestamp" >= %d AND v2."timestamp" < %d AND input_tx_hash is not NULL GROUP BY v1.output_key_id,days
+					 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.output_tx_hash = v2.hash) 
+						WHERE v1.ecosystem = 1 AND v2."timestamp" >= %d AND v2."timestamp" < %d GROUP BY v1.output_key_id,days
 			) AS h1 GROUP BY h1.days
 			
 	) AS h3 ON(h3.days = h2.ds)
 	
-	ORDER BY h2.ds DESC`, st, ed, st, ed, st, ed)).First(&ratio))
+	ORDER BY h2.ds DESC`, st, ed, st, ed, st, ed, st, ed, st, ed)).First(&ratio))
 	return ratio, f, err
 }
 
@@ -329,6 +284,10 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 	var (
 		dtList []DailyActiveReport
 	)
+	getDailyActiveReportListEnd = false
+	defer func() {
+		getDailyActiveReportListEnd = true
+	}()
 
 	var list []DaysActiveReport
 	//now := time.Now()
@@ -341,8 +300,11 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 	END AS ratio,h2.tx_number,h2.tx_amount
 
 	FROM (
-		(SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS ds,count(1) tx_number,sum(amount) tx_amount FROM "1_history" GROUP BY ds) AS h1
-		
+			(
+				SELECT to_char(to_timestamp(tx_time),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM
+				transaction_data WHERE ecosystem = 1 GROUP BY ds ORDER BY ds asc
+			)AS h1
+
 			LEFT JOIN(
 				WITH rollback_tx AS(
 					SELECT to_char(to_timestamp(log.time), 'yyyy-mm-dd') AS days,count(1) num
@@ -354,6 +316,10 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 					(SELECT SUM(num) FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
 				FROM rollback_tx AS rk1 
 			) AS rk ON (h1.ds = rk.days)
+			
+			LEFT JOIN(
+				SELECT count(1)AS tx_number,to_char(to_timestamp(timestamp/1000), 'yyyy-mm-dd') AS days FROM log_transactions WHERE ecosystem_id = 1 GROUP BY days
+			)AS v1 ON(v1.days = h1.ds)
 	
 		) AS h2
 
@@ -362,6 +328,12 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 					SELECT sender_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" WHERE sender_id <> 0 AND ecosystem = 1 GROUP BY sender_id,days
 					 UNION 
 					SELECT recipient_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" WHERE recipient_id <> 0 AND ecosystem = 1 GROUP BY recipient_id,days
+					 UNION
+					SELECT output_key_id AS keyid,to_char(to_timestamp(timestamp/1000),'yyyy-MM-dd') days FROM spent_info AS s1 LEFT JOIN 
+					 log_transactions AS l1 ON(l1.hash = s1.output_tx_hash)	WHERE ecosystem = 1 GROUP BY days,output_key_id
+					 UNION
+					SELECT output_key_id AS keyid,to_char(to_timestamp(timestamp/1000),'yyyy-MM-dd') days FROM spent_info AS s1 LEFT JOIN 
+					 log_transactions AS l1 ON(l1.hash = s1.input_tx_hash)	WHERE ecosystem = 1 GROUP BY days,output_key_id
 			) AS h1 GROUP BY h1.days
 			
 	) AS h3 ON(h3.days = h2.ds)
@@ -386,7 +358,7 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 				continue
 			}
 			if dayTime.Unix() == findTime.Unix() {
-				if list[i].Active != 0 {
+				if list[i].TotalKey != 0 {
 					lastTotalKey = list[i].TotalKey
 				}
 				dt.TotalKey = lastTotalKey
@@ -453,6 +425,7 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 		}
 		dt.Ratio = "0"
 		dt.TxAmount = "0"
+		dt.TotalKey = lastTotalKey
 
 		return dt, nil
 	}
@@ -464,7 +437,7 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 			log.WithFields(log.Fields{"error": err}).Error("Get NewKeys Chart Block Id List ParseInLocation Failed")
 			return nil, err
 		}
-		for startTime.Unix() <= today.Unix() {
+		for startTime.Unix() < today.Unix() {
 			dt, err := getDaysReport(startTime, list)
 			if err != nil {
 				return nil, err
@@ -623,6 +596,12 @@ LEFT JOIN(
 					SELECT sender_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy') AS days FROM "1_history" WHERE sender_id <> 0 AND ecosystem = 1 GROUP BY sender_id,days
 					 UNION 
 					SELECT recipient_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy') AS days FROM "1_history" WHERE recipient_id <> 0 AND ecosystem = 1  GROUP BY recipient_id,days
+					 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.input_tx_hash = v2.hash) WHERE v1.ecosystem = 1 AND input_tx_hash is not NULL GROUP BY v1.output_key_id,days
+					 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.output_tx_hash = v2.hash) WHERE v1.ecosystem = 1 GROUP BY v1.output_key_id,days
 			) AS h1 GROUP BY h1.days
 			
 	) AS h3 ON(h3.days = dt.days)
@@ -647,6 +626,12 @@ LEFT JOIN(
 					SELECT sender_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm') AS days FROM "1_history" WHERE sender_id <> 0 AND ecosystem = 1 GROUP BY sender_id,days
 					 UNION 
 					SELECT recipient_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm') AS days FROM "1_history" WHERE recipient_id <> 0 AND ecosystem = 1  GROUP BY recipient_id,days
+					 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.input_tx_hash = v2.hash) WHERE v1.ecosystem = 1 AND input_tx_hash is not NULL GROUP BY v1.output_key_id,days
+					 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.output_tx_hash = v2.hash) WHERE v1.ecosystem = 1 GROUP BY v1.output_key_id,days
 			) AS h1 GROUP BY h1.days
 			
 	) AS h3 ON(h3.days = dt.days)
@@ -743,8 +728,16 @@ SELECT count(1) FROM(
 	SELECT sender_id as keyid FROM "1_history" WHERE sender_id <> 0 AND ecosystem = 1 AND created_at >= %d AND created_at < %d GROUP BY sender_id
 		 UNION 
 	SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND ecosystem = 1 AND created_at >= %d AND created_at < %d GROUP BY recipient_id
+		UNION
+	SELECT v1.output_key_id AS keyid FROM spent_info AS v1 
+			LEFT JOIN log_transactions AS v2 ON(v1.input_tx_hash = v2.hash) WHERE 
+			v1.ecosystem = 1 AND input_tx_hash is not NULL AND v2."timestamp" >= %d AND v2."timestamp" < %d GROUP BY v1.output_key_id
+		UNION
+	SELECT v1.output_key_id AS keyid FROM spent_info AS v1 
+		LEFT JOIN log_transactions AS v2 ON(v1.output_tx_hash = v2.hash) WHERE 
+		v1.ecosystem = 1 AND v2."timestamp" >= %d AND v2."timestamp" < %d GROUP BY v1.output_key_id
 ) AS h1
-`, stTime, edTime, stTime, edTime)).Take(&number))
+`, stTime, edTime, stTime, edTime, stTime, edTime, stTime, edTime)).Take(&number))
 	if err != nil {
 		return 0, err
 	}

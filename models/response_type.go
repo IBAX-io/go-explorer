@@ -201,11 +201,17 @@ type EcosystemDetailInfoResponse struct {
 	Circulations      string  `json:"circulations"`
 	FollowFuel        float64 `json:"follow_fuel"`
 
-	Registered       int               `json:"registered"`
-	Country          int               `json:"country"`
+	Registered int `json:"registered"`
+	//Country          int               `json:"country"`
+	countryInfo
 	RegistrationNo   string            `json:"registration_no"`
 	RegistrationType int               `json:"registration_type"`
+	WebPage          string            `json:"web_page"`
 	Social           map[string]string `json:"social"`
+}
+
+type countryInfo struct {
+	Country string `json:"country"`
 }
 
 type EcosystemTxList struct {
@@ -214,7 +220,7 @@ type EcosystemTxList struct {
 	Time     int64  `json:"time"`
 	Contract string `json:"contract"`
 	Address  string `json:"address"`
-	Status   int64  `json:"status"`
+	Status   int32  `json:"status"`
 }
 
 type EcosystemSearchResponse struct {
@@ -496,11 +502,12 @@ type BlockSizeListResponse struct {
 }
 
 type TransactionListResponse struct {
-	Hash    string `json:"hash"`
-	Block   int64  `json:"block"`
-	Time    int64  `json:"time"`
-	Address int64  `json:"address"`
-	Name    string `json:"name"`
+	Hash     string `json:"hash"`
+	Block    int64  `json:"block"`
+	Time     int64  `json:"time"`
+	Address  int64  `json:"address"`
+	Name     string `json:"name"`
+	Contract string `json:"contract"`
 }
 
 type DaysNumberResponse struct {
@@ -589,7 +596,7 @@ type GovernModelRatioResponse struct {
 }
 
 type SearchHashResponse struct {
-	IsTxHash bool `json:"is_tx_hash"`
+	HashType int `json:"hash_type"`
 }
 
 type StorageCapacitysChart struct {
@@ -784,4 +791,51 @@ type NftMinerRegionListResponse struct {
 	Total         int64  `json:"total"`
 	StakingNumber int64  `json:"staking_number"`
 	StakingAmount string `json:"staking_amount"`
+}
+
+type utxoDetail struct {
+	Address     string `json:"address"`
+	Amount      string `json:"amount"`
+	Hash        string `json:"hash"`
+	TokenSymbol string `json:"token_symbol"`
+}
+
+type FuelRate struct {
+	Ecosystem   int64  `json:"ecosystem"`
+	Value       string `json:"value"`
+	TokenSymbol string `json:"token_symbol"`
+}
+
+type FeeInfo struct {
+	Sender      string `json:"sender"`
+	Recipient   string `json:"recipient"`
+	Amount      string `json:"amount"`
+	TokenSymbol string `json:"token_symbol"`
+}
+
+type UtxoExplorer struct {
+	UtxoType      string       `json:"utxo_type"`
+	Comment       string       `json:"comment"`
+	Sender        string       `json:"sender"`
+	Recipient     string       `json:"recipient"`
+	Amount        string       `json:"amount"`
+	Expedite      string       `json:"expedite"`
+	BasisFuelRate FuelRate     `json:"basis_fuel_rate"`
+	EcoFuelRate   FuelRate     `json:"eco_fuel_rate"`
+	Ecosystem     int64        `json:"ecosystem"`
+	Change        []utxoDetail `json:"change"`
+	Inputs        []utxoDetail `json:"inputs"`
+	Outputs       []utxoDetail `json:"outputs"`
+	TokenSymbol   string       `json:"token_symbol"`
+	BasisGasFee   FeeInfo      `json:"basis_gas_fee"`
+	EcoGasFee     FeeInfo      `json:"eco_gas_fee"`
+}
+
+type AccountTxListResponse struct {
+	Hash         string `json:"hash"`
+	BlockId      int64  `json:"block_id"`
+	ContractName string `json:"contract_name"`
+	Timestamp    int64  `json:"timestamp"`
+	Address      string `json:"address"`
+	Status       int32  `json:"status"`
 }

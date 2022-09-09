@@ -12,12 +12,16 @@ import (
 	"github.com/IBAX-io/go-ibax/packages/types"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type TransactionData struct {
-	Hash   []byte `gorm:"primary_key;not null"`
-	Block  int64  `gorm:"not null"`
-	TxData []byte `gorm:"not null"`
+	Hash      []byte `gorm:"primary_key;not null"`
+	Block     int64  `gorm:"not null"`
+	TxData    []byte `gorm:"not null"`
+	Amount    string `gorm:"column:amount;type:decimal(40);default:'0';not null"` //the transaction occurs ecosystem generates transaction amount
+	Ecosystem int64  `gorm:"not null"`
+	TxTime    int64  `gorm:"not null"`
 }
 
 var getTransactionData chan bool
@@ -86,7 +90,7 @@ func SendTxDataSyncSignal() {
 }
 
 func transactionDataSync() error {
-	var insertData []*TransactionData
+	var insertData []TransactionData
 	var b1 Block
 
 	tr := &TransactionData{}
@@ -105,7 +109,7 @@ func transactionDataSync() error {
 		}
 	}
 
-	bkList, err := GetBlockchain(tr.Block, tr.Block+5000, "asc")
+	bkList, err := GetBlockchain(tr.Block, tr.Block+100, "asc")
 	if err != nil {
 		return err
 	}
@@ -117,26 +121,20 @@ func transactionDataSync() error {
 		if err != nil {
 			return err
 		}
-		for hash, data := range txList {
-			var tran TransactionData
-			tran.Hash, _ = hex.DecodeString(hash)
-			tran.Block = val.ID
-			tran.TxData = data
-			insertData = append(insertData, &tran)
-		}
-		if len(insertData) >= 5000 {
-			err = createTransactionDataBatches(GetDB(nil), insertData)
-			if err != nil {
-				return err
+		for _, data := range txList {
+			data.Block = val.ID
+			if data.TxTime == 0 {
+				data.TxTime = val.Time
 			}
-			insertData = nil
+			if data.Ecosystem == 0 {
+				data.Ecosystem = 1
+			}
+			insertData = append(insertData, data)
 		}
 	}
-	if insertData != nil {
-		err = createTransactionDataBatches(GetDB(nil), insertData)
-		if err != nil {
-			return err
-		}
+	err = createTransactionDataBatches(GetDB(nil), &insertData)
+	if err != nil {
+		return err
 	}
 
 	return transactionDataSync()
@@ -170,14 +168,14 @@ func transactionDataCheck(lastBlockId int64) {
 	}
 }
 
-func createTransactionDataBatches(dbTx *gorm.DB, data []*TransactionData) error {
-	if len(data) == 0 {
+func createTransactionDataBatches(dbTx *gorm.DB, data *[]TransactionData) error {
+	if data == nil {
 		return nil
 	}
-	return dbTx.Model(&TransactionData{}).Create(&data).Error
+	return dbTx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(data, 1000).Error
 }
 
-func UnmarshallBlockTxData(blockBuffer *bytes.Buffer) (map[string][]byte, error) {
+func UnmarshallBlockTxData(blockBuffer *bytes.Buffer) (map[string]TransactionData, error) {
 	var (
 		block = &types.BlockData{}
 	)
@@ -185,19 +183,38 @@ func UnmarshallBlockTxData(blockBuffer *bytes.Buffer) (map[string][]byte, error)
 		return nil, err
 	}
 
-	txList := make(map[string][]byte)
+	txList := make(map[string]TransactionData)
 	for i := 0; i < len(block.TxFullData); i++ {
+		var info TransactionData
+
 		tx, err := transaction.UnmarshallTransaction(bytes.NewBuffer(block.TxFullData[i]))
 		if err != nil {
 			return nil, err
 		}
+		info.TxData = block.TxFullData[i]
+		info.Hash = tx.Hash()
 
-		txList[hex.EncodeToString(tx.Hash())] = block.TxFullData[i]
+		if tx.IsSmartContract() {
+			if tx.SmartContract().TxSmart.UTXO != nil {
+				info.Amount = tx.SmartContract().TxSmart.UTXO.Value
+			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
+				//info.Amount = tx.SmartContract().TxSmart.TransferSelf.Value
+			} else {
+				var his History
+				info.Amount = his.GetHashSum(info.Hash, tx.SmartContract().TxSmart.EcosystemID)
+			}
+			info.TxTime = MsToSeconds(tx.Timestamp())
+			info.Ecosystem = tx.SmartContract().TxSmart.EcosystemID
+		}
+		txList[hex.EncodeToString(tx.Hash())] = info
 	}
 	return txList, nil
 }
 
-func GetTxContractNameByHash(hash []byte) string {
+func GetUtxoTxContractNameByHash(hash []byte) string {
+	if hash == nil {
+		return ""
+	}
 	tr := &TransactionData{}
 	f, err := tr.GetByHash(hash)
 	if err != nil || !f {
@@ -213,9 +230,9 @@ func GetTxContractNameByHash(hash []byte) string {
 	}
 	if tx.IsSmartContract() {
 		if tx.SmartContract().TxSmart.UTXO != nil {
-			return "UTXO_Tx"
+			return UtxoTx
 		} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-			return "UTXO_Transfer"
+			return UtxoTransfer
 		}
 	}
 	return ""
@@ -223,4 +240,17 @@ func GetTxContractNameByHash(hash []byte) string {
 
 func UnmarshallTransaction(blockBuffer *bytes.Buffer) (*transaction.Transaction, error) {
 	return transaction.UnmarshallTransaction(blockBuffer)
+}
+
+func IsUtxoTransaction(txData []byte) (bool, error) {
+	tx, err := UnmarshallTransaction(bytes.NewBuffer(txData))
+	if err != nil {
+		return false, err
+	}
+	if tx.IsSmartContract() {
+		if tx.SmartContract().TxSmart.UTXO != nil || tx.SmartContract().TxSmart.TransferSelf != nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }

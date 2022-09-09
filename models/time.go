@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const SvgTimeFormat = "15:04:05 02-01-2006(UTC)"
+const SvgTimeFormat = "15:04:05 02-01-2006 (UTC)"
 
 //MsToSeconds millisecond to second
 func MsToSeconds(millisecond int64) int64 {

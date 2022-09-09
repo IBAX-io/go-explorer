@@ -12,7 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/IBAX-io/go-ibax/packages/converter"
+	"github.com/IBAX-io/go-ibax/packages/types"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
+	"reflect"
 	"strconv"
 	"time"
 	"unsafe"
@@ -26,7 +29,7 @@ type LogTransaction struct {
 	ContractName string `gorm:"not null"`
 	Address      int64  `gorm:"not null"`
 	EcosystemID  int64  `gorm:"not null"`
-	Status       int64  `gorm:"not null"`
+	Status       int32  `gorm:"not null"`
 }
 
 var (
@@ -43,8 +46,15 @@ func (lt *LogTransaction) GetByHash(hash []byte) (bool, error) {
 	return isFound(GetDB(nil).Where("hash = ?", hash).First(lt))
 }
 
+func (lt *LogTransaction) GetContract(hash []byte) (bool, error) {
+	return isFound(GetDB(nil).Select("contract_name").Where("hash = ?", hash).First(lt))
+}
+
 func (lt *LogTransaction) GetBlockIdByHash(hash []byte) (bool, error) {
 	return isFound(GetDB(nil).Select("block").Where("hash = ?", hash).First(lt))
+}
+func (lt *LogTransaction) GetStatus(hash []byte) (bool, error) {
+	return isFound(GetDB(nil).Select("status").Where("hash = ?", hash).First(lt))
 }
 
 func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string, reqType int) (*[]BlockTxDetailedInfoHex, int64, error) {
@@ -64,7 +74,7 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 		return &ret, num, err
 	}
 
-	err = GetDB(nil).Select("hash,block").Offset((page - 1) * limit).Limit(limit).Order("block desc").Find(&tss).Error
+	err = GetDB(nil).Select("hash,block,status").Offset((page - 1) * limit).Limit(limit).Order("block desc").Find(&tss).Error
 	if err != nil {
 		return &ret, num, err
 	}
@@ -74,9 +84,11 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 	}
 	TBlock := make(map[string]int64)
 	Thash := make(map[string]bool)
+	hashStatus := make(map[string]int32)
 	for i = 0; i < len(tss); i++ {
 		hash := hex.EncodeToString(tss[i].Hash)
 		Thash[hash] = true
+		hashStatus[hash] = tss[i].Status
 
 		key := strconv.FormatInt(tss[i].Block, 10)
 		TBlock[key] = tss[i].Block
@@ -101,13 +113,14 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 				bh := BlockTxDetailedInfoHex{}
 				bh.BlockID = rt.Header.BlockId
 				bh.ContractName = rt.Transactions[j].ContractName
-				if bh.ContractName == "" {
-					bh.ContractName = GetTxContractNameByHash(converter.HexToBin(rt.Transactions[j].Hash))
-				}
 				bh.Hash = rt.Transactions[j].Hash
 				bh.KeyID = rt.Transactions[j].KeyID
 				//bh.Params = rt.Transactions[j].Params
-				bh.Time = rt.Transactions[j].Time
+				if reqType == 1 {
+					bh.Time = bk.Time
+				} else {
+					bh.Time = rt.Transactions[j].Time
+				}
 				bh.Type = rt.Transactions[j].Type
 				bh.Ecosystem = rt.Transactions[j].Ecosystem
 				bh.Ecosystemname = rt.Transactions[j].Ecosystemname
@@ -122,14 +135,33 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 				Ten := unsafe.Sizeof(rt.Transactions[j])
 				bh.Size = int64(Ten)
 				if Thash[rt.Transactions[j].Hash] {
-					var his History
-					det, err := his.GetTxListExplorer(converter.HexToBin(rt.Transactions[j].Hash))
-					if err != nil {
-						return nil, 0, err
+					bh.Status = hashStatus[rt.Transactions[j].Hash]
+					if reqType == 0 {
+						if bh.ContractName == UtxoTx {
+							var params types.UTXO
+							err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
+							if err != nil {
+								return nil, 0, err
+							}
+							bh.Amount, _ = decimal.NewFromString(params.Value)
+							//bh.GasFee todo: need add
+						} else if bh.ContractName == UtxoTransfer {
+							var params types.TransferSelf
+							err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
+							if err != nil {
+								return nil, 0, err
+							}
+							bh.Amount, _ = decimal.NewFromString(params.Value)
+						} else {
+							var his History
+							gasFee, amount, err := his.GetTxListExplorer(converter.HexToBin(rt.Transactions[j].Hash))
+							if err != nil {
+								return nil, 0, err
+							}
+							bh.GasFee = gasFee
+							bh.Amount = amount
+						}
 					}
-					bh.GasFee = det.GasFee
-					bh.Amount = det.Amount
-					bh.Status = det.Status
 					ret = append(ret, bh)
 				}
 			}
@@ -223,7 +255,7 @@ func GetTransactionBlockFromRedis() (*[]BlockTxDetailedInfoHex, int64, error) {
 	return &ret, num, nil
 }
 
-func getTransactionBlockToRedis() error {
+func GetTransactionBlockToRedis() error {
 	var ret HashTransactionResult
 	rets, total, err := Get_Group_TransactionBlock(1, 10, "", 1)
 	if err != nil {
@@ -299,9 +331,13 @@ func (lt *LogTransaction) UnmarshalTxTransaction(txData []byte) (*TxDetailedInfo
 
 	if tx.IsSmartContract() {
 		if tx.SmartContract().TxSmart.UTXO != nil {
-			//TODO ADD
+			txDetailedInfo.ContractName = UtxoTx
+			dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
+			txDetailedInfo.Params = string(dataBytes)
 		} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-			//TODO ADD
+			txDetailedInfo.ContractName = UtxoTransfer
+			dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
+			txDetailedInfo.Params = string(dataBytes)
 		} else {
 			txDetailedInfo.ContractName, txDetailedInfo.Params = GetMineParam(tx.SmartContract().TxSmart.EcosystemID, tx.SmartContract().TxContract.Name, tx.SmartContract().TxData, tx.Hash())
 		}
@@ -323,10 +359,11 @@ func (lt *LogTransaction) UnmarshalTxTransaction(txData []byte) (*TxDetailedInfo
 		if txDetailedInfo.Ecosystem == 0 {
 			txDetailedInfo.Ecosystem = 1
 		}
-		txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = GetEcosystemTokenSymbol(txDetailedInfo.Ecosystem)
+		txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = Tokens.Get(txDetailedInfo.Ecosystem), EcoNames.Get(txDetailedInfo.Ecosystem)
 	} else {
 		if txDetailedInfo.Ecosystem == 0 {
 			txDetailedInfo.Ecosystem = 1
+			txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = Tokens.Get(txDetailedInfo.Ecosystem), EcoNames.Get(txDetailedInfo.Ecosystem)
 		}
 		if txDetailedInfo.Ecosystem == 1 || txDetailedInfo.Ecosystem == 0 {
 			txDetailedInfo.TokenSymbol = SysTokenSymbol
@@ -344,6 +381,7 @@ func SearchHash(hash string) (SearchHashResponse, error) {
 		rets SearchHashResponse
 	)
 	var lt LogTransaction
+	var tx TransactionData
 	hashHex, err := hex.DecodeString(hash)
 	if err != nil {
 		return rets, err
@@ -361,8 +399,24 @@ func SearchHash(hash string) (SearchHashResponse, error) {
 		if !f {
 			return rets, errors.New("doesn't not hash")
 		}
+		rets.HashType = 1
 	} else {
-		rets.IsTxHash = true
+		f, err = tx.GetTxDataByHash(hashHex)
+		if err != nil {
+			return rets, err
+		}
+		if !f {
+			return rets, errors.New("transaction data synchronization")
+		}
+		f, err = IsUtxoTransaction(tx.TxData)
+		if err != nil {
+			return rets, err
+		}
+		if f {
+			rets.HashType = 2
+		} else {
+			rets.HashType = 3
+		}
 	}
 
 	return rets, nil
@@ -425,4 +479,96 @@ func (lt *LogTransaction) GetEcosystemTransactionFind(ecosystem int64, page, lim
 	}
 
 	return &txList, total, nil
+}
+
+func (lt *LogTransaction) GetEcosystemAccountTransaction(ecosystem int64, page int, size int, wallet, order string, where map[string]any) (*GeneralResponse, error) {
+	var (
+		tss   []LogTransaction
+		ret   []AccountTxListResponse
+		count int64
+		keyId int64
+		err   error
+		rets  GeneralResponse
+		q     *gorm.DB
+	)
+	rets.Limit = size
+	rets.Page = page
+	if order == "" {
+		order = "timestamp desc"
+	}
+
+	keyId = converter.StringToAddress(wallet)
+	if wallet == "0000-0000-0000-0000-0000" {
+	} else if keyId == 0 {
+		return &rets, errors.New("wallet does not meet specifications")
+	}
+	if page < 1 || size < 1 {
+		return &rets, err
+	}
+	if ecosystem != 0 {
+		if where == nil {
+			where = make(map[string]any)
+		}
+		where["ecosystem_id ="] = ecosystem
+		dayTime := int64(60 * 60 * 24)
+		if value, ok := where["timestamp >="]; ok {
+			if reflect.TypeOf(value).String() == "json.Number" {
+				val, err := value.(json.Number).Int64()
+				if err != nil {
+					return nil, err
+				}
+				where["timestamp >="] = val * 1000
+			}
+		}
+		if value, ok := where["timestamp <="]; ok {
+			if reflect.TypeOf(value).String() == "json.Number" {
+				val, err := value.(json.Number).Int64()
+				if err != nil {
+					return nil, err
+				}
+				where["timestamp <="] = (val + dayTime) * 1000
+			}
+		}
+	}
+	if len(where) != 0 {
+		cond, vals, err := WhereBuild(where)
+		if err != nil {
+			return &rets, err
+		}
+		q = GetDB(nil).Table(lt.TableName()).Where(cond, vals...).Where("address = ?", keyId)
+	} else {
+		q = GetDB(nil).Table(lt.TableName()).Where("address = ?", keyId)
+	}
+	if err = q.Count(&count).Error; err != nil {
+		return &rets, err
+	}
+	if count > 0 {
+		err = q.Order(order).Offset((page - 1) * size).Limit(size).Find(&tss).Error
+	}
+
+	if err != nil {
+		return &rets, err
+	}
+
+	length := len(tss)
+	for i := 0; i < length; i++ {
+		da := AccountTxListResponse{}
+		da.Hash = hex.EncodeToString(tss[i].Hash)
+		da.BlockId = tss[i].Block
+		da.Timestamp = MsToSeconds(tss[i].Timestamp)
+		da.Address = converter.AddressToString(tss[i].Address)
+		da.ContractName = tss[i].ContractName
+		if da.ContractName == "" {
+			da.ContractName = GetUtxoTxContractNameByHash(tss[i].Hash)
+		}
+		da.Status = tss[i].Status
+
+		ret = append(ret, da)
+	}
+	if length < rets.Limit {
+		rets.Limit = length
+	}
+	rets.Total = count
+	rets.List = ret
+	return &rets, nil
 }
