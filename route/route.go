@@ -109,10 +109,12 @@ func Run(host string) (err error) {
 	//Global Search
 	api.GET(`/search_hash/:hash`, controllers.SearchHash)
 	api.GET(`/transaction_detail/:hash`, controllers.GetTransactionDetails)
+	api.GET(`/transaction_utxo_detail/:hash`, controllers.GetUtxoTransactionDetails)
 	api.GET(`/transaction_head/:hash`, controllers.GetTransactionHead)
 	api.GET(`/block_detail/:block_id`, controllers.GetBlockDetails)
 	api.POST(`/account_detail`, controllers.GetAccountDetailEcosystem)
 	api.GET(`/account_detail_basis/:wallet`, controllers.GetAccountDetailBasisEcosystem)
+	api.GET(`/account_detail_basis_chart/:wallet`, controllers.GetAccountDetailBasisTokenChange)
 	//Nft Miner Global Search
 	api.GET(`/nft_miner_info/:search`, controllers.NftMinerInfoHandler)
 	api.POST(`/nft_miner_history_info`, controllers.NftMinerHistoryInfoHandler)
@@ -128,7 +130,8 @@ func Run(host string) (err error) {
 	//Account Detail Info
 	api.POST("/ecosystem_search", controllers.EcosystemSearchHandler)
 	api.POST(`/account_list`, controllers.GetAccountList)
-	api.POST(`/account_detail_tx`, controllers.GetAccountTranscationHistory)
+	api.GET(`/account_list_chart/:ecosystem`, controllers.GetAccountListChartHandler)
+	api.POST(`/account_detail_tx`, controllers.GetAccountTransactionHistory)
 	api.POST(`/account_detail_nft_miner`, controllers.GetAccountDetailNftMinerHandler)
 
 	//Account Detail Info Chart

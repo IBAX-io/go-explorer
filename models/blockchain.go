@@ -217,23 +217,27 @@ func GetBlockList(page, limit, reqType int, order string) (*BlockListHeaderRespo
 		NodeName      string
 		Hid           int64
 	}
+	if !CheckSql(order) {
+		log.WithFields(log.Fields{"warn": err.Error(), "order": order}).Warn("Get Block list check sql Failed")
+		return &ret, err
+	}
 	var list []bkListResponse
-	err = GetDB(nil).Raw(`
+	err = GetDB(nil).Raw(fmt.Sprintf(`
 SELECT v1.id,v1.time,v1.tx,v1.node_position,v1.consensus_mode,coalesce((SELECT sum(amount) FROM "1_history" WHERE block_id = v1.id AND type IN(1,2) AND ecosystem = 1),0)gas_fee,
 	coalesce((SELECT count(1) FROM (SELECT ecosystem_id FROM log_transactions WHERE block = v1.id GROUP BY ecosystem_id)AS lg),0)eco_lib,
 	coalesce(CAST((SELECT min(recipient_id) FROM "1_history" WHERE block_id = v1.id AND type IN(12)) AS TEXT),'')recipient_id,
 	coalesce((SELECT sum(amount) FROM "1_history" WHERE block_id = v1.id AND type IN(12)),0)reward,coalesce(t2.address,'')address,coalesce(t2.api_address,'')api_address,
 	COALESCE(t2.id,0)hid,coalesce(node_name,'')node_name
 FROM(
-		SELECT id,time,tx,node_position,consensus_mode FROM block_chain ORDER BY ? OFFSET ? LIMIT ?
+		SELECT id,time,tx,node_position,consensus_mode FROM block_chain ORDER BY %s OFFSET ? LIMIT ?
 )AS v1
 LEFT JOIN(
         SELECT CAST(value->>'id' AS numeric) node_id,CAST(value->>'consensus_mode' AS numeric) consensus_mode,address,id,
 		value->>'api_address' api_address,value->>'node_name' node_name
-		FROM honor_node_info
+		FROM honor_node_info LIMIT 1
 )AS t2 ON(t2.node_id = v1.node_position AND t2.consensus_mode = v1.consensus_mode)
-ORDER BY ?
-`, order, (page-1)*limit, limit, order).Find(&list).Error
+ORDER BY %s
+`, order, order), (page-1)*limit, limit).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err.Error()}).Warn("Get Block List Failed")
 		return &ret, err
@@ -300,9 +304,13 @@ func GetBlocksDetailedInfoHex(bk *Block) (*BlockDetailedInfoHex, error) {
 		}
 		if tx.IsSmartContract() {
 			if tx.SmartContract().TxSmart.UTXO != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTx
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
+				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTransfer
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
+				txDetailedInfo.Params = string(dataBytes)
 			} else {
 				txDetailedInfo.ContractName, txDetailedInfo.Params = GetMineParam(tx.SmartContract().TxSmart.EcosystemID, tx.SmartContract().TxContract.Name, tx.SmartContract().TxData, tx.Hash())
 			}
@@ -322,7 +330,7 @@ func GetBlocksDetailedInfoHex(bk *Block) (*BlockDetailedInfoHex, error) {
 			if txDetailedInfo.Ecosystem == 0 {
 				txDetailedInfo.Ecosystem = 1
 			}
-			txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = GetEcosystemTokenSymbol(txDetailedInfo.Ecosystem)
+			txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = Tokens.Get(txDetailedInfo.Ecosystem), EcoNames.Get(txDetailedInfo.Ecosystem)
 		}
 
 		txDetailedInfoCollection = append(txDetailedInfoCollection, txDetailedInfo)
@@ -562,9 +570,13 @@ func GetBlocksContractNameList(bk *Block) (map[string]string, error) {
 		}
 		if tx.IsSmartContract() {
 			if tx.SmartContract().TxSmart.UTXO != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTx
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
+				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTransfer
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
+				txDetailedInfo.Params = string(dataBytes)
 			} else {
 				txDetailedInfo.ContractName, _ = GetMineParam(tx.SmartContract().TxSmart.EcosystemID, tx.SmartContract().TxContract.Name, tx.SmartContract().TxData, tx.Hash())
 			}
@@ -611,4 +623,11 @@ func GetNodeBlockReplyRate(bk *Block) (string, error) {
 	}
 
 	return "0", nil
+}
+
+func CheckSql(query string) bool {
+	if strings.Contains(query, "drop") || strings.Contains(query, ";") {
+		return false
+	}
+	return true
 }

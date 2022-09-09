@@ -332,7 +332,7 @@ func Get_Find_Ecosytemhistory(c *gin.Context) {
 // @Produce  json
 // @Success  200  {string}  json  "{"code":200,"data":{"id":1,"name":"admin","alias":"","email":"admin@block.vc","password":"","roles":[],"openid":"","active":true,"is_admin":true},"message":"success"}}"
 // @Router   /auth/admin/{id} [get]
-func GetAccountTranscationHistory(c *gin.Context) {
+func GetAccountTransactionHistory(c *gin.Context) {
 	ret := &Response{}
 	req := &EcosytemTranscationHistoryFind{}
 
@@ -347,8 +347,8 @@ func GetAccountTranscationHistory(c *gin.Context) {
 		return
 	}
 
-	ts := &models.History{}
-	rets, err := ts.GetEcosytemTransactionWallets(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Search, req.Order, req.Where)
+	lt := &models.LogTransaction{}
+	rets, err := lt.GetEcosystemAccountTransaction(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Order, req.Where)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)
@@ -485,6 +485,20 @@ func GetAccountDetailBasisEcosystem(c *gin.Context) {
 	JsonResponse(c, ret)
 }
 
+func GetAccountDetailBasisTokenChange(c *gin.Context) {
+	ret := &Response{}
+	wallet := c.Param("wallet")
+	rets, err := models.GetWalletTokenChangeBasis(wallet)
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+
+	ret.Return(rets, CodeSuccess)
+	JsonResponse(c, ret)
+}
+
 // @tags         common_transaction_search
 // @Description  common_transaction_search
 // @Summary      common_transaction_search
@@ -604,6 +618,26 @@ func GetNodeTransactionListHandler(c *gin.Context) {
 	list.Limit = req.Limit
 
 	ret.Return(&list, CodeSuccess)
+	JsonResponse(c, ret)
+
+}
+
+func GetUtxoTransactionDetails(c *gin.Context) {
+	ret := &Response{}
+	hash := c.Param("hash")
+	if hash == "" || utf8.RuneCountInString(hash) > 100 {
+		ret.ReturnFailureString("request params invalid")
+		JsonResponse(c, ret)
+		return
+	}
+	rets, err := services.GetUtxoTransactionDetailedInfo(hash)
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+
+	ret.Return(rets, CodeSuccess)
 	JsonResponse(c, ret)
 
 }

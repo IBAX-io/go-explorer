@@ -287,9 +287,18 @@ with "1_history" AS(
 	SELECT h3.days,count(1) num FROM(
 		SELECT min(h2.days) days,h2.keyid FROM(
 				SELECT h1.days,h1.keyid FROM (
-					SELECT sender_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" WHERE sender_id <> 0 AND sender_balance > 0 AND ecosystem = 1 GROUP BY sender_id,days
+					SELECT sender_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" WHERE 
+						sender_id <> 0 AND sender_balance > 0 AND ecosystem = 1 GROUP BY sender_id,days
 					 UNION 
-					SELECT recipient_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" WHERE recipient_id <> 0 AND recipient_balance > 0 AND ecosystem = 1 GROUP BY recipient_id,days
+					SELECT recipient_id as keyid,to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days FROM "1_history" WHERE
+						recipient_id <> 0 AND recipient_balance > 0 AND ecosystem = 1 GROUP BY recipient_id,days
+				 	 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.input_tx_hash = v2.hash) WHERE v1.ecosystem = 1 AND input_tx_hash is not NULL 
+						GROUP BY v1.output_key_id,days
+					 UNION
+					SELECT v1.output_key_id AS keyid,to_char(to_timestamp(v2."timestamp"/1000), 'yyyy-mm-dd') AS days FROM spent_info AS v1 
+						LEFT JOIN log_transactions AS v2 ON(v1.output_tx_hash = v2.hash) WHERE v1.ecosystem = 1 GROUP BY v1.output_key_id,days
 				) AS h1 ORDER BY h1.days DESC
 		)as h2
 		GROUP BY h2.keyid ORDER BY days ASC
@@ -499,9 +508,9 @@ func Get15DayTxList(page, limit int) (GeneralResponse, error) {
 	}
 
 	err = GetDB(nil).Raw(`
-SELECT log.hash,log.block,log.timestamp as time,log.address,(SELECT name AS name FROM "1_ecosystems" as es WHERE es.id = log.ecosystem_id) 
+SELECT log.hash,log.block,log.timestamp as time,log.contract_name as contract,log.address,(SELECT name AS name FROM "1_ecosystems" as es WHERE es.id = log.ecosystem_id) 
 FROM (
-	SELECT encode(hash,'hex') hash,block,timestamp,address,ecosystem_id FROM 
+	SELECT encode(hash,'hex') hash,block,timestamp,address,contract_name,ecosystem_id FROM 
 	log_transactions WHERE timestamp >= ? AND timestamp < ?
 )as log ORDER BY log.block DESC OFFSET ? LIMIT ?
 `, t1.UnixMilli(), yesterday.AddDate(0, 0, 1).UnixMilli(), (page-1)*limit, limit).Find(&list).Error
@@ -509,11 +518,12 @@ FROM (
 		return rets, err
 	}
 	type transactionList struct {
-		Hash    string `json:"hash"`
-		Block   int64  `json:"block"`
-		Time    int64  `json:"time"`
-		Address string `json:"address"`
-		Name    string `json:"name"`
+		Hash     string `json:"hash"`
+		Block    int64  `json:"block"`
+		Time     int64  `json:"time"`
+		Address  string `json:"address"`
+		Name     string `json:"name"`
+		Contract string `json:"contract"`
 	}
 	var cut []transactionList
 	for i := 0; i < len(list); i++ {
@@ -523,6 +533,11 @@ FROM (
 		rts.Time = MsToSeconds(list[i].Time)
 		rts.Address = converter.AddressToString(list[i].Address)
 		rts.Name = list[i].Name
+		rts.Contract = list[i].Contract
+		hashHex, _ := hex.DecodeString(list[i].Hash)
+		if rts.Contract == "" {
+			rts.Contract = GetUtxoTxContractNameByHash(hashHex)
+		}
 		cut = append(cut, rts)
 	}
 	rets.List = cut

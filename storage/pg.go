@@ -54,9 +54,7 @@ func (d *DatabaseModel) GormInit() (err error) {
 		return err
 	}
 	smart.InitVM()
-	if err := smart.LoadContracts(); err != nil {
-		return err
-	}
+
 	// Stats returns database statistics.
 	//sqlDB.Stats()
 	return nil

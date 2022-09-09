@@ -11,8 +11,6 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"gorm.io/gorm"
-	"reflect"
 	"sort"
 	"strconv"
 	"time"
@@ -116,7 +114,7 @@ type HistoryHex struct {
 	RecipientBalance decimal.Decimal `json:"recipient_balance"`
 	Amount           decimal.Decimal `json:"amount"`
 	Comment          string          `json:"comment"`
-	Blockid          int64           `json:"block_id"`
+	BlockId          int64           `json:"block_id"`
 	Txhash           string          `json:"txhash"`
 	//Createdat        time.Time       `json:"created_at"`
 	Createdat     int64  `json:"created_at"`
@@ -217,14 +215,6 @@ type WalletHistoryHex struct {
 	Amount      decimal.Decimal `json:"amount,omitempty"`
 }
 
-type HistorysResult struct {
-	Total int64           `json:"total"`
-	Page  int             `json:"page"`
-	Limit int             `json:"limit"`
-	Sum   decimal.Decimal `json:"sum,omitempty"`
-	Rets  []HistoryHex    `json:"rets"`
-}
-
 type HistoryTransaction struct {
 	ID            int64  `json:"id"`
 	Keyid         string `json:"key_id"`
@@ -267,7 +257,7 @@ func (th *History) Get(txHash []byte) (*HistoryMergeHex, error) {
 
 			//fmt.Println(ts)
 			tss.Ecosystem = ts[0].Ecosystem
-			tss.TokenSymbol, tss.Ecosystemname = GetEcosystemTokenSymbol(tss.Ecosystem)
+			tss.TokenSymbol, tss.Ecosystemname = Tokens.Get(tss.Ecosystem), EcoNames.Get(tss.Ecosystem)
 
 			tss.ID = ts[0].ID
 			tss.Senderid = converter.AddressToString(ts[0].Senderid) //strconv.FormatInt(ts[0].Senderid, 10)
@@ -314,6 +304,16 @@ func (th *History) Get(txHash []byte) (*HistoryMergeHex, error) {
 		}
 	}
 	return &tss, err
+}
+
+func (th *History) GetHashSum(txHash []byte, ecosystem int64) string {
+	var sum SumAmount
+	err := GetDB(nil).Table(th.TableName()).Select("sum(amount)").Where("txhash = ? AND ecosystem = ?", txHash, ecosystem).Take(&sum).Error
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "hash": hex.EncodeToString(txHash), "ecosystem": ecosystem}).Error("Get Hash Sum Failed")
+		return "0"
+	}
+	return sum.Sum.String()
 }
 
 func (th *History) GetByHash(txHash []byte) (bool, error) {
@@ -721,13 +721,13 @@ func (th *History) GetHistory(page int, size int, order string) (*[]HistoryHex, 
 		//fmt.Println("offset Error:%d ", offset)
 		da := HistoryHex{}
 		da.Ecosystem = tss[i].Ecosystem
-		da.TokenSymbol, da.Ecosystemname = GetEcosystemTokenSymbol(da.Ecosystem)
+		da.TokenSymbol, da.Ecosystemname = Tokens.Get(da.Ecosystem), EcoNames.Get(da.Ecosystem)
 		da.ID = tss[i].ID
 		da.Senderid = strconv.FormatInt(tss[i].Senderid, 10)
 		da.Recipientid = strconv.FormatInt(tss[i].Recipientid, 10)
 		da.Amount = tss[i].Amount
 		da.Comment = tss[i].Comment
-		da.Blockid = tss[i].Blockid
+		da.BlockId = tss[i].Blockid
 		da.Txhash = hex.EncodeToString(tss[i].Txhash)
 		da.Createdat = MsToSeconds(tss[i].Createdat)
 		ret = append(ret, da)
@@ -807,13 +807,13 @@ func (th *History) GetWallets(page int, size int, wallet string, searchType stri
 		//fmt.Println("offet Error:%d ", ioffet)
 		da := HistoryHex{}
 		da.Ecosystem = tss[i].Ecosystem
-		da.TokenSymbol, da.Ecosystemname = GetEcosystemTokenSymbol(da.Ecosystem)
+		da.TokenSymbol, da.Ecosystemname = Tokens.Get(da.Ecosystem), EcoNames.Get(da.Ecosystem)
 		da.ID = tss[i].ID
 		da.Senderid = strconv.FormatInt(tss[i].Senderid, 10)
 		da.Recipientid = strconv.FormatInt(tss[i].Recipientid, 10)
 		da.Amount = tss[i].Amount
 		da.Comment = tss[i].Comment
-		da.Blockid = tss[i].Blockid
+		da.BlockId = tss[i].Blockid
 		da.Txhash = hex.EncodeToString(tss[i].Txhash)
 		da.Createdat = MsToSeconds(tss[i].Createdat)
 		ret = append(ret, da)
@@ -895,13 +895,14 @@ func (th *History) GetEcosytemWallets(id int64, page int, size int, wallet strin
 		//fmt.Println("offet Error:%d ", ioffet)
 		da := HistoryHex{}
 		da.Ecosystem = tss[i].Ecosystem
-		da.TokenSymbol, da.Ecosystemname = GetEcosystemTokenSymbol(da.Ecosystem)
+		da.TokenSymbol, da.Ecosystemname = Tokens.Get(da.Ecosystem), EcoNames.Get(da.Ecosystem)
+
 		da.ID = tss[i].ID
 		da.Senderid = strconv.FormatInt(tss[i].Senderid, 10)
 		da.Recipientid = strconv.FormatInt(tss[i].Recipientid, 10)
 		da.Amount = tss[i].Amount
 		da.Comment = tss[i].Comment
-		da.Blockid = tss[i].Blockid
+		da.BlockId = tss[i].Blockid
 		da.Txhash = hex.EncodeToString(tss[i].Txhash)
 		da.Createdat = MsToSeconds(tss[i].Createdat)
 		ret = append(ret, da)
@@ -910,162 +911,6 @@ func (th *History) GetEcosytemWallets(id int64, page int, size int, wallet strin
 	}
 
 	return &ret, num, total, err
-}
-
-func (th *History) GetEcosytemTransactionWallets(ecoid int64, page int, size int, wallet, searchType, order string, where map[string]any) (*HistorysResult, error) {
-	var (
-		tss []History
-		ret []HistoryHex
-		num int64
-		//ioffet int64
-		i     int64
-		keyId int64
-		err   error
-		total SumAmount
-		rets  HistorysResult
-		q     *gorm.DB
-	)
-	rets.Limit = size
-	rets.Page = page
-	if order == "" {
-		order = "id desc"
-	}
-
-	keyId = converter.StringToAddress(wallet)
-	if wallet == "0000-0000-0000-0000-0000" {
-	} else if keyId == 0 {
-		return &rets, errors.New("wallet does not meet specifications")
-	}
-	if page < 1 || size < 1 {
-		return &rets, err
-	}
-	if ecoid != 0 {
-		if where == nil {
-			where = make(map[string]any)
-		}
-		where["ecosystem ="] = ecoid
-		oneDay := int64(60 * 60 * 24)
-		if value, ok := where["created_at >="]; ok {
-			if reflect.TypeOf(value).String() == "json.Number" {
-				val, err := value.(json.Number).Int64()
-				if err != nil {
-					return nil, err
-				}
-				where["created_at >="] = val * 1000
-			}
-		}
-		if value, ok := where["created_at <="]; ok {
-			if reflect.TypeOf(value).String() == "json.Number" {
-				val, err := value.(json.Number).Int64()
-				if err != nil {
-					return nil, err
-				}
-				//fmt.Printf("(val + oneDay) * 1000:%d\n", (val+oneDay)*1000)
-				where["created_at <="] = (val + oneDay) * 1000
-			}
-		}
-	}
-	switch searchType {
-	case "income":
-		if len(where) != 0 {
-			where["recipient_id ="] = keyId
-			cond, vals, err := WhereBuild(where)
-			if err != nil {
-				return &rets, err
-			}
-			q = GetDB(nil).Table(th.TableName()).Where(cond, vals...)
-		} else {
-			q = GetDB(nil).Table(th.TableName()).Where("recipient_id = ?", keyId)
-		}
-		if err = q.Count(&num).Error; err != nil {
-			return &rets, err
-		}
-		if num > 0 {
-			_, err = isFound(q.Select("sum(amount)").Take(&total))
-			if err != nil {
-				return &rets, err
-			}
-			err = q.Select("*").Order(order).Offset((page - 1) * size).Limit(size).Find(&tss).Error
-		}
-	case "outcome":
-		if len(where) != 0 {
-			where["sender_id ="] = keyId
-			cond, vals, err := WhereBuild(where)
-			if err != nil {
-				return &rets, err
-			}
-			q = GetDB(nil).Table(th.TableName()).Where(cond, vals...)
-		} else {
-			q = GetDB(nil).Table(th.TableName()).Where("sender_id = ?", keyId)
-		}
-		if err = q.Count(&num).Error; err != nil {
-			return &rets, err
-		}
-		if num > 0 {
-			_, err = isFound(q.Select("sum(amount)").Take(&total))
-			if err != nil {
-				return &rets, err
-			}
-			err = q.Select("*").Order(order).Offset((page - 1) * size).Limit(size).Find(&tss).Error
-		}
-	default:
-		if len(where) != 0 {
-			cond, vals, err := WhereBuild(where)
-			if err != nil {
-				return &rets, err
-			}
-			q = GetDB(nil).Table(th.TableName()).Where(cond, vals...).Where("(recipient_id = ? OR sender_id = ?)", keyId, keyId)
-		} else {
-			q = GetDB(nil).Table(th.TableName()).Where("(recipient_id = ? OR sender_id = ?)", keyId, keyId)
-		}
-		if err = q.Count(&num).Error; err != nil {
-			return &rets, err
-		}
-		if num > 0 {
-			_, err = isFound(q.Select("sum(amount)").Take(&total))
-			if err != nil {
-				return &rets, err
-			}
-			err = q.Select("*").Order(order).Offset((page - 1) * size).Limit(size).Find(&tss).Error
-		}
-	}
-	if err != nil {
-		return &rets, err
-	}
-
-	count := int64(len(tss))
-	for i = 0; i < count; i++ {
-		//fmt.Println("offet Error:%d ", ioffet)
-		da := HistoryHex{}
-		da.Ecosystem = tss[i].Ecosystem
-		da.TokenSymbol, da.Ecosystemname = GetEcosystemTokenSymbol(da.Ecosystem)
-
-		da.ID = tss[i].ID
-		da.Senderid = converter.AddressToString(tss[i].Senderid)       //strconv.FormatInt(tss[i].Senderid, 10)
-		da.Recipientid = converter.AddressToString(tss[i].Recipientid) //strconv.FormatInt(tss[i].Recipientid, 10)
-		da.Type = tss[i].Type
-		da.Amount = tss[i].Amount
-		da.Comment = tss[i].Comment
-		da.Blockid = tss[i].Blockid
-		da.Txhash = hex.EncodeToString(tss[i].Txhash)
-		da.Createdat = MsToSeconds(tss[i].Createdat)
-		var bt BlockTxDetailedInfoHex
-		//ft, errt := bt.GetByHash_Sqlite(da.Txhash)
-		ft, errt := bt.GetDbTxDetailedHash(da.Txhash)
-		if errt == nil && ft {
-			da.ContractName = bt.ContractName
-		} else {
-			//fmt.Println(errt)
-		}
-
-		ret = append(ret, da)
-		//i++
-		//fmt.Println("offet Error:%d ", ioffet)
-	}
-	rets.Total = num
-	rets.Sum = total.Sum
-	rets.Rets = ret
-	return &rets, nil
 }
 
 func (th *History) GetWalletTotals(wallet string) (*WalletHistoryHex, error) {
@@ -1104,74 +949,145 @@ func (th *History) GetWalletTotals(wallet string) (*WalletHistoryHex, error) {
 func (th *History) GetAccountHistoryTotals(id int64, keyId int64) (*WalletHistoryHex, error) {
 	var (
 		ret    WalletHistoryHex
-		scount int64
-		rcount int64
-		in     string
-		out    string
+		sCount int64
+		rCount int64
+		in     = "0"
+		out    = "0"
 		err    error
+		his    History
 	)
-
-	err = conf.GetDbConn().Conn().Table("1_history").
-		Where("recipient_id = ? and ecosystem = ?", keyId, id).
-		Count(&rcount).Error
+	type inOutInfo struct {
+		InTx      int64
+		OutTx     int64
+		InAmount  string
+		OutAmount string
+	}
+	var utxoInfo inOutInfo
+	//in out tx
+	err = GetDB(nil).Raw(`
+SELECT count(v1.txhash)in_tx FROM(
+	SELECT txhash FROM "1_history" WHERE recipient_id = ? and ecosystem = ? GROUP BY "txhash"
+)AS v1
+`, keyId, id).Row().Scan(&rCount)
 	if err != nil {
 		return &ret, err
 	}
-	if rcount > 0 {
-		err = conf.GetDbConn().Conn().Table("1_history").Select("sum(amount)").Where("recipient_id = ? and ecosystem = ?", keyId, id).Row().Scan(&in)
+
+	err = GetDB(nil).Raw(`
+SELECT count(v1.txhash)out_tx FROM(
+	SELECT txhash FROM "1_history" WHERE sender_id = ? and ecosystem = ? GROUP BY "txhash"
+)AS v1
+`, keyId, id).Row().Scan(&sCount)
+	if err != nil {
+		return &ret, err
+	}
+
+	//in amount
+	if rCount > 0 {
+		err = GetDB(nil).Table(his.TableName()).Select("sum(amount)").Where("recipient_id = ? and ecosystem = ?", keyId, id).Row().Scan(&in)
 		if err != nil {
 			return &ret, err
 		}
-	} else {
-		in = "0"
 	}
 
-	err = conf.GetDbConn().Conn().Table("1_history").
-		Where("sender_id = ? and ecosystem = ?", keyId, id).
-		Count(&scount).Error
+	utxoQuery := `
+SELECT COALESCE(sum(v4.out_tx),0)out_tx,COALESCE(sum(v4.in_tx),0)in_tx,
+COALESCE(sum(v4.in_amount),0)in_amount,COALESCE(sum(v4.out_amount),0)out_amount
+FROM(
+	SELECT v3.*,CASE WHEN v3.diff >=0 THEN 
+			v3.diff 
+		ELSE
+			0
+		END AS in_amount,
+		CASE WHEN v3.diff < 0 THEN 
+			v3.diff*-1 
+		ELSE
+			0
+		END AS out_amount,
+		CASE WHEN v3.diff >=0 THEN 
+			1
+		ELSE
+			0
+		END AS in_tx,
+		CASE WHEN v3.diff < 0 THEN 
+			1
+		ELSE
+			0
+		END AS out_tx
+	FROM(
+		SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
+				CASE WHEN v2.pre_sum < v1.output_value THEN
+					(v1.output_value - v2.pre_sum)*-1
+				ELSE
+					v2.pre_sum - v1.output_value
+				END
+			ELSE
+				0
+		END diff
+		 FROM(
+			SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? GROUP BY output_tx_hash 
+			ORDER BY timestamp asc
+		)AS v1
+		LEFT JOIN(
+			SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? GROUP BY output_tx_hash 
+			ORDER BY timestamp asc
+		)AS v2 ON(v2.num+1=v1.num)
+	)AS v3
+)as v4`
+
+	err = GetDB(nil).Raw(utxoQuery, keyId, id, keyId, id).Take(&utxoInfo).Error
 	if err != nil {
-		return &ret, err
+		return nil, err
 	}
-	if scount > 0 {
-		err = conf.GetDbConn().Conn().Table("1_history").Select("sum(amount)").Where("sender_id = ? and ecosystem = ?", keyId, id).Row().Scan(&out)
+
+	//out amount
+	if sCount > 0 {
+		err = GetDB(nil).Table("1_history").Select("sum(amount)").Where("sender_id = ? and ecosystem = ?", keyId, id).Row().Scan(&out)
 		if err != nil {
 			return &ret, err
 		}
-	} else {
-		out = "0"
 	}
 
-	din, err := decimal.NewFromString(in)
-	if err != nil {
-		return &ret, err
-	}
-	dout, err := decimal.NewFromString(out)
-	if err != nil {
-		return &ret, err
-	}
-	ret.InTx = rcount
-	ret.OutTx = scount
-	ret.Transaction = scount + rcount
-	ret.Inamount = din
-	ret.Outamount = dout
+	in1Amount, _ := decimal.NewFromString(in)
+	in2Amount, _ := decimal.NewFromString(utxoInfo.InAmount)
+	out1Amount, _ := decimal.NewFromString(out)
+	out2Amount, _ := decimal.NewFromString(utxoInfo.OutAmount)
+
+	ret.InTx = rCount + utxoInfo.InTx
+	ret.OutTx = sCount + utxoInfo.OutTx
+
+	ret.Transaction = ret.InTx + ret.OutTx
+	ret.Inamount = in1Amount.Add(in2Amount)
+	ret.Outamount = out1Amount.Add(out2Amount)
 
 	return &ret, err
 }
 
-func (th *History) GetWalletTimeLineHistoryTotals(id int64, keyId int64) (*AccountHistoryChart, error) {
+func (th *History) GetWalletTimeLineHistoryTotals(ecosystem int64, keyId int64, getDay int) (*AccountHistoryChart, error) {
 	var (
 		ret AccountHistoryChart
 		err error
+		t1  time.Time
 	)
-	const getDay = 30
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
-	t1 := yesterday.AddDate(0, 0, -1*getDay)
+	if getDay != 0 {
+		t1 = yesterday.AddDate(0, 0, -1*getDay)
+	}
 
 	type daysAmount struct {
 		Days   string          `gorm:"column:days"`
 		Amount decimal.Decimal `gorm:"column:amount"`
 	}
+
+	type utxoDaysAmount struct {
+		Days      string
+		InAmount  decimal.Decimal
+		OutAmount decimal.Decimal
+	}
+	var utxoInfo []utxoDaysAmount
 
 	getDaysAmount := func(dayTime int64, list []daysAmount) decimal.Decimal {
 		for i := 0; i < len(list); i++ {
@@ -1180,33 +1096,103 @@ func (th *History) GetWalletTimeLineHistoryTotals(id int64, keyId int64) (*Accou
 				return list[i].Amount
 			}
 		}
-		str, _ := decimal.NewFromString("0")
-		return str
+		return decimal.Zero
 	}
 
-	var inDays []daysAmount
-	var outDays []daysAmount
+	getUtxoDaysAmount := func(dayTime int64, list []utxoDaysAmount, isGetOut bool) decimal.Decimal {
+		for i := 0; i < len(list); i++ {
+			times, _ := time.ParseInLocation("2006-01-02", list[i].Days, time.Local)
+			if dayTime == times.Unix() {
+				if isGetOut {
+					return list[i].OutAmount
+				} else {
+					return list[i].InAmount
+				}
+			}
+		}
+		return decimal.Zero
+	}
+
+	var (
+		inAmount  []daysAmount
+		outAmount []daysAmount
+	)
 	err = GetDB(nil).Table(th.TableName()).Raw(`SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days ,sum(amount) amount  
 FROM "1_history" WHERE recipient_id <> 0 AND recipient_id = ?
-and ecosystem = ? AND created_at >= ? GROUP BY days`, keyId, id, t1.UnixMilli()).Find(&inDays).Error
+and ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days asc`, keyId, ecosystem, t1.UnixMilli()).Find(&inAmount).Error
 	if err != nil {
 		return &ret, err
 	}
 
 	err = GetDB(nil).Table(th.TableName()).Raw(`SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days ,sum(amount) amount  
 FROM "1_history" WHERE sender_id <> 0 AND sender_id = ?
-and ecosystem = ? AND created_at >= ? GROUP BY days`, keyId, id, t1.UnixMilli()).Find(&outDays).Error
+and ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days asc`, keyId, ecosystem, t1.UnixMilli()).Find(&outAmount).Error
 	if err != nil {
 		return &ret, err
 	}
 
-	ret.Inamount = make([]string, getDay)
-	ret.Time = make([]int64, getDay)
-	ret.Outamount = make([]string, getDay)
-	for i := 0; i < len(ret.Time); i++ {
-		ret.Time[i] = t1.AddDate(0, 0, i+1).Unix()
-		ret.Inamount[i] = getDaysAmount(ret.Time[i], inDays).String()
-		ret.Outamount[i] = getDaysAmount(ret.Time[i], outDays).String()
+	err = GetDB(nil).Raw(`
+SELECT to_char(to_timestamp(v4.timestamp/1000), 'yyyy-mm-dd') AS days,
+COALESCE(sum(v4.in_amount),0)in_amount,COALESCE(sum(v4.out_amount),0)out_amount
+FROM(
+	SELECT v3.*,CASE WHEN v3.diff >= 0 THEN 
+			v3.diff 
+		ELSE
+			0
+		END AS in_amount,
+		CASE WHEN v3.diff < 0 THEN 
+			v3.diff*-1 
+		ELSE
+			0
+		END AS out_amount
+	FROM(
+		SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
+				CASE WHEN v2.pre_sum < v1.output_value THEN
+					(v1.output_value - v2.pre_sum)*-1
+				ELSE
+					v2.pre_sum - v1.output_value
+				END
+			ELSE
+				0
+		END diff
+		 FROM(
+			SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? GROUP BY output_tx_hash 
+			ORDER BY timestamp asc
+		)AS v1
+		LEFT JOIN(
+			SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? GROUP BY output_tx_hash 
+			ORDER BY timestamp asc
+		)AS v2 ON(v2.num+1 = v1.num)
+	)AS v3
+)as v4
+GROUP BY days
+`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.UnixMilli()).Find(&utxoInfo).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var startTime time.Time
+	var stTime string
+
+	if t1.UnixMilli() > 0 {
+		stTime = t1.Format("2006-01-02")
+	} else {
+		stTime = time.Unix(FirstBlockTime, 0).Format("2006-01-02")
+	}
+	t2, err := time.ParseInLocation("2006-01-02", stTime, time.Local)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "day": stTime}).Error("Get Account Time Line History Totals startTime parseInLocation Failed")
+		return &ret, err
+	}
+	startTime = t2
+	today := yesterday.AddDate(0, 0, 1)
+	for startTime.Unix() <= today.Unix() {
+		ret.Time = append(ret.Time, startTime.Unix())
+		ret.Inamount = append(ret.Inamount, getDaysAmount(startTime.Unix(), inAmount).Add(getUtxoDaysAmount(startTime.Unix(), utxoInfo, false)).String())
+		ret.Outamount = append(ret.Outamount, getDaysAmount(startTime.Unix(), outAmount).Add(getUtxoDaysAmount(startTime.Unix(), utxoInfo, true)).String())
+		startTime = startTime.AddDate(0, 0, 1)
 	}
 
 	return &ret, err
@@ -1239,7 +1225,7 @@ func (th *History) Get_Sqlite(txHash []byte) (*HistoryMergeHex, error) {
 			sort.Sort(Historys(ts))
 			//fmt.Println(ts)
 			tss.Ecosystem = ts[0].Ecosystem
-			tss.TokenSymbol, tss.Ecosystemname = GetEcosystemTokenSymbol(tss.Ecosystem)
+			tss.TokenSymbol, tss.Ecosystemname = Tokens.Get(tss.Ecosystem), EcoNames.Get(tss.Ecosystem)
 			tss.ID = ts[0].ID
 			tss.Senderid = strconv.FormatInt(ts[0].Senderid, 10)
 			tss.Comment = ts[0].Comment
@@ -1293,13 +1279,13 @@ func (th *History) GetHistorys_Sqlite(page int, size int, order string) (*[]Hist
 		da := HistoryHex{}
 		da.Ecosystem = tss[i].Ecosystem
 
-		da.TokenSymbol, da.Ecosystemname = GetEcosystemTokenSymbol(da.Ecosystem)
+		da.TokenSymbol, da.Ecosystemname = Tokens.Get(da.Ecosystem), EcoNames.Get(da.Ecosystem)
 		da.ID = tss[i].ID
 		da.Senderid = strconv.FormatInt(tss[i].Senderid, 10)
 		da.Recipientid = strconv.FormatInt(tss[i].Recipientid, 10)
 		da.Amount = tss[i].Amount
 		da.Comment = tss[i].Comment
-		da.Blockid = tss[i].Blockid
+		da.BlockId = tss[i].Blockid
 		da.Txhash = hex.EncodeToString(tss[i].Txhash)
 		da.Createdat = MsToSeconds(tss[i].Createdat)
 		ret = append(ret, da)
@@ -1379,13 +1365,13 @@ func (th *History) GetWallets_Sqlite(page int, size int, wallet string, searchTy
 		//fmt.Println("offet Error:%d ", ioffet)
 		da := HistoryHex{}
 		da.Ecosystem = tss[i].Ecosystem
-		da.TokenSymbol, da.Ecosystemname = GetEcosystemTokenSymbol(da.Ecosystem)
+		da.TokenSymbol, da.Ecosystemname = Tokens.Get(da.Ecosystem), EcoNames.Get(da.Ecosystem)
 		da.ID = tss[i].ID
 		da.Senderid = strconv.FormatInt(tss[i].Senderid, 10)
 		da.Recipientid = strconv.FormatInt(tss[i].Recipientid, 10)
 		da.Amount = tss[i].Amount
 		da.Comment = tss[i].Comment
-		da.Blockid = tss[i].Blockid
+		da.BlockId = tss[i].Blockid
 		da.Txhash = hex.EncodeToString(tss[i].Txhash)
 		da.Createdat = MsToSeconds(tss[i].Createdat)
 		ret = append(ret, da)
@@ -1458,13 +1444,13 @@ func (th *History) GetWallets_EcosytemSqlite(id int64, page int, size int, walle
 	for i = 0; i < count; i++ {
 		da := HistoryHex{}
 		da.Ecosystem = tss[i].Ecosystem
-		da.TokenSymbol, da.Ecosystemname = GetEcosystemTokenSymbol(da.Ecosystem)
+		da.TokenSymbol, da.Ecosystemname = Tokens.Get(da.Ecosystem), EcoNames.Get(da.Ecosystem)
 		da.ID = tss[i].ID
 		da.Senderid = strconv.FormatInt(tss[i].Senderid, 10)
 		da.Recipientid = strconv.FormatInt(tss[i].Recipientid, 10)
 		da.Amount = tss[i].Amount
 		da.Comment = tss[i].Comment
-		da.Blockid = tss[i].Blockid
+		da.BlockId = tss[i].Blockid
 		da.Txhash = hex.EncodeToString(tss[i].Txhash)
 		da.Createdat = MsToSeconds(tss[i].Createdat)
 		ret = append(ret, da)
@@ -1541,11 +1527,51 @@ func (th *History) Get24HourTxAmount() string {
 	}
 	var res result
 
-	//todo :need add freeze_amount
-	if err := GetDB(nil).Table(th.TableName()).Select("SUM(amount) as amount").Where("created_at >= ? AND ecosystem = 1", t1.UnixMilli()).Scan(&res).Error; err != nil {
+	err := GetDB(nil).Raw(`
+SELECT COALESCE(sum(amount) + 
+		(
+			SELECT COALESCE(sum(v4.in_amount),0)+COALESCE(sum(v4.out_amount),0)amount
+			FROM(
+				SELECT v3.*,CASE WHEN v3.diff >= 0 THEN 
+						v3.diff 
+					ELSE
+						0
+					END AS in_amount,
+					CASE WHEN v3.diff < 0 THEN 
+						v3.diff*-1 
+					ELSE
+						0
+					END AS out_amount
+				FROM(
+					SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
+							CASE WHEN v2.pre_sum < v1.output_value THEN
+								(v1.output_value - v2.pre_sum)*-1
+							ELSE
+								v2.pre_sum - v1.output_value
+							END
+						ELSE
+							0
+					END diff
+					 FROM(
+						SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+							FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE ecosystem = 1 AND timestamp >= ? GROUP BY output_tx_hash 
+						ORDER BY timestamp asc
+					)AS v1
+					LEFT JOIN(
+						SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+							FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE ecosystem = 1 AND timestamp >= ? GROUP BY output_tx_hash 
+						ORDER BY timestamp asc
+					)AS v2 ON(v2.num+1 = v1.num)
+				)AS v3
+			)as v4
+		),0)as amount
+FROM "1_history" AS h1 WHERE ecosystem = 1 AND created_at >= ?
+`, t1.UnixMilli(), t1.UnixMilli(), t1.UnixMilli()).Scan(&res).Error
+	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("Get scan 24 Hour tx amount err")
 		return "0"
 	}
+
 	return res.Amount.String()
 }
 
@@ -1560,6 +1586,8 @@ func GetAmountChangePieChart(ecosystem int64, account string, stTime, edTime int
 		f         bool
 		endTime   time.Time
 		startTime time.Time
+		r1        AccountAmountChangePieChart
+		r2        AccountAmountChangePieChart
 	)
 	keyId := converter.StringToAddress(account)
 	if keyId == 0 {
@@ -1577,14 +1605,9 @@ func GetAmountChangePieChart(ecosystem int64, account string, stTime, edTime int
 	}
 
 	f, err = isFound(GetDB(nil).Raw(fmt.Sprintf(`SELECT sum(amount) AS outcome,
-(SELECT sum(amount)AS income FROM "1_history" WHERE recipient_id = %d AND ecosystem = max(h1.ecosystem) AND created_at >= %d AND created_at < %d),
-case WHEN max(h1.ecosystem) = 1 THEN
- coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(h1.ecosystem)),'IBXC')
-ELSE
- (SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(h1.ecosystem)) 
-END as token_symbol
+(SELECT sum(amount)AS income FROM "1_history" WHERE recipient_id = %d AND ecosystem = max(h1.ecosystem) AND created_at >= %d AND created_at < %d)
 FROM "1_history" AS h1 WHERE sender_id = %d AND ecosystem = %d AND created_at >= %d AND created_at < %d`,
-		keyId, startTime.UnixMilli(), endTime.UnixMilli(), keyId, ecosystem, startTime.UnixMilli(), endTime.UnixMilli())).Take(&rets))
+		keyId, startTime.UnixMilli(), endTime.UnixMilli(), keyId, ecosystem, startTime.UnixMilli(), endTime.UnixMilli())).Take(&r1))
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Pie Chart Failed")
 		return rets, nil
@@ -1592,69 +1615,121 @@ FROM "1_history" AS h1 WHERE sender_id = %d AND ecosystem = %d AND created_at >=
 	if !f {
 		return rets, errors.New("unknown account:" + converter.AddressToString(keyId) + " in ecosystem:" + strconv.FormatInt(ecosystem, 10))
 	}
+
+	f, err = isFound(GetDB(nil).Raw(`
+SELECT COALESCE(sum(v4.in_amount),0)income,COALESCE(sum(v4.out_amount),0)outcome
+FROM(
+	SELECT v3.*,CASE WHEN v3.diff >= 0 THEN 
+			v3.diff 
+		ELSE
+			0
+		END AS in_amount,
+		CASE WHEN v3.diff < 0 THEN 
+			v3.diff*-1 
+		ELSE
+			0
+		END AS out_amount
+	FROM(
+		SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
+				CASE WHEN v2.pre_sum < v1.output_value THEN
+					(v1.output_value - v2.pre_sum)*-1
+				ELSE
+					v2.pre_sum - v1.output_value
+				END
+			ELSE
+				0
+		END diff
+		 FROM(
+			SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  
+				WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? AND timestamp < ?  GROUP BY output_tx_hash 
+			ORDER BY timestamp asc
+		)AS v1
+		LEFT JOIN(
+			SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
+				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  
+				WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? AND timestamp < ? GROUP BY output_tx_hash 
+			ORDER BY timestamp asc
+		)AS v2 ON(v2.num+1 = v1.num)
+	)AS v3
+)as v4
+`, keyId, ecosystem, startTime.UnixMilli(), endTime.UnixMilli(), keyId, ecosystem, startTime.UnixMilli(), endTime.UnixMilli()).Take(&r2))
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Pie Chart Failed")
+		return rets, nil
+	}
+	if !f {
+		return rets, errors.New("unknown account:" + converter.AddressToString(keyId) + " in ecosystem:" + strconv.FormatInt(ecosystem, 10))
+	}
+
+	rets.Outcome = r1.Outcome.Add(r2.Outcome)
+	rets.Income = r1.Income.Add(r2.Income)
+	rets.TokenSymbol = Tokens.Get(ecosystem)
 	return rets, nil
 }
 
 func GetAmountChangeBarChart(ecosystem int64, account string, isDefault int) (AccountAmountChangeBarChart, error) {
 	var (
-		rets                                 AccountAmountChangeBarChart
-		balanceList, outcomeList, incomeList []DaysAmount
-		findTime                             int64
+		rets     AccountAmountChangeBarChart
+		findTime int64
+		his      History
+		list     *AccountHistoryChart
+		err      error
+		balance  AccountAmountChangeBarChart
 	)
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	today := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 	keyId := converter.StringToAddress(account)
-	if keyId == 0 {
+	if keyId == 0 && account != "0000-0000-0000-0000-0000" {
 		return rets, errors.New("account invalid")
 	}
 	if isDefault == 1 {
 		findTime = today.AddDate(0, 0, -1*14).UnixMilli()
+		list, err = his.GetWalletTimeLineHistoryTotals(ecosystem, keyId, 15)
+		if err != nil {
+			return rets, err
+		}
+	} else {
+		list, err = his.GetWalletTimeLineHistoryTotals(ecosystem, keyId, 0)
+		if err != nil {
+			return rets, err
+		}
 	}
-	err := GetDB(nil).Raw(fmt.Sprintf(`
-SELECT h4.days, h3.amount FROM (
-						SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days ,max(h1.id) mid
-						FROM "1_history" AS h1 
-					WHERE (h1.recipient_id = %d OR h1.sender_id = %d) AND h1.ecosystem = %d AND created_at >= %d GROUP BY days ORDER BY days asc
- 
-) h4 LEFT JOIN (
-			SELECT id, CASE WHEN (sender_balance > 0 AND sender_id = %d AND created_at >= %d) THEN
-			 sender_balance
-			 ELSE
-			 recipient_balance
-			 END as amount FROM "1_history" AS h2 
-) as h3 ON h3.id = h4.mid`,
-		keyId, keyId, ecosystem, findTime, keyId, findTime)).Find(&balanceList).Error
+
+	getBalance := func(dayTime int64, info AccountAmountChangeBarChart) string {
+		for i := 0; i < len(info.Time); i++ {
+			if dayTime == info.Time[i] {
+				return info.Balance[i]
+			}
+		}
+		return "0"
+	}
+
+	getAmount := func(dayTime int64, info *AccountHistoryChart, getInAmount bool) string {
+		if info == nil {
+			return "0"
+		}
+		for i := 0; i < len(info.Time); i++ {
+			if dayTime == info.Time[i] {
+				if getInAmount {
+					return info.Inamount[i]
+				} else {
+					return info.Outamount[i]
+				}
+			}
+		}
+		return "0"
+	}
+
+	balance, err = GetAccountTokenChangeChart(ecosystem, keyId, findTime)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Bar Chart balance list Failed")
-		return rets, nil
+		return rets, err
 	}
+	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
 
-	err = GetDB(nil).Raw(fmt.Sprintf(`
- SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,sum(amount) AS amount 
-FROM "1_history" WHERE sender_id = %d AND ecosystem = %d AND created_at >= %d GROUP BY days ORDER BY days asc`,
-		keyId, ecosystem, findTime)).Find(&outcomeList).Error
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Bar Chart balance list Failed")
-		return rets, nil
-	}
-
-	err = GetDB(nil).Raw(fmt.Sprintf(`
- SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,sum(amount) AS amount 
-FROM "1_history" WHERE recipient_id = %d AND ecosystem = %d AND created_at >= %d GROUP BY days ORDER BY days asc`,
-		keyId, ecosystem, findTime)).Find(&incomeList).Error
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Bar Chart balance list Failed")
-		return rets, nil
-	}
-	rets.TokenSymbol, _ = GetEcosystemTokenSymbol(ecosystem)
-
-	rets.Time = make([]int64, 0)
-	rets.Outcome = make([]string, 0)
-	rets.Income = make([]string, 0)
-	rets.Balance = make([]string, 0)
-
+	lastBalance := decimal.Zero
 	var startTime time.Time
-	lastBalance := decimal.New(0, 0).String()
 	var stTime string
 
 	if findTime > 0 {
@@ -1670,15 +1745,17 @@ FROM "1_history" WHERE recipient_id = %d AND ecosystem = %d AND created_at >= %d
 	startTime = t1
 	for startTime.Unix() <= today.Unix() {
 		rets.Time = append(rets.Time, startTime.Unix())
-		balance := GetDaysAmount(startTime.Unix(), balanceList)
-		if balance != "0" {
-			lastBalance = balance
-			rets.Balance = append(rets.Balance, balance)
+		balanceAmount := getBalance(startTime.Unix(), balance)
+
+		//balance := GetDaysAmount(startTime.Unix(), balanceList)
+		if balanceAmount != "0" {
+			lastBalance, _ = decimal.NewFromString(balanceAmount)
+			rets.Balance = append(rets.Balance, balanceAmount)
 		} else {
-			rets.Balance = append(rets.Balance, lastBalance)
+			rets.Balance = append(rets.Balance, lastBalance.String())
 		}
-		rets.Outcome = append(rets.Outcome, GetDaysAmount(startTime.Unix(), outcomeList))
-		rets.Income = append(rets.Income, GetDaysAmount(startTime.Unix(), incomeList))
+		rets.Outcome = append(rets.Outcome, getAmount(startTime.Unix(), list, false))
+		rets.Income = append(rets.Income, getAmount(startTime.Unix(), list, true))
 		startTime = startTime.AddDate(0, 0, 1)
 	}
 
@@ -1696,10 +1773,30 @@ func GetAccountTxChart(ecosystem int64, account string) (AccountTxChart, error) 
 	}
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	today := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
-	err := GetDB(nil).Raw(fmt.Sprintf(`
-SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,count(1) num 
-FROM "1_history" WHERE (sender_id = %d or recipient_id = %d) AND ecosystem = %d GROUP BY days ORDER BY days asc
-`, keyId, keyId, ecosystem)).Find(&list).Error
+	err := GetDB(nil).Raw(`
+SELECT CASE WHEN n1.days = ''THEN
+	n2.days
+ELSE
+	n1.days
+END,COALESCE(n1.num,0)+COALESCE(n2.num,0)AS num
+FROM(
+	SELECT days,count(1)num FROM (
+		SELECT txhash,to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days FROM "1_history" WHERE (sender_id = ? or recipient_id = ?) AND ecosystem = ? GROUP BY txhash,created_at
+		ORDER BY days asc
+	)AS v1
+	GROUP BY days
+)AS n1
+FULL JOIN(
+
+	SELECT days,count(1)num FROM(
+		SELECT output_tx_hash,to_char(to_timestamp(timestamp/1000),'yyyy-MM-dd') AS days FROM spent_info AS v1 
+			LEFT JOIN log_transactions AS v2 ON(v1.output_tx_hash = v2.hash) WHERE output_key_id = ? AND ecosystem = ?
+		GROUP BY output_tx_hash,"timestamp"
+		ORDER BY days asc
+	)AS v1
+	GROUP BY days
+)AS n2 ON(n2.days = n1.days)
+`, keyId, keyId, ecosystem, keyId, ecosystem).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Bar Chart balance list Failed")
 		return rets, nil

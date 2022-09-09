@@ -7,7 +7,6 @@ package models
 
 import (
 	"github.com/IBAX-io/go-ibax/packages/converter"
-	"github.com/IBAX-io/go-ibax/packages/smart"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -24,8 +23,6 @@ type Contract struct {
 	EcosystemID int64  `gorm:"column:ecosystem" json:"ecosystem_id,omitempty"`
 }
 
-var loadContractsSig chan bool
-
 // TableName returns name of table
 func (c *Contract) TableName() string {
 	return `1_contracts`
@@ -36,6 +33,9 @@ func (c *Contract) GetById(id int64) (bool, error) {
 }
 
 func GetContractCodeByName(contractName string) string {
+	if contractName == UtxoTx || contractName == UtxoTransfer {
+		return ""
+	}
 	ecosystem, name := converter.ParseName(contractName)
 	var c Contract
 	f, err := isFound(GetDB(nil).Select("value").Where("name = ? AND ecosystem = ?", name, ecosystem).First(&c))
@@ -58,26 +58,4 @@ func (c *Contract) GetByApp(appID int64, ecosystemID int64) ([]Contract, error) 
 	var result []Contract
 	err := GetDB(nil).Select("id,name,value,conditions").Where("app_id = ? and ecosystem = ?", appID, ecosystemID).Find(&result).Error
 	return result, err
-}
-
-func LoadContractsReceive() {
-	if loadContractsSig == nil {
-		loadContractsSig = make(chan bool)
-	}
-	for {
-		select {
-		case <-loadContractsSig:
-			if err := smart.LoadContracts(); err != nil {
-				log.WithFields(log.Fields{"error": err}).Error("Load Contracts Failed")
-			}
-		}
-	}
-}
-
-func SendLoadContractsSignal() {
-	select {
-	case loadContractsSig <- true:
-	default:
-		//If there is still unprocessed content in the channel, not continue to send
-	}
 }

@@ -115,7 +115,7 @@ type TxDetailedInfoResponse struct {
 	Size   string `json:"size"`
 
 	Ecosystemname string `json:"ecosystemname"`
-	Token_symbol  string `json:"token_symbol"`
+	TokenSymbol   string `json:"token_symbol"`
 	Ecosystem     int64  `json:"ecosystem"`
 }
 

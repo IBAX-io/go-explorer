@@ -54,13 +54,15 @@ func (p *CandidateNodeRequests) TableName() string {
 	return "1_candidate_node_requests"
 }
 
-func initPledgeAmount() {
-	pledgeAmount, err := sqldb.GetPledgeAmount()
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("init Pledge Amount Failed")
-		return
+func InitPledgeAmount() {
+	if NodeReady {
+		pledgeAmount, err := sqldb.GetPledgeAmount()
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("init Pledge Amount Failed")
+			return
+		}
+		PledgeAmount = pledgeAmount
 	}
-	PledgeAmount = pledgeAmount
 }
 
 func (p *CandidateNodeRequests) GetById(id int64) (bool, error) {

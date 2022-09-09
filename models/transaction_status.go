@@ -83,7 +83,7 @@ func (ts *TransactionStatus) GetTransactions(page int, size int, order string) (
 			Error:     tss[i].Error,
 			Penalty:   tss[i].Penalty,
 		}
-		tx.TokenSymbol, tx.Ecosystemname = GetEcosystemTokenSymbol(tss[i].Ecosystem)
+		tx.TokenSymbol, tx.Ecosystemname = Tokens.Get(tss[i].Ecosystem), EcoNames.Get(tss[i].Ecosystem)
 		ret = append(ret, tx)
 	}
 	return &ret, num, err

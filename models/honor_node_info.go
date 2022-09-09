@@ -93,13 +93,13 @@ func GeoIpClose() {
 	}
 }
 
-func getHonorNodeInfo() {
+func InsertHonorNodeInfo() {
 	var (
 		err      error
 		list2    []NodeValue
 		list1    []NodeValue
 		p        HonorNodeInfo
-		sp       SystemParameter
+		sp       PlatformParameter
 		nodeInfo string
 		nodes    []NodeInfo
 		list     []NodeValue
@@ -377,7 +377,7 @@ func (p *HonorNodeInfo) DelRedis() {
 	}
 }
 
-func updateHonorNodeInfo() {
+func UpdateHonorNodeInfo() {
 	HonorNodes = GetHonorNodeInfo()
 }
 

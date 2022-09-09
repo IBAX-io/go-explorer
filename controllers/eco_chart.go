@@ -32,7 +32,7 @@ func GetAccountTokenChangeHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetAccountTokenChangeChart(req.Ecosystem, wid)
+	rets, err := models.GetAccountTokenChangeChart(req.Ecosystem, wid, 0)
 	if err != nil {
 		ret.ReturnFailureString("Get Account Token Change Failed")
 		JsonResponse(c, ret)

@@ -115,3 +115,13 @@ func GetTransactionHeadInfoHash(hash string) (*models.TxDetailedInfoHeadResponse
 
 	return &rets, nil
 }
+
+func GetUtxoTransactionDetailedInfo(hash string) (*models.UtxoExplorer, error) {
+	hashByte := converter.HexToBin(hash)
+	si := &models.SpentInfo{}
+	ret2, err := si.GetExplorer(hashByte)
+	if err != nil {
+		return nil, err
+	}
+	return ret2, nil
+}

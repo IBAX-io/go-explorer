@@ -362,10 +362,10 @@ ORDER BY days DESC LIMIT 15
 }
 
 func GetDaysNumber(getTime int64, list []DaysNumber) int64 {
-	for i := 0; i < len(list); i++ {
-		times, _ := time.ParseInLocation("2006-01-02", list[i].Days, time.Local)
+	for i := len(list); i > 0; i-- {
+		times, _ := time.ParseInLocation("2006-01-02", list[i-1].Days, time.Local)
 		if getTime == times.Unix() {
-			return list[i].Num
+			return list[i-1].Num
 		}
 	}
 	return 0
@@ -594,7 +594,7 @@ func GetHonorListFromRedis(cmd string) (*GeneralResponse, error) {
 	return rets, err
 }
 
-func InitHonorNodeRedis(cmd string) {
+func InitHonorNodeByRedis(cmd string) {
 	rd := RedisParams{
 		Key:   "dashboard-node-" + cmd,
 		Value: "",

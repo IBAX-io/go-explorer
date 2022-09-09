@@ -11,6 +11,7 @@ import (
 	"github.com/IBAX-io/go-explorer/conf"
 	"github.com/IBAX-io/go-explorer/daemons"
 	"github.com/IBAX-io/go-explorer/models"
+	"github.com/IBAX-io/go-explorer/models/crontab"
 	"github.com/IBAX-io/go-explorer/route"
 	"github.com/IBAX-io/go-ibax/packages/consts"
 	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
@@ -76,7 +77,7 @@ func loadStartRun() error {
 	}
 
 	daemons.StartDaemons(context.Background())
-	go models.CreateCrontab()
+	go crontab.CreateCrontab()
 
 	go func() {
 		err := route.Run(conf.GetEnvConf().ServerInfo.Str())

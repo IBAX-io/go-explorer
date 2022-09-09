@@ -8,6 +8,7 @@ package models
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"github.com/IBAX-io/go-explorer/conf"
 	"github.com/IBAX-io/go-ibax/packages/block"
 	"github.com/IBAX-io/go-ibax/packages/converter"
@@ -140,9 +141,13 @@ func GetBlocksDetailedInfoHexByScanOut(mc *Block) (*BlockDetailedInfoHex, error)
 
 		if tx.IsSmartContract() {
 			if tx.SmartContract().TxSmart.UTXO != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTx
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
+				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTransfer
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
+				txDetailedInfo.Params = string(dataBytes)
 			} else {
 				txDetailedInfo.ContractName, txDetailedInfo.Params = GetMineParam(tx.SmartContract().TxSmart.EcosystemID, tx.SmartContract().TxContract.Name, tx.SmartContract().TxData, tx.Hash())
 			}
@@ -165,7 +170,8 @@ func GetBlocksDetailedInfoHexByScanOut(mc *Block) (*BlockDetailedInfoHex, error)
 			if txDetailedInfo.Ecosystem == 0 {
 				txDetailedInfo.Ecosystem = 1
 			}
-			txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = GetEcosystemTokenSymbol(txDetailedInfo.Ecosystem)
+			txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = Tokens.Get(txDetailedInfo.Ecosystem), EcoNames.Get(txDetailedInfo.Ecosystem)
+
 		} else {
 			if txDetailedInfo.Ecosystem == 0 {
 				txDetailedInfo.Ecosystem = 1
@@ -325,9 +331,13 @@ func GetBlocksTransactionListByBlockInfo(mc *Block) (*[]TxDetailedInfoResponse, 
 		}
 		if tx.IsSmartContract() {
 			if tx.SmartContract().TxSmart.UTXO != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTx
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
+				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				//TODO ADD
+				txDetailedInfo.ContractName = UtxoTransfer
+				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
+				txDetailedInfo.Params = string(dataBytes)
 			} else {
 				txDetailedInfo.ContractName, _ = GetMineParam(tx.SmartContract().TxSmart.EcosystemID, tx.SmartContract().TxContract.Name, tx.SmartContract().TxData, tx.Hash())
 			}
@@ -349,13 +359,13 @@ func GetBlocksTransactionListByBlockInfo(mc *Block) (*[]TxDetailedInfoResponse, 
 			if txDetailedInfo.Ecosystem == 0 {
 				txDetailedInfo.Ecosystem = 1
 			}
-			txDetailedInfo.Token_symbol, txDetailedInfo.Ecosystemname = GetEcosystemTokenSymbol(txDetailedInfo.Ecosystem)
+			txDetailedInfo.TokenSymbol, txDetailedInfo.Ecosystemname = Tokens.Get(txDetailedInfo.Ecosystem), EcoNames.Get(txDetailedInfo.Ecosystem)
 		} else {
 			if txDetailedInfo.Ecosystem == 0 {
 				txDetailedInfo.Ecosystem = 1
 			}
 			if txDetailedInfo.Ecosystem == 1 {
-				txDetailedInfo.Token_symbol = SysTokenSymbol
+				txDetailedInfo.TokenSymbol = SysTokenSymbol
 				if txDetailedInfo.Ecosystemname == "" {
 					txDetailedInfo.Ecosystemname = SysEcosystemName
 				}
