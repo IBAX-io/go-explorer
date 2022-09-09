@@ -835,7 +835,7 @@ type AccountTxListResponse struct {
 	Hash         string `json:"hash"`
 	BlockId      int64  `json:"block_id"`
 	ContractName string `json:"contract_name"`
-	CreatedAt    int64  `json:"created_at"`
+	Timestamp    int64  `json:"timestamp"`
 	Address      string `json:"address"`
 	Status       int32  `json:"status"`
 }

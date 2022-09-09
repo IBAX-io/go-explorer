@@ -74,7 +74,7 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 		return &ret, num, err
 	}
 
-	err = GetDB(nil).Select("hash,block").Offset((page - 1) * limit).Limit(limit).Order("block desc").Find(&tss).Error
+	err = GetDB(nil).Select("hash,block,status").Offset((page - 1) * limit).Limit(limit).Order("block desc").Find(&tss).Error
 	if err != nil {
 		return &ret, num, err
 	}
@@ -84,9 +84,11 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 	}
 	TBlock := make(map[string]int64)
 	Thash := make(map[string]bool)
+	hashStatus := make(map[string]int32)
 	for i = 0; i < len(tss); i++ {
 		hash := hex.EncodeToString(tss[i].Hash)
 		Thash[hash] = true
+		hashStatus[hash] = tss[i].Status
 
 		key := strconv.FormatInt(tss[i].Block, 10)
 		TBlock[key] = tss[i].Block
@@ -114,7 +116,11 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 				bh.Hash = rt.Transactions[j].Hash
 				bh.KeyID = rt.Transactions[j].KeyID
 				//bh.Params = rt.Transactions[j].Params
-				bh.Time = rt.Transactions[j].Time
+				if reqType == 1 {
+					bh.Time = bk.Time
+				} else {
+					bh.Time = rt.Transactions[j].Time
+				}
 				bh.Type = rt.Transactions[j].Type
 				bh.Ecosystem = rt.Transactions[j].Ecosystem
 				bh.Ecosystemname = rt.Transactions[j].Ecosystemname
@@ -129,38 +135,32 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 				Ten := unsafe.Sizeof(rt.Transactions[j])
 				bh.Size = int64(Ten)
 				if Thash[rt.Transactions[j].Hash] {
-					if bh.ContractName == UtxoTx {
-						var params types.UTXO
-						err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
-						if err != nil {
-							return nil, 0, err
+					bh.Status = hashStatus[rt.Transactions[j].Hash]
+					if reqType == 0 {
+						if bh.ContractName == UtxoTx {
+							var params types.UTXO
+							err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
+							if err != nil {
+								return nil, 0, err
+							}
+							bh.Amount, _ = decimal.NewFromString(params.Value)
+							//bh.GasFee todo: need add
+						} else if bh.ContractName == UtxoTransfer {
+							var params types.TransferSelf
+							err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
+							if err != nil {
+								return nil, 0, err
+							}
+							bh.Amount, _ = decimal.NewFromString(params.Value)
+						} else {
+							var his History
+							gasFee, amount, err := his.GetTxListExplorer(converter.HexToBin(rt.Transactions[j].Hash))
+							if err != nil {
+								return nil, 0, err
+							}
+							bh.GasFee = gasFee
+							bh.Amount = amount
 						}
-						bh.Amount, _ = decimal.NewFromString(params.Value)
-						f, err := lt.GetStatus(converter.HexToBin(rt.Transactions[j].Hash))
-						if err == nil && f {
-							bh.Status = lt.Status
-						}
-						//bh.GasFee todo: need add
-					} else if bh.ContractName == UtxoTransfer {
-						var params types.TransferSelf
-						err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
-						if err != nil {
-							return nil, 0, err
-						}
-						bh.Amount, _ = decimal.NewFromString(params.Value)
-						f, err := lt.GetStatus(converter.HexToBin(rt.Transactions[j].Hash))
-						if err == nil && f {
-							bh.Status = lt.Status
-						}
-					} else {
-						var his History
-						det, err := his.GetTxListExplorer(converter.HexToBin(rt.Transactions[j].Hash))
-						if err != nil {
-							return nil, 0, err
-						}
-						bh.GasFee = det.GasFee
-						bh.Amount = det.Amount
-						bh.Status = det.Status
 					}
 					ret = append(ret, bh)
 				}
@@ -555,7 +555,7 @@ func (lt *LogTransaction) GetEcosystemAccountTransaction(ecosystem int64, page i
 		da := AccountTxListResponse{}
 		da.Hash = hex.EncodeToString(tss[i].Hash)
 		da.BlockId = tss[i].Block
-		da.CreatedAt = MsToSeconds(tss[i].Timestamp)
+		da.Timestamp = MsToSeconds(tss[i].Timestamp)
 		da.Address = converter.AddressToString(tss[i].Address)
 		da.ContractName = tss[i].ContractName
 		if da.ContractName == "" {

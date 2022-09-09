@@ -652,34 +652,33 @@ func (th *History) GetBlockRewardById(blockId int64) (*BlockListResponse, error)
 	return &tss, err
 }
 
-func (th *History) GetTxListExplorer(txHash []byte) (*BlockTxDetailedInfoHex, error) {
+func (th *History) GetTxListExplorer(txHash []byte) (decimal.Decimal, decimal.Decimal, error) {
 	var (
-		ts  []History
-		tss BlockTxDetailedInfoHex
+		ts []History
 	)
 	//get ecosystem 1 gasFee
-	err := GetDB(nil).Select("type,amount,status,ecosystem").Where("txhash = ?", txHash).Order("id ASC").Find(&ts).Error
+	err := GetDB(nil).Select("type,amount,ecosystem").Where("txhash = ?", txHash).Order("id ASC").Find(&ts).Error
 	count := len(ts)
+	gasFee := decimal.Zero
+	amount := decimal.Zero
 
 	//TODO:status need add struct log table
-	tss.Status = 0
 	if err == nil && count > 0 {
 		//for
 		for _, ret := range ts {
-			tss.Status = ret.Status
 			if ret.Type == 1 || ret.Type == 2 {
 				if ret.Ecosystem == 1 {
-					tss.GasFee = tss.GasFee.Add(ret.Amount)
+					gasFee = gasFee.Add(ret.Amount)
 				}
 			} else {
 				if ret.Type != 15 && ret.Type != 16 {
-					tss.Amount = tss.Amount.Add(ret.Amount)
+					amount = amount.Add(ret.Amount)
 				}
 			}
 		}
 	}
 
-	return &tss, err
+	return gasFee, amount, err
 }
 
 func (th *History) GetHistoryTimeList(time time.Time) (*[]History, error) {
