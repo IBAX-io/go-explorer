@@ -9,9 +9,15 @@ import (
 	"encoding/json"
 	"github.com/shopspring/decimal"
 	"strconv"
+	"sync"
 
 	"github.com/IBAX-io/go-explorer/conf"
 )
+
+type FuelRateInfo struct {
+	Map map[int64]decimal.Decimal
+	sync.RWMutex
+}
 
 // PlatformParameter is model
 type PlatformParameter struct {

@@ -28,6 +28,7 @@ func (p *RealTime) ReceiveSignal() {
 	for {
 		select {
 		case <-p.Signal:
+			models.RealtimeWG.Wait()
 			realTimeDataServer()
 		}
 	}
@@ -37,7 +38,7 @@ func realTimeDataServer() {
 	go models.SyncBlockListToRedis()
 	go models.DealRedisBlockTpsList()
 	go models.GetTransactionBlockToRedis()
-	models.SendStatisticsSignal()
+	go models.GetStatisticsSignal()
 	go models.DataChartRealtimeSever()
 	go models.GetHonorListToRedis("newest")
 	go models.GetHonorListToRedis("pkg_rate")

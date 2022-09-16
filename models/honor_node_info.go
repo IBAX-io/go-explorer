@@ -209,7 +209,7 @@ func syncNodeDisplayStatus(nodeValue []NodeValue) {
 		p    HonorNodeInfo
 		list []HonorNodeInfo
 	)
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		return
 	}
 	if err := GetDB(nil).Table(p.TableName()).Select("id,value,display").Order("id desc").Find(&list).Error; err != nil {
@@ -378,6 +378,10 @@ func (p *HonorNodeInfo) DelRedis() {
 }
 
 func UpdateHonorNodeInfo() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	HonorNodes = GetHonorNodeInfo()
 }
 
@@ -389,6 +393,7 @@ func FindNodeLocatedSave(list []NodeValue) (err error) {
 	for i := 0; i < len(list); i++ {
 		var node HonorNodeInfo
 		ip = getIPAddress(list[i].ApiAddress)
+		//fmt.Printf("ip:%s\n", ip)
 		if isNotIp := net.ParseIP(list[i].ApiAddress); isNotIp == nil {
 			addr, err := net.ResolveIPAddr("ip", ip)
 			if err != nil {
@@ -561,7 +566,8 @@ func (p *HonorNodeInfo) nodeStatusUpdate() bool {
 	}
 
 	f, err := isFound(GetDB(nil).Table(p.TableName()).
-		Where("CAST(value->>'id' as numeric) = ? AND CAST(value->>'consensus_mode' as numeric) = ? AND value->>'api_address' = ?", value.Id, value.ConsensusMode, value.ApiAddress).Take(&node))
+		Where("CAST(value->>'id' as numeric) = ? AND CAST(value->>'consensus_mode' as numeric) = ? AND value->>'api_address' = ?",
+			value.Id, value.ConsensusMode, value.ApiAddress).Take(&node))
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "node_id": value.Id, "consensus_mode": value.ConsensusMode}).Error("Node Status Update DB Failed ")
 		return false
@@ -573,14 +579,12 @@ func (p *HonorNodeInfo) nodeStatusUpdate() bool {
 			node.Latitude == p.Latitude && node.Longitude == p.Longitude {
 			return true
 		}
-
-		if err := GetDB(nil).Where("id = ?", node.ID).Model(HonorNodeInfo{}).Updates(map[string]interface{}{"address": p.Address,
-			"latitude": p.Latitude, "longitude": p.Latitude, "display": p.Display,
+		if err := GetDB(nil).Model(&HonorNodeInfo{}).Where("id = ?", node.ID).Updates(map[string]interface{}{"address": p.Address,
+			"latitude": p.Latitude, "longitude": p.Longitude, "display": p.Display,
 		}).Error; err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Node Status Update err")
 			return true
 		}
-
 		return true
 	}
 }

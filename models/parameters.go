@@ -112,8 +112,6 @@ func (sp *StateParameter) GetMintAmount() (string, error) {
 	} else {
 		return "0", errors.New("assign rules err")
 	}
-
-	return "0", nil
 }
 
 func (sp *StateParameter) FindStateParameters(page int, size int, name, order string, ecosystem int64) (num int64, rets []StateParameter, err error) {

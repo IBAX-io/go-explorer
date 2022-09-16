@@ -28,6 +28,10 @@ func MsgpackUnmarshal(bt []byte, v any) error {
 }
 
 func GetEcoLibsChartDataToRedis() {
+	ChartWG.Add(1)
+	defer func() {
+		ChartWG.Done()
+	}()
 	var eco Ecosystem
 	rets, err := eco.GetBasisEcosystemChart()
 	if err != nil {
@@ -79,6 +83,10 @@ func GetEcoLibsChartData() (*BasisEcosystemResponse, error) {
 }
 
 func GetEcoLibsTxChartDataToRedis() {
+	ChartWG.Add(1)
+	defer func() {
+		ChartWG.Done()
+	}()
 	rets, err := GetEcoLibsTransaction()
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("GetEcoLibsTransaction error")
@@ -108,7 +116,8 @@ func GetEcoLibsTxChartDataFromRedis() ([]EcosystemTxRatioChart, error) {
 		Key:   "ecoLibs-tx-chart",
 		Value: "",
 	}
-	if err := rd.Get(); err != nil {
+	err = rd.Get()
+	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("GetEcoLibsTxChartDataFromRedis getDb err")
 		return nil, err
 	}
@@ -145,6 +154,10 @@ func getBlockDiffChartDataFromDays(days int) (*BlockListChart, error) {
 }
 
 func Get15DayBlockDiffChartDataToRedis() {
+	ChartWG.Add(1)
+	defer func() {
+		ChartWG.Done()
+	}()
 	rets, err := getBlockDiffChartDataFromDays(15)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get15DayBlockDiffChartDataToRedis error")

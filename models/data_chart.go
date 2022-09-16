@@ -85,6 +85,10 @@ func GetDataChart(date any, err error) string {
 }
 
 func DataChartHistoryServer() {
+	ChartWG.Add(1)
+	defer func() {
+		ChartWG.Done()
+	}()
 	InsertRedis(FifteenDaysGasFee, GetDataChart(Get15DayGasFeeChart()))
 	InsertRedis(FifteenDaysNewCirculations, GetDataChart(Get15DayNewCirculationsChart()))
 	InsertRedis(FifteenDaysBlockSize, GetDataChart(Get15DayBlockSizeChart()))
@@ -101,6 +105,10 @@ func DataChartHistoryServer() {
 }
 
 func DataChartRealtimeSever() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	InsertRedis(NewKey, GetDataChart(GetNewKeysChart()))
 	InsertRedis(AccountChange, GetDataChart(GetAccountChangeChart()))
 	InsertRedis(NftMinerInterval, GetDataChart(GetNftMinerIntervalChart()))
@@ -438,7 +446,7 @@ func Get15DayBlockSizeChart() (StorageCapacitysChart, error) {
 	rets.StorageCapacitys = make([]string, getDays)
 	for i := 0; i < len(rets.Time); i++ {
 		rets.Time[i] = t1.AddDate(0, 0, i+1).Unix()
-		rets.StorageCapacitys[i] = ToCapcityMb(GetDaysNumber(rets.Time[i], list))
+		rets.StorageCapacitys[i] = ToCapacityMb(GetDaysNumber(rets.Time[i], list))
 	}
 	return rets, nil
 }
@@ -479,7 +487,7 @@ func Get15DayBlockSizeList(page, limit int) (GeneralResponse, error) {
 		var rts blockSizeList
 		rts.Id = list[i].Id
 		rts.Tx = list[i].Tx
-		rts.Size = TocapacityString(list[i].Size)
+		rts.Size = ToCapacityString(list[i].Size)
 		rts.Time = list[i].Time
 		cut = append(cut, rts)
 	}
@@ -584,7 +592,7 @@ func GetNewKeysChart() (NewKeyHistoryChart, error) {
 		}
 	}
 
-	_, err = bk.GetByTimeBlockId(today.Unix())
+	_, err = bk.GetByTimeBlockId(nil, today.Unix())
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Warn("get Ecosystem New Key Chart Today Block Failed")
 		return keyChart, err

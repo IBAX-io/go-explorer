@@ -42,7 +42,7 @@ func (ts *MineIncomehistory) Get(hash []byte) (bool, error) {
 }
 
 func (m *MineIncomehistory) GetID(id int64) (bool, error) {
-	if HasTableOrView(nil, "1_mine_incomehistory") {
+	if HasTableOrView("1_mine_incomehistory") {
 		return isFound(conf.GetDbConn().Conn().Where("block_id = ?", id).First(m))
 	} else {
 		return false, nil

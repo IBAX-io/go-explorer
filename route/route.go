@@ -113,8 +113,9 @@ func Run(host string) (err error) {
 	api.GET(`/transaction_head/:hash`, controllers.GetTransactionHead)
 	api.GET(`/block_detail/:block_id`, controllers.GetBlockDetails)
 	api.POST(`/account_detail`, controllers.GetAccountDetailEcosystem)
-	api.GET(`/account_detail_basis/:wallet`, controllers.GetAccountDetailBasisEcosystem)
-	api.GET(`/account_detail_basis_chart/:wallet`, controllers.GetAccountDetailBasisTokenChange)
+	api.GET(`/account_detail_basis/:account`, controllers.GetAccountDetailBasisEcosystem)
+	api.GET(`/account_detail_basis_chart/:account`, controllers.GetAccountDetailBasisTokenChange)
+	api.GET(`/account_tx_count/:ecosystem/:account`, controllers.GetAccountTxCountHandler)
 	//Nft Miner Global Search
 	api.GET(`/nft_miner_info/:search`, controllers.NftMinerInfoHandler)
 	api.POST(`/nft_miner_history_info`, controllers.NftMinerHistoryInfoHandler)

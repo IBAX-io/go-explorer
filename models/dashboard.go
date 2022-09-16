@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+var SendWebsocketSignal chan bool
+
 type BlockListChart struct {
 	Time  []int64 `json:"time"`
 	Block []int64 `json:"block"`
@@ -104,7 +106,7 @@ func (s *DashboardChartData) Marshal() ([]byte, error) {
 	if res, err := msgpack.Marshal(s); err != nil {
 		return nil, err
 	} else {
-		return res, err
+		return res, nil
 	}
 }
 
@@ -116,6 +118,10 @@ func (s *DashboardChartData) Unmarshal(bt []byte) error {
 }
 
 func GetDashboardChartDataToRedis() {
+	ChartWG.Add(1)
+	defer func() {
+		ChartWG.Done()
+	}()
 	rets, err := GetDashboardChartData()
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("GetDashboardChartData error")
@@ -163,7 +169,7 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 	//	return nil, err
 	//}
 
-	tm, err := GetTotalAmount(1)
+	cir, err := GetCirculations(1)
 	if err != nil {
 		return rets, err
 	}
@@ -195,7 +201,7 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 	}
 
 	rets.CirculationsChart.TotalAmount = TotalSupplyToken
-	rets.CirculationsChart.CirculationsAmount = tm.String()
+	rets.CirculationsChart.CirculationsAmount = cir
 	rets.CirculationsChart.StakeAmounts = nftStaking.Add(nodeStaking.Sum).String()
 	rets.CirculationsChart.FreezeAmount = agm.String()
 
@@ -283,7 +289,7 @@ SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days , recipient_id a
 	for i := 0; i < len(keyChart.Time); i++ {
 		keyChart.Time[i] = t2.AddDate(0, 0, i+1).Unix()
 		var bks Block
-		f, err := bks.GetByTimeBlockId(keyChart.Time[i])
+		f, err := bks.GetByTimeBlockId(nil, keyChart.Time[i])
 		if err != nil {
 			return &rets, err
 		}
@@ -483,6 +489,10 @@ func getTimeLineEcoListInfo(stTime int64, endTime int64, his []History) int64 {
 }
 
 func GetHonorListToRedis(cmd string) {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	var (
 		bk   Block
 		list []any
@@ -554,20 +564,7 @@ func GetHonorListToRedis(cmd string) {
 		log.WithFields(log.Fields{"INFO": err}).Info("Get Honor List To Redis Failed")
 		return
 	}
-	switch cmd {
-	case "pkg_rate":
-		err = SendDashboardDataToWebsocket(rets.List, ChannelNodePkgRate)
-		if err != nil {
-			log.WithFields(log.Fields{"INFO": err, "cmd": cmd}).Info("Send Websocket Failed")
-			return
-		}
-	default:
-		err = SendDashboardDataToWebsocket(rets.List, ChannelNodeNewest)
-		if err != nil {
-			log.WithFields(log.Fields{"INFO": err, "cmd": cmd}).Info("Send Websocket Failed")
-			return
-		}
-	}
+
 	return
 }
 
@@ -606,6 +603,10 @@ func InitHonorNodeByRedis(cmd string) {
 }
 
 func GetHonorNodeMapToRedis() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	rets, err := GetHonorNodeMap()
 	value, err := json.Marshal(rets)
 	if err != nil {
@@ -619,12 +620,6 @@ func GetHonorNodeMapToRedis() {
 	}
 	if err := rd.Set(); err != nil {
 		log.WithFields(log.Fields{"INFO": err}).Info("Get Honor Node Map To Redis Failed")
-		return
-	}
-
-	err = SendDashboardDataToWebsocket(rets, ChannelNodeMap)
-	if err != nil {
-		log.WithFields(log.Fields{"INFO": err, "channel": ChannelNodeMap}).Info("Send Websocket Failed")
 		return
 	}
 }
@@ -643,4 +638,81 @@ func GetHonorNodeMapFromRedis() (*HonorNodeMapResponse, error) {
 		return nil, err
 	}
 	return rets, err
+}
+
+func SendAllWebsocketData() {
+	var scanOut ScanOut
+	ret1, err := scanOut.GetDashboardFromRedis()
+	if err != nil {
+		log.Info("Get Dashboard Redis Failed:", err.Error())
+	} else {
+		err := SendDashboardDataToWebsocket(ret1, ChannelStatistical)
+		if err != nil {
+			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelStatistical)
+		}
+	}
+
+	ret2, err := GetTraninfoFromRedis(30)
+	if err != nil {
+		log.Info("Get Tran info From Redis Failed:", err.Error())
+	} else {
+		err = SendTpsListToWebsocket(ret2)
+		if err != nil {
+			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockTpsList)
+		}
+	}
+
+	ret3, _, err := GetTransactionBlockFromRedis()
+	if err != nil {
+		log.Info("Get Transaction Block From Redis Failed:", err.Error())
+	} else {
+		err = SendTransactionListToWebsocket(ret3)
+		if err != nil {
+			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockTransactionList)
+		}
+	}
+
+	ret4, err := GetBlockListFromRedis()
+	if err != nil {
+		log.Info("Get Transaction Block From Redis Failed:", err.Error())
+	} else {
+		if err := SendBlockListToWebsocket(&ret4.List); err != nil {
+			log.WithFields(log.Fields{"warn": err}).Warn("sendBlockListToWebsocket err")
+			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockList)
+		}
+	}
+
+	ret5, err := GetHonorNodeMapFromRedis()
+	if err != nil {
+		log.Info("Get Honor Node Map From Redis Failed:", err.Error())
+	} else {
+		err = SendDashboardDataToWebsocket(ret5, ChannelNodeMap)
+		if err != nil {
+			log.WithFields(log.Fields{"INFO": err, " channel": ChannelNodeMap}).Info("Send Websocket Failed")
+		}
+	}
+
+	cmd := "pkg_rate"
+	ret6, err := GetHonorListFromRedis(cmd)
+	if err != nil {
+		log.Info("Get Honor List From Redis Failed:", err.Error(), "cmd", cmd)
+	} else {
+		err = SendDashboardDataToWebsocket(ret6.List, ChannelNodePkgRate)
+		if err != nil {
+			log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodePkgRate}).Info("Send Websocket Failed")
+			return
+		}
+	}
+
+	cmd = "newest"
+	ret7, err := GetHonorListFromRedis(cmd)
+	if err != nil {
+		log.Info("Get Honor List From Redis Failed:", err.Error(), "cmd", cmd)
+	} else {
+		err = SendDashboardDataToWebsocket(ret7.List, ChannelNodeNewest)
+		if err != nil {
+			log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodeNewest}).Info("Send Websocket Failed")
+			return
+		}
+	}
 }

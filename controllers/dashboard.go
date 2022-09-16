@@ -35,7 +35,7 @@ func DashboardGetToken(c *gin.Context) {
 func GetDashboard(c *gin.Context) {
 	ret := &Response{}
 	var scanout models.ScanOut
-	rets, err := scanout.GetRedisdashboard()
+	rets, err := scanout.GetDashboardFromRedis()
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)

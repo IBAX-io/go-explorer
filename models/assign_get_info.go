@@ -40,7 +40,7 @@ func (m AssignGetInfo) TableName() string {
 }
 
 // GetId is retrieving model from database
-func (m *AssignGetInfo) GetBalance(db *DbTransaction, wallet int64) (bool, decimal.Decimal, decimal.Decimal, error) {
+func (m *AssignGetInfo) GetBalance(dbTx *DbTransaction, wallet int64) (bool, decimal.Decimal, decimal.Decimal, error) {
 
 	var mps []AssignGetInfo
 	var balance, totalBalance decimal.Decimal
@@ -49,7 +49,7 @@ func (m *AssignGetInfo) GetBalance(db *DbTransaction, wallet int64) (bool, decim
 	if !HasTable(m) {
 		return false, balance, totalBalance, nil
 	}
-	err := GetDB(nil).Table(m.TableName()).
+	err := GetDB(dbTx).Table(m.TableName()).
 		Where("keyid = ? and deleted =? ", wallet, 0).
 		Find(&mps).Error
 	if err != nil {
@@ -142,7 +142,7 @@ func (m *AssignGetInfo) GetAllBalance(db *DbTransaction) (decimal.Decimal, error
 	var mps []AssignGetInfo
 	var balance decimal.Decimal
 	balance = decimal.NewFromFloat(0)
-	if HasTableOrView(nil, m.TableName()) {
+	if HasTableOrView(m.TableName()) {
 		err := GetDB(db).Table(m.TableName()).Select("balance_amount").
 			Where("deleted =?", 0).
 			Find(&mps).Error

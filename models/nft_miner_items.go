@@ -70,7 +70,7 @@ func (p *NftMinerItems) GetAllPower() (int64, error) {
 		Count int64 `gorm:"column:count"`
 	}
 	var count powerCount
-	if HasTableOrView(nil, p.TableName()) {
+	if HasTableOrView(p.TableName()) {
 		if err := GetDB(nil).Table(p.TableName()).Select("sum(energy_point) count").Where("merge_status = 1").First(&count).Error; err != nil {
 			return 0, err
 		}
@@ -477,7 +477,7 @@ func GetNftMinerMap() (*[]Positioning, error) {
 
 func NftMinerTableIsExist() bool {
 	var p NftMinerItems
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		return false
 	}
 	return true

@@ -44,7 +44,7 @@ func (dt *DailyActiveReport) TableName() string {
 
 func (p *DailyActiveReport) CreateTable() (err error) {
 	err = nil
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		if err = GetDB(nil).Migrator().CreateTable(p); err != nil {
 			return err
 		}
@@ -100,6 +100,10 @@ func (dt *DailyActiveReport) Insert() error {
 }
 
 func InsertDailyActiveReport() {
+	ChartWG.Add(1)
+	defer func() {
+		ChartWG.Done()
+	}()
 	var (
 		dt DailyActiveReport
 	)

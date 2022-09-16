@@ -9,11 +9,11 @@ import (
 	"github.com/IBAX-io/go-explorer/models"
 )
 
-type History struct {
+type Chart struct {
 	Signal chan bool
 }
 
-func (p *History) SendSignal() {
+func (p *Chart) SendSignal() {
 	select {
 	case p.Signal <- true:
 	default:
@@ -21,24 +21,25 @@ func (p *History) SendSignal() {
 	}
 }
 
-func (p *History) ReceiveSignal() {
+func (p *Chart) ReceiveSignal() {
 	if p.Signal == nil {
 		p.Signal = make(chan bool)
 	}
 	for {
 		select {
 		case <-p.Signal:
-			models.HistoryWG.Wait()
-			historyDataServer()
+			models.ChartWG.Wait()
+			chartDataServer()
 		}
 	}
 }
 
-func historyDataServer() {
-	go models.GetScanOutKeyInfoToRedis()
-	go models.GetSingleDayMaxTxToRedis()
-	go models.GetWeekAverageValueTxToRedis()
-	go models.GetActiveEcoLibsToRedis()
-	go models.GetMaxBlockSizeToRedis()
-	go models.GetMaxTxToRedis()
+func chartDataServer() {
+	go models.GetDashboardChartDataToRedis()
+	go models.GetEcoLibsChartDataToRedis()
+	go models.GetEcoLibsTxChartDataToRedis()
+	go models.Get15DayBlockDiffChartDataToRedis()
+	go models.InsertDailyActiveReport()
+	go models.InsertDailyNodeReport()
+	go models.DataChartHistoryServer()
 }

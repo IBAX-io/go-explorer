@@ -17,6 +17,7 @@ const (
 	HistoryData       DataType = 1
 	RealTimeData      DataType = 2
 	LoadContractsData DataType = 3
+	ChartData         DataType = 4
 )
 
 type GetDataProvider interface {
@@ -34,6 +35,8 @@ func NewGetDataProvider(p DataType) GetDataProvider {
 		return &get_data.RealTime{}
 	case LoadContractsData:
 		return &get_data.LoadContracts{}
+	case ChartData:
+		return &get_data.Chart{}
 	}
 	panic(fmt.Errorf("get data [%v] is not supported yet", p))
 }
