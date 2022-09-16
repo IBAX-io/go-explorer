@@ -18,6 +18,7 @@ var (
 	realTime      GetDataProvider
 	history       GetDataProvider
 	loadContracts GetDataProvider
+	chart         GetDataProvider
 )
 
 func CreateCrontab() {
@@ -28,8 +29,9 @@ func CreateCrontab() {
 
 		//go CreateCrontabFromNodeTransaction(CrontabInfo.NodeTransaction)
 		go CreateCrontabFromChartData(CrontabInfo.ChartData)
-		go CreateCrontabFromDashboard(CrontabInfo.Dashboard)
+		go CreateCrontabFromRealtime(CrontabInfo.Realtime)
 		go CreateCrontabFromLoadContracts(CrontabInfo.LoadContracts)
+		go CreateCrontabFromHistoryData(CrontabInfo.HistoryData)
 	}
 
 }
@@ -37,11 +39,10 @@ func CreateCrontab() {
 func CreateCrontabFromHonorNode(timeSet string) {
 	c := NewWithSecond()
 	_, err := c.AddFunc(timeSet, func() {
-		//models.InsertHonorNodeInfo()
 		honorNode.SendSignal()
 	})
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("CreateCrontabFromHonorNode addFunction failed")
+		log.WithFields(log.Fields{"error": err}).Error("Create Crontab From Honor Node Add Function failed")
 	}
 	c.Start()
 }
@@ -92,14 +93,13 @@ func CreateCrontabFromNodeTransaction(timeSet string) {
 	c.Start()
 }
 
-func CreateCrontabFromDashboard(timeSet string) {
+func CreateCrontabFromRealtime(timeSet string) {
 	c := NewWithSecond()
 	_, err := c.AddFunc(timeSet, func() {
-		//realTimeDataServer()
 		realTime.SendSignal()
 	})
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("CreateCrontabFromHotEcosystemInfo addFunction failed")
+		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("Create Crontab From Realtime Add Function failed")
 	}
 	c.Start()
 }
@@ -108,11 +108,10 @@ func CreateCrontabFromDashboard(timeSet string) {
 func CreateCrontabFromChartData(timeSet string) {
 	c := NewWithSecond()
 	_, err := c.AddFunc(timeSet, func() {
-		//historyDataServer()
 		history.SendSignal()
 	})
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("CreateCrontabFromDashboardChartData addFunction failed")
+		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("Create Crontab From Chart Data Add Function failed")
 	}
 	c.Start()
 }
@@ -120,11 +119,21 @@ func CreateCrontabFromChartData(timeSet string) {
 func CreateCrontabFromLoadContracts(timeSet string) {
 	c := NewWithSecond()
 	_, err := c.AddFunc(timeSet, func() {
-		//models.SendLoadContractsSignal()
 		loadContracts.SendSignal()
 	})
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("Create Crontab From Load Contracts addFunction failed")
+		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("Create Crontab From Load Contracts Add Function failed")
+	}
+	c.Start()
+}
+
+func CreateCrontabFromHistoryData(timeSet string) {
+	c := NewWithSecond()
+	_, err := c.AddFunc(timeSet, func() {
+		history.SendSignal()
+	})
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("Create Crontab From history data Add Function failed")
 	}
 	c.Start()
 }
@@ -134,11 +143,13 @@ func InitCrontabTask() {
 	history = NewGetDataProvider(1)
 	realTime = NewGetDataProvider(2)
 	loadContracts = NewGetDataProvider(3)
+	chart = NewGetDataProvider(4)
 
 	go honorNode.ReceiveSignal()
 	go history.ReceiveSignal()
 	go realTime.ReceiveSignal()
 	go loadContracts.ReceiveSignal()
+	go chart.ReceiveSignal()
 
 	//wait receive channel start up finish
 	time.Sleep(1 * time.Second)
@@ -147,6 +158,7 @@ func InitCrontabTask() {
 	honorNode.SendSignal()
 	history.SendSignal()
 	realTime.SendSignal()
+	chart.SendSignal()
 
 	models.InitHonorNodeByRedis("newest")
 	models.InitHonorNodeByRedis("pkg_rate")

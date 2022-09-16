@@ -150,33 +150,16 @@ func ChainValidBlockInit() {
 	}
 }
 
-func Sys_CentrifugoWork(ctx context.Context) {
-	models.SendScanOut = make(chan bool, 1)
+func SyncCentrifugoWork(ctx context.Context) {
+	models.SendWebsocketSignal = make(chan bool, 1)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-models.SendScanOut:
-			var scanOut models.ScanOut
-			rets, err := scanOut.GetRedisdashboard()
-			if err != nil {
-				log.Info("Get Redis Dashboard Failed:", err.Error())
-			} else {
-				if err := SendToWebsocket(rets, &scanOut); err != nil {
-					log.Info("Send Dashboard To Websocket Failed:", err.Error())
-				}
-			}
+		case <-models.SendWebsocketSignal:
+			models.SendAllWebsocketData()
 		}
 	}
-}
-
-func SendToWebsocket(rets *models.ScanOutRet, scanOut *models.ScanOut) error {
-	err := models.SendDashboardDataToWebsocket(rets, models.ChannelStatistical)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func InitReport() error {

@@ -29,7 +29,7 @@ func (p *DailyNodeReport) TableName() string {
 
 func (p *DailyNodeReport) CreateTable() (err error) {
 	err = nil
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		if err = GetDB(nil).Migrator().CreateTable(p); err != nil {
 			return err
 		}
@@ -52,6 +52,10 @@ func (dt *DailyNodeReport) Insert() error {
 }
 
 func InsertDailyNodeReport() {
+	ChartWG.Add(1)
+	defer func() {
+		ChartWG.Done()
+	}()
 	var (
 		dt DailyNodeReport
 	)

@@ -631,26 +631,24 @@ k1.amount+(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx
 	}
 }
 
-// GetKeysCount returns common count of keys
-func GetTotalAmount(ecosystem int64) (decimal.Decimal, error) {
+func GetCirculations(ecosystem int64) (string, error) {
 	var err error
 	type result struct {
-		Amount decimal.Decimal
+		Amount string
 	}
 	var (
-		res  result
-		utxo SumAmount
+		rets result
 	)
-	err = GetDB(nil).Table("1_keys").
-		Select("coalesce(sum(amount),0) as amount").Where("ecosystem = ?", ecosystem).Scan(&res).Error
+	err = GetDB(nil).Raw(`
+	SELECT coalesce(sum(amount),0)+
+		(SELECT COALESCE(sum(output_value),0) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?) as amount 
+	FROM "1_keys" WHERE ecosystem = ?
+`, ecosystem, ecosystem).Take(&rets).Error
 	if err != nil {
-		return decimal.Zero, err
+		return decimal.Zero.String(), err
 	}
-	err = GetDB(nil).Table("spent_info").Select("sum(output_value)").Where("input_tx_hash is NULL AND ecosystem = ?", ecosystem).Take(&utxo).Error
-	if err != nil {
-		return decimal.Zero, err
-	}
-	return res.Amount.Add(utxo.Sum), err
+
+	return rets.Amount, err
 }
 
 func (m *Key) GetStakeAmount() (string, error) {
@@ -663,7 +661,7 @@ func (m *Key) GetStakeAmount() (string, error) {
 		return "0", err
 	}
 
-	if HasTableOrView(nil, "1_mine_stake") {
+	if HasTableOrView("1_mine_stake") {
 		var mine, pool result
 		err = conf.GetDbConn().Conn().Table("1_keys").Select("SUM(mine_lock) as amount").Where("ecosystem = 1").Scan(&mine).Error
 		if err != nil {
@@ -804,7 +802,11 @@ func GetAccountListChart(ecosystem int64) (*KeysListChartResult, error) {
 		ret KeysListChartResult
 	)
 
-	ret.KeysInfo = getScanOutKeyInfo(ecosystem)
+	if ecosystem == 1 {
+		ret.KeysInfo, _ = getScanOutKeyInfoFromRedis()
+	} else {
+		ret.KeysInfo, _ = getScanOutKeyInfo(ecosystem)
+	}
 	ret.KeyChart = GetEcosystemNewKeyChart(ecosystem, 15)
 
 	return &ret, nil
@@ -1010,7 +1012,7 @@ FROM block_chain WHERE time >= %d and time < %d GROUP BY days ORDER BY days asc
 		if id != 0 {
 			idList[i] = id
 		}
-		_, err := bk.GetByTimeBlockId(today.Unix())
+		_, err := bk.GetByTimeBlockId(nil, today.Unix())
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Warn("get Ecosystem New Key Chart Today Block Failed")
 			return rets

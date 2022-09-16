@@ -800,42 +800,56 @@ type utxoDetail struct {
 	TokenSymbol string `json:"token_symbol"`
 }
 
-type FuelRate struct {
-	Ecosystem   int64  `json:"ecosystem"`
-	Value       string `json:"value"`
-	TokenSymbol string `json:"token_symbol"`
+type FuelRateResponse struct {
+	Value string `json:"value"`
+	Unit  string `json:"unit"`
 }
 
 type FeeInfo struct {
 	Sender      string `json:"sender"`
 	Recipient   string `json:"recipient"`
 	Amount      string `json:"amount"`
-	TokenSymbol string `json:"token_symbol"`
+	TokenSymbol string `json:"tokenSymbol"`
+}
+
+type FeesInfo struct {
+	Amount      decimal.Decimal  `json:"amount"`
+	TokenSymbol string           `json:"tokenSymbol"`
+	FuelRate    FuelRateResponse `json:"fuelRate"`
+	Fees        FeeInfo          `json:"fees"`
+	Taxes       FeeInfo          `json:"taxes"`
 }
 
 type UtxoExplorer struct {
-	UtxoType      string       `json:"utxo_type"`
-	Comment       string       `json:"comment"`
-	Sender        string       `json:"sender"`
-	Recipient     string       `json:"recipient"`
-	Amount        string       `json:"amount"`
-	Expedite      string       `json:"expedite"`
-	BasisFuelRate FuelRate     `json:"basis_fuel_rate"`
-	EcoFuelRate   FuelRate     `json:"eco_fuel_rate"`
-	Ecosystem     int64        `json:"ecosystem"`
-	Change        []utxoDetail `json:"change"`
-	Inputs        []utxoDetail `json:"inputs"`
-	Outputs       []utxoDetail `json:"outputs"`
-	TokenSymbol   string       `json:"token_symbol"`
-	BasisGasFee   FeeInfo      `json:"basis_gas_fee"`
-	EcoGasFee     FeeInfo      `json:"eco_gas_fee"`
+	UtxoType    string       `json:"utxo_type"`
+	Comment     string       `json:"comment"`
+	Sender      string       `json:"sender"`
+	Recipient   string       `json:"recipient"`
+	Amount      string       `json:"amount"`
+	Expedite    string       `json:"expedite"`
+	Ecosystem   int64        `json:"ecosystem"`
+	TokenSymbol string       `json:"token_symbol"`
+	Change      []utxoDetail `json:"change"`
+	Inputs      []utxoDetail `json:"inputs"`
+	Outputs     []utxoDetail `json:"outputs"`
+	BasisGasFee FeesInfo     `json:"basis_gas_fee"`
+	EcoGasFee   FeesInfo     `json:"eco_gas_fee"`
+	Size        int64        `json:"size"`
 }
 
 type AccountTxListResponse struct {
-	Hash         string `json:"hash"`
-	BlockId      int64  `json:"block_id"`
-	ContractName string `json:"contract_name"`
-	Timestamp    int64  `json:"timestamp"`
-	Address      string `json:"address"`
-	Status       int32  `json:"status"`
+	Hash          string `json:"hash"`
+	BlockId       int64  `json:"block_id"`
+	ContractName  string `json:"contract_name"`
+	Timestamp     int64  `json:"timestamp"`
+	Address       string `json:"address"`
+	Status        int32  `json:"status"`
+	EcosystemName string `json:"ecosystem_name"`
+	Ecosystem     int64  `json:"ecosystem"`
+}
+
+type AccountTxInfoResponse struct {
+	Total int64 `json:"total"`
+	InTx  int64 `json:"in_tx"`
+	OutTx int64 `json:"out_tx"`
 }

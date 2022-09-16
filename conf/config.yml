@@ -45,10 +45,11 @@ centrifugo:
   key: "5872a29c-25d3-45d8-b6f2-0b36c44407cd" #
 
 crontab:
-  honor_node: "0/20 * * * * ?"          #dashboard node map
-  chart_data: "0/20 * * * * ?"          #chart_data
-  dashboard: "0/4 * * * * ?"            #dashboard tps list; block list;transaction list; statics date;
-  load_contracts: "0/20 * * * * ?"      #load contracts
+  honor_node: "0 0/10 * * * ?"          #dashboard node map
+  chart_data: "0 0/60 * * * ?"          #chart_data
+  realtime: "0/4 * * * * ?"             #realtime data
+  load_contracts: "0 0/20 * * * ?"      #load contracts
+  history_data: "0 0/10 * * * ?"        #history data
 
 crypto_settings:
   cryptoer: "ECC_Secp256k1"

@@ -111,7 +111,7 @@ func GetTransactionHeadInfoHash(hash string) (*models.TxDetailedInfoHeadResponse
 	rets.Params = info.Params
 	rets.BlockID = lt.Block
 	rets.Address = converter.AddressToString(lt.Address)
-	rets.Size = models.TocapacityString(info.Size)
+	rets.Size = models.ToCapacityString(info.Size)
 
 	return &rets, nil
 }

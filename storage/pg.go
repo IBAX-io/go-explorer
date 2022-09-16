@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-var DBConn *gorm.DB
+var dbConn *gorm.DB
 
 type DatabaseModel struct {
 	Enable  bool   `yaml:"enable"`
@@ -33,7 +33,7 @@ type DatabaseModel struct {
 
 func (d *DatabaseModel) GormInit() (err error) {
 	dsn := fmt.Sprintf("%s TimeZone=UTC", d.Connect)
-	DBConn, err = gorm.Open(postgres.New(postgres.Config{
+	dbConn, err = gorm.Open(postgres.New(postgres.Config{
 		DSN: dsn,
 	}), &gorm.Config{
 		//AllowGlobalUpdate: true,                                  //allow global update
@@ -42,14 +42,14 @@ func (d *DatabaseModel) GormInit() (err error) {
 	if err != nil {
 		return err
 	}
-	sqlDB, err := DBConn.DB()
+	sqlDB, err := dbConn.DB()
 	if err != nil {
 		return err
 	}
 	sqlDB.SetConnMaxLifetime(time.Minute * 10)
-	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetMaxOpenConns(20)
-	sqldb.DBConn = DBConn
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(200)
+	sqldb.DBConn = dbConn
 	if err = syspar.SysUpdate(nil); err != nil {
 		return err
 	}
@@ -62,19 +62,19 @@ func (d *DatabaseModel) GormInit() (err error) {
 }
 
 func (d *DatabaseModel) Conn() *gorm.DB {
-	return DBConn
+	return dbConn
 }
 
 func (d *DatabaseModel) Close() error {
-	if DBConn != nil {
-		sqlDB, err := DBConn.DB()
+	if dbConn != nil {
+		sqlDB, err := dbConn.DB()
 		if err != nil {
 			return err
 		}
 		if err = sqlDB.Close(); err != nil {
 			return err
 		}
-		DBConn = nil
+		dbConn = nil
 	}
 	return nil
 }

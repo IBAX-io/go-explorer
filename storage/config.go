@@ -35,7 +35,8 @@ type Crontab struct {
 	HonorNode     string `yaml:"honor_node"`
 	LoadContracts string `yaml:"load_contracts"`
 	ChartData     string `yaml:"chart_data"`
-	Dashboard     string `yaml:"dashboard"`
+	Realtime      string `yaml:"realtime"`
+	HistoryData   string `yaml:"history_data"`
 }
 
 type CryptoSettings struct {

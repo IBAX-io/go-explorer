@@ -32,7 +32,7 @@ func (p *TransactionData) TableName() string {
 
 func (p *TransactionData) CreateTable() (err error) {
 	err = nil
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		if err = GetDB(nil).Migrator().CreateTable(p); err != nil {
 			return err
 		}
@@ -82,6 +82,10 @@ func TxDataSyncSignalReceive() {
 }
 
 func SendTxDataSyncSignal() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	select {
 	case getTransactionData <- true:
 	default:
@@ -201,7 +205,7 @@ func UnmarshallBlockTxData(blockBuffer *bytes.Buffer) (map[string]TransactionDat
 				//info.Amount = tx.SmartContract().TxSmart.TransferSelf.Value
 			} else {
 				var his History
-				info.Amount = his.GetHashSum(info.Hash, tx.SmartContract().TxSmart.EcosystemID)
+				info.Amount = his.GetHashSum(info.Hash, tx.SmartContract().TxSmart.EcosystemID, block.Header.BlockId)
 			}
 			info.TxTime = MsToSeconds(tx.Timestamp())
 			info.Ecosystem = tx.SmartContract().TxSmart.EcosystemID

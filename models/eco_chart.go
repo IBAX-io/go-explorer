@@ -1026,7 +1026,7 @@ func GetEco15DayStorageCapacitysChart(ecosystem int64) (StorageCapacitysChart, e
 	rets.StorageCapacitys = make([]string, getDays)
 	for i := 0; i < len(rets.Time); i++ {
 		rets.Time[i] = t1.AddDate(0, 0, i+1).Unix()
-		rets.StorageCapacitys[i] = ToCapcityMb(GetDaysNumber(rets.Time[i], list))
+		rets.StorageCapacitys[i] = ToCapacityMb(GetDaysNumber(rets.Time[i], list))
 	}
 	rets.Name = EcoNames.Get(ecosystem)
 	return rets, nil

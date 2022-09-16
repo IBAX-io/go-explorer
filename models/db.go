@@ -8,11 +8,9 @@ package models
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/IBAX-io/go-explorer/conf"
 	"github.com/IBAX-io/go-ibax/packages/consts"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/IBAX-io/go-explorer/conf"
 
 	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
 
@@ -22,7 +20,7 @@ import (
 type DbTransaction struct {
 	conn *gorm.DB
 }
-type DayBlock struct {
+type BlockTps struct {
 	Id     int64 `gorm:"not null"`
 	Tx     int32 `gorm:"not null"`
 	Length int64 `gorm:"not null"`
@@ -75,7 +73,10 @@ func StartTransaction() (*DbTransaction, error) {
 
 // Rollback is transaction rollback
 func (tr *DbTransaction) Rollback() {
-	tr.conn.Rollback()
+	err := tr.conn.Rollback().Error
+	if err != nil {
+		log.WithFields(log.Fields{"type": consts.DBError, "error": err}).Error("db transaction rollback")
+	}
 }
 
 // Commit is transaction commit
@@ -128,18 +129,9 @@ func GetDBDealTraninfo(limit int) error {
 	return err
 }
 
-func SendTpsListToWebsocket(dayblock []DayBlock) error {
-	var ret []ScanOutBlockTransactionRet
+func SendTpsListToWebsocket(ret *[]ScanOutBlockTransactionRet) error {
 	var err error
-	for i := 0; i < len(dayblock); i++ {
-		var info = ScanOutBlockTransactionRet{
-			BlockId:           dayblock[i].Id,
-			BlockSizes:        dayblock[i].Length,
-			BlockTranscations: int64(dayblock[i].Tx),
-		}
-		ret = append(ret, info)
-	}
-	err = SendTopTransactiontps(&ret)
+	err = SendTopTransactiontps(ret)
 	if err != nil {
 		return err
 	}
@@ -157,7 +149,7 @@ func SendTopTransactiontps(topBlockTps *[]ScanOutBlockTransactionRet) error {
 func GetTraninfoFromRedis(limit int) (*[]ScanOutBlockTransactionRet, error) {
 	var ret []ScanOutBlockTransactionRet
 	var err error
-	var transBlock []DayBlock
+	var transBlock []BlockTps
 
 	rd := RedisParams{
 		Key:   "block-tpslist",
@@ -184,7 +176,7 @@ func GetTraninfoFromRedis(limit int) (*[]ScanOutBlockTransactionRet, error) {
 }
 
 func GetBlockInfoToRedis(limit int) error {
-	var trans []DayBlock
+	var trans []BlockTps
 	if err := GetDB(nil).Raw(`SELECT block_chain."id",LENGTH(block_chain."data"),block_chain.tx FROM block_chain ORDER BY id desc LIMIT 30`).Find(&trans).Error; err != nil {
 		return err
 	}
@@ -199,9 +191,7 @@ func GetBlockInfoToRedis(limit int) error {
 	if err := rd.Set(); err != nil {
 		return err
 	}
-	if err := SendTpsListToWebsocket(trans); err != nil {
-		return fmt.Errorf("SendTpsListToWebsocket err:%s", err.Error())
-	}
+
 	return nil
 }
 
@@ -225,9 +215,9 @@ func GetDBDayTraninfo(day int) (*[]DBTransactionsInfo, error) {
 	return &Gret, nil
 }
 
-func HasTableOrView(tr *DbTransaction, names string) bool {
+func HasTableOrView(names string) bool {
 	var name string
-	conf.GetDbConn().Conn().Table("information_schema.tables").
+	GetDB(nil).Table("information_schema.tables").
 		Where("table_type IN ('BASE TABLE', 'VIEW') AND table_schema NOT IN ('pg_catalog', 'information_schema') AND table_name=?", names).
 		Select("table_name").Row().Scan(&name)
 

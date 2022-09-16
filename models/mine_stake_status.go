@@ -42,7 +42,7 @@ func (MinePledgeStatus) TableName() string {
 
 //func (m *MinePledgeStatus) GetActiveGuardianNode() (int64, error) {
 //	mps := new([]MinePledgeStatus)
-//	if HasTableOrView(nil,`1_v_mine_pledge_status_info`){
+//	if HasTableOrView(`1_v_mine_pledge_status_info`){
 //		err := DBConn.Table(m.TableName()).
 //			Where("mine_type = ? and online = ? ", 2, 1).
 //			Find(&mps).Error
@@ -53,7 +53,7 @@ func (MinePledgeStatus) TableName() string {
 
 func (m *MinePledgeStatus) GetCastNodeandGuardianNode() (int64, int64, int64, error) {
 	var honor, in, nftCount int64
-	if HasTableOrView(nil, "1_v_mine_stake_status_info") {
+	if HasTableOrView("1_v_mine_stake_status_info") {
 		err := GetDB(nil).Table("1_v_mine_stake_status_info").Select("count(*)").Where("(mine_type = ? or mine_type = ?) and online = ? ", 2, 1, 1).Row().Scan(&in)
 		if err != nil {
 			return honor, in, nftCount, err

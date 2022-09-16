@@ -46,7 +46,7 @@ func (m MineInfo) TableName() string {
 func (m *MineInfo) GetGuardianNodeCapacity() (int64, error) {
 	var ret int64
 	var rets string
-	if HasTableOrView(nil, "1_mine_info") {
+	if HasTableOrView("1_mine_info") {
 		err := conf.GetDbConn().Conn().Table("1_mine_info").Select("COALESCE(SUM(capacity),0)").Where("type = ?", 2).Row().Scan(&rets)
 		if err != nil {
 			return 0, err

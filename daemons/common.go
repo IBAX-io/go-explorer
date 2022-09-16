@@ -51,7 +51,7 @@ func StartDaemons(ctx context.Context) {
 	//	}
 	//}()
 
-	go Sys_CentrifugoWork(ctx)
+	go SyncCentrifugoWork(ctx)
 
 	go func() {
 		err := InitReport()

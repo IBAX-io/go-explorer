@@ -59,8 +59,8 @@ func (b *Block) GetId(blockID int64) (bool, error) {
 	return isFound(GetDB(nil).Where("id = ?", blockID).First(b))
 }
 
-func (b *Block) GetByTimeBlockId(time int64) (bool, error) {
-	return isFound(GetDB(nil).Select("id").Where("time >= ?", time).First(b))
+func (b *Block) GetByTimeBlockId(dbTx *DbTransaction, time int64) (bool, error) {
+	return isFound(GetDB(dbTx).Select("id").Where("time >= ?", time).First(b))
 }
 
 // GetNodeBlocksAtTime returns records of blocks for time interval and position of node
@@ -186,13 +186,22 @@ func GetBlockList(page, limit, reqType int, order string) (*BlockListHeaderRespo
 			if !f {
 				return &ret, errors.New("get block list max block failed")
 			}
+			maxBlock, err := getMaxBlockSizeFromRedis()
+			if err != nil {
+				return nil, err
+			}
+			maxTx, err := getMaxTxFromRedis()
+			if err != nil {
+				return nil, err
+			}
+
 			bkRet := &BlockRet{}
 			bkRet.Blockid = bk.ID
-			bkRet.MaxTps = m.MaxTps
+			bkRet.MaxTps = maxTx.Tx
 			bkRet.MaxBlockSize = m.MaxBlockSize
 			bkRet.StorageCapacitys = m.StorageCapacitys
-			_, bkRet.MaxBlockSizeId = getMaxBlockSize()
-			_, bkRet.MaxTpsId = getMaxTps()
+			bkRet.MaxBlockSizeId = maxBlock.ID
+			bkRet.MaxTpsId = maxTx.ID
 			ret.BlockInfo = bkRet
 		}
 	}
@@ -234,7 +243,7 @@ FROM(
 LEFT JOIN(
         SELECT CAST(value->>'id' AS numeric) node_id,CAST(value->>'consensus_mode' AS numeric) consensus_mode,address,id,
 		value->>'api_address' api_address,value->>'node_name' node_name
-		FROM honor_node_info LIMIT 1
+		FROM honor_node_info
 )AS t2 ON(t2.node_id = v1.node_position AND t2.consensus_mode = v1.consensus_mode)
 ORDER BY %s
 `, order, order), (page-1)*limit, limit).Find(&list).Error
@@ -368,8 +377,8 @@ func GetBlocksDetailedInfoHex(bk *Block) (*BlockDetailedInfoHex, error) {
 		SysUpdate:     blck.SysUpdate,
 		GenBlock:      blck.GenBlock,
 		//StopCount:     blck.s,
-		BlockSize:    TocapacityString(int64(len(bk.Data))),
-		TxTotalSize:  TocapacityString(transize),
+		BlockSize:    ToCapacityString(int64(len(bk.Data))),
+		TxTotalSize:  ToCapacityString(transize),
 		Transactions: txDetailedInfoCollection,
 	}
 
@@ -411,6 +420,10 @@ func GetMineIncomeParam(hash []byte) string {
 }
 
 func SyncBlockListToRedis() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	rets, err := GetBlockList(1, 10, 1, "")
 	if err != nil {
 		return
@@ -436,10 +449,7 @@ func SyncBlockListToRedis() {
 		Value: string(date),
 	}
 	if err := rd.Set(); err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("SyncBlockinfoToRedis setdb err")
-	}
-	if err := sendBlockListToWebsocket(&rets.List); err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("sendBlockListToWebsocket err")
+		log.WithFields(log.Fields{"warn": err}).Warn("Sync Block info To Redis set db err")
 	}
 }
 
@@ -506,7 +516,7 @@ func GzipDecode(in []byte) ([]byte, error) {
 	return ioutil.ReadAll(reader)
 }
 
-func sendBlockListToWebsocket(ret1 *[]BlockListResponse) error {
+func SendBlockListToWebsocket(ret1 *[]BlockListResponse) error {
 	var (
 		err error
 	)

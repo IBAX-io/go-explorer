@@ -58,7 +58,7 @@ func (p *NftMinerStaking) GetAllStakeAmount() (int64, decimal.Decimal, error) {
 func (p *NftMinerStaking) GetAllStakeAmountByStaker(keyid string) (int64, string, error) {
 	var nftStaking string
 	var nftStakingNum int64
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		return 0, "", nil
 	}
 	if err := GetDB(nil).Table(p.TableName()).Where("staking_status = 1 AND staker = ?", keyid).Count(&nftStakingNum).Error; err != nil {

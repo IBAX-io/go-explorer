@@ -44,7 +44,7 @@ type ScanOut struct {
 	MintAmounts string
 
 	Blockid          int64
-	MaxTps           int64
+	MaxTps           int32
 	MaxBlockSize     string
 	StorageCapacitys string
 
@@ -100,7 +100,7 @@ type ScanOutRet struct {
 
 type BlockRet struct {
 	Blockid          int64  `json:"block_id"` //
-	MaxTps           int64  `json:"max_tps"`
+	MaxTps           int32  `json:"max_tps"`
 	MaxBlockSize     string `json:"max_block_size"`
 	StorageCapacitys string `json:"storage_capacitys"`
 	MaxTpsId         int64  `json:"max_tps_id,omitempty"`
@@ -163,11 +163,22 @@ type ScanOutBlockTransactionRet struct {
 	BlockTranscations int64 `json:"block_transcations" ` //
 }
 
-var ScanPrefix = "scan-"
-var ScanOutStPrefix = "scan-out-"
-var ScanOutLastest = "lastest"
-var GetScanOut chan bool
-var SendScanOut chan bool
+type maxBlock struct {
+	ID     int64
+	Length int64
+}
+
+type maxTx struct {
+	ID int64
+	Tx int32
+}
+
+var (
+	ScanPrefix      = "scan-"
+	ScanOutStPrefix = "scan-out-"
+	ScanOutLastest  = "lastest"
+	GetScanOut      chan bool
+)
 
 func (s *ScanOutBlockTransactionRet) Marshal(q []ScanOutBlockTransactionRet) (string, error) {
 	if res, err := msgpack.Marshal(q); err != nil {
@@ -306,27 +317,33 @@ func GetScanOutDataToRedis() error {
 }
 
 func InitGlobalSwitch() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	NodeReady = CandidateTableExist()
 	NftMinerReady = NftMinerTableIsExist()
 	VotingReady = VotingTableExist()
 }
 
 func (ret *ScanOut) Changes() error {
+
 	var ne NftMinerItems
 	powerCount, err := ne.GetAllPower()
 	if err != nil {
-		return errors.New("GetAllPower failed:" + err.Error())
+		return errors.New("Get All Power failed:" + err.Error())
 	}
 	ret.TotalCounts = powerCount
 
-	tm, err := GetTotalAmount(1)
+	cir, err := GetCirculations(1)
 	if err != nil {
-		return errors.New("GetTotalAmount failed:" + err.Error())
+		return errors.New("Get Circulations failed:" + err.Error())
 	}
+
 	var nft NftMinerStaking
 	_, nftStaking, err := nft.GetAllStakeAmount()
 	if err != nil {
-		return errors.New("GetAllStakeAmount failed:" + err.Error())
+		return errors.New("Get All Stake Amount failed:" + err.Error())
 	}
 
 	//stakeamount, err := key.GetStakeAmount()
@@ -334,17 +351,28 @@ func (ret *ScanOut) Changes() error {
 	//	return err
 	//}
 
-	ret.Circulations = tm.String()
+	ret.Circulations = cir
 	ret.NftStakeAmounts = nftStaking.String()
 
-	ret.EcoLibsInfo = getEcoLibsInfo()
-	ret.KeysInfo = getScanOutKeyInfo(1)
-	ret.CandidateNodeInfo = getScanOutNodeInfo()
+	ret.EcoLibsInfo, err = getEcoLibsInfo()
+	if err != nil {
+		return err
+	}
+
+	ret.KeysInfo, err = getScanOutKeyInfoFromRedis()
+	if err != nil {
+		return err
+	}
+
+	ret.CandidateNodeInfo, err = getScanOutNodeInfo()
+	if err != nil {
+		return err
+	}
 
 	var mst MinePledgeStatus
 	honor, casts, nftCount, err := mst.GetCastNodeandGuardianNode()
 	if err != nil {
-		return errors.New("GetCastNodeandGuardianNode failed:" + err.Error())
+		return fmt.Errorf("get Cast Nodeand Guardian Node failed:%s", err.Error())
 	}
 	ret.HonorNode = honor
 	ret.CastNodes = casts
@@ -352,7 +380,7 @@ func (ret *ScanOut) Changes() error {
 
 	capacity, err := getDatabaseSize()
 	if err != nil {
-		return errors.New("getDatabaseSize failed:" + err.Error())
+		return fmt.Errorf("get Database Size failed:%s", err.Error())
 	}
 	ret.StorageCapacitys = capacity
 
@@ -360,23 +388,62 @@ func (ret *ScanOut) Changes() error {
 	sp.ecosystem = 1
 	mb, err := sp.GetMintAmount()
 	if err != nil {
-		return errors.New("GetMintAmount failed:" + err.Error())
+		return fmt.Errorf("get Mint Amount failed:%s", err.Error())
 	}
 	ret.MintAmounts = mb
-	ret.HalveNumber, ret.NftBlockReward = getHalveNumber()
+	ret.HalveNumber, ret.NftBlockReward, err = getHalveNumber()
+	if err != nil {
+		return err
+	}
 
 	var his History
-	ret.TodayCirculationsAmount = his.GetTodayCirculationsAmount(ret.NftBlockReward)
-	ret.TwentyFourAmount = his.Get24HourTxAmount()
+	ret.TodayCirculationsAmount, err = his.GetTodayCirculationsAmount(ret.NftBlockReward)
+	if err != nil {
+		return err
+	}
 
-	ret.MaxTps, _ = getMaxTps()
-	maxSize, _ := getMaxBlockSize()
-	ret.MaxBlockSize = TocapacityString(maxSize)
-	ret.TotalTx = getTotalTx()
-	ret.TwentyFourTx = getTwentyFourTx()
-	ret.WeekAverageTx = getWeekAverageValueTx()
-	ret.MaxActiveEcoLib = GetActiveEcoLibs()
-	ret.SingleDayMaxTx = getSingleDayMaxTx()
+	ret.TwentyFourAmount, err = his.Get24HourTxAmount()
+	if err != nil {
+		return err
+	}
+
+	maxTx, err := getMaxTxFromRedis()
+	if err != nil {
+		return err
+	}
+	ret.MaxTps = maxTx.Tx
+
+	maxBlock, err := getMaxBlockSizeFromRedis()
+	if err != nil {
+		return err
+	}
+
+	ret.MaxBlockSize = ToCapacityString(maxBlock.Length)
+
+	ret.TotalTx, err = getTotalTx()
+	if err != nil {
+		return err
+	}
+
+	ret.TwentyFourTx, err = getTwentyFourTx()
+	if err != nil {
+		return err
+	}
+
+	ret.WeekAverageTx, err = getWeekAverageValueTxFromRedis()
+	if err != nil {
+		return err
+	}
+
+	ret.MaxActiveEcoLib, err = GetActiveEcoLibsFromRedis()
+	if err != nil {
+		return err
+	}
+
+	ret.SingleDayMaxTx, err = getSingleDayMaxTxFromRedis()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -478,7 +545,7 @@ func (s *ScanOut) InsertRedisDb() error {
 	}
 
 	for i := 0; i < 10; i++ {
-		err = rp.SetExpire(time.Second * 10)
+		err = rp.SetExpire(time.Minute * 1)
 		if err == nil {
 			break
 		} else {
@@ -490,7 +557,7 @@ func (s *ScanOut) InsertRedisDb() error {
 	return err
 }
 
-func (m *ScanOut) GetRedisdashboard() (*ScanOutRet, error) {
+func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	var rets ScanOutRet
 	f, err := m.GetRedisLastest()
 	if err != nil {
@@ -567,7 +634,7 @@ func (m *ScanOut) GetRedisLastest() (bool, error) {
 	return true, err
 }
 
-func TocapacityString(count int64) string {
+func ToCapacityString(count int64) string {
 	rs := float64(count) / float64(1024)
 	if rs >= float64(1024) && rs < float64(1048576) {
 		rs = rs / float64(1024)
@@ -579,22 +646,30 @@ func TocapacityString(count int64) string {
 		return strconv.FormatFloat(rs, 'f', 2, 64) + " KB"
 	}
 }
-func ToCapcityMb(count int64) string {
+func ToCapacityMb(count int64) string {
 	rs := float64(count) / float64(1024)
 	rs = rs / float64(1024)
 	return strconv.FormatFloat(rs, 'f', 6, 64)
 }
 
-func ToCapcityKb(count int64) string {
+func ToCapacityKb(count int64) string {
 	rs := float64(count) / float64(1024)
 	return strconv.FormatFloat(rs, 'f', 5, 64)
 }
 
 func DealRedisBlockTpsList() error {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	return GetDBDealTraninfo(30)
 }
 
-func SendStatisticsSignal() {
+func GetStatisticsSignal() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	for len(GetScanOut) > 0 {
 		<-GetScanOut
 	}
@@ -602,11 +677,12 @@ func SendStatisticsSignal() {
 	case GetScanOut <- true:
 	default:
 	}
-	for len(SendScanOut) > 0 {
-		<-SendScanOut
+
+	for len(SendWebsocketSignal) > 0 {
+		<-SendWebsocketSignal
 	}
 	select {
-	case SendScanOut <- true:
+	case SendWebsocketSignal <- true:
 	default:
 	}
 }
@@ -661,28 +737,123 @@ func getBlockContracts(blockId int64) int64 {
 	return int64(len(name))
 }
 
-func getMaxTps() (int64, int64) {
-	var bk Block
+func getMaxTx() (maxTx, error) {
+	var (
+		bk   Block
+		rets maxTx
+	)
 	if err := GetDB(nil).Select("id,tx").Order("tx DESC").Last(&bk).Error; err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("getMaxTps err")
-		return 0, 0
+		log.WithFields(log.Fields{"warn": err}).Warn("get Max tx err")
+		return rets, err
 	}
-	return int64(bk.Tx), bk.ID
+	rets.ID = bk.ID
+	rets.Tx = bk.Tx
+	return rets, nil
 }
 
-func getMaxBlockSize() (int64, int64) {
-	var bk Block
-	type block struct {
-		ID     int64
-		Length int64
-	}
-	var info block
-	if err := GetDB(nil).Table(bk.TableName()).Select("id,length(data)").Order("length(data) DESC").Last(&info).Error; err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("getMaxTps err")
-		return 0, 0
+func GetMaxTxToRedis() {
+	HistoryWG.Add(1)
+	defer func() {
+		HistoryWG.Done()
+	}()
+	rets, err := getMaxTx()
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get max tx error")
+		return
 	}
 
-	return info.Length, info.ID
+	res, err := msgpack.Marshal(rets)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get max tx msgpack error")
+		return
+	}
+
+	rd := RedisParams{
+		Key:   "max_tx",
+		Value: string(res),
+	}
+	if err := rd.Set(); err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get max tx set redis error")
+		return
+	}
+}
+
+func getMaxTxFromRedis() (maxTx, error) {
+	var rets maxTx
+	var err error
+	rd := RedisParams{
+		Key:   "max_tx",
+		Value: "",
+	}
+	if err := rd.Get(); err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get max tx From Redis getDb err")
+		return rets, err
+	}
+	err = msgpack.Unmarshal([]byte(rd.Value), &rets)
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get max tx From Redis msgpack err")
+		return rets, err
+	}
+
+	return rets, nil
+}
+
+func getMaxBlock() (maxBlock, error) {
+	var bk Block
+	var info maxBlock
+	if err := GetDB(nil).Table(bk.TableName()).Select("id,length(data)").Order("length(data) DESC").Last(&info).Error; err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get max block err")
+		return info, err
+	}
+
+	return info, nil
+}
+
+func GetMaxBlockSizeToRedis() {
+	HistoryWG.Add(1)
+	defer func() {
+		HistoryWG.Done()
+	}()
+	rets, err := getMaxBlock()
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get max block error")
+		return
+	}
+
+	res, err := msgpack.Marshal(rets)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get max block msgpack error")
+		return
+	}
+
+	rd := RedisParams{
+		Key:   "max_block",
+		Value: string(res),
+	}
+	if err := rd.Set(); err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get max block set redis error")
+		return
+	}
+}
+
+func getMaxBlockSizeFromRedis() (maxBlock, error) {
+	var rets maxBlock
+	var err error
+	rd := RedisParams{
+		Key:   "max_block",
+		Value: "",
+	}
+	if err := rd.Get(); err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get max block From Redis getDb err")
+		return rets, err
+	}
+	err = msgpack.Unmarshal([]byte(rd.Value), &rets)
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get max block From Redis msgpack err")
+		return rets, err
+	}
+
+	return rets, nil
 }
 
 func getNftBlockReward() string {
@@ -717,17 +888,17 @@ func getNftBlockReward() string {
 	return money
 }
 
-func getTotalTx() int64 {
+func getTotalTx() (int64, error) {
 	var bk Block
 	var ret SumInt64
 	if err := GetDB(nil).Table(bk.TableName()).Select("sum(tx)").Take(&ret).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getTotalTx failed")
-		return 0
+		return 0, err
 	}
-	return ret.Sum
+	return ret.Sum, nil
 }
 
-func getSingleDayMaxTx() int64 {
+func getSingleDayMaxTx() (int64, error) {
 	type reqParams struct {
 		Date  string `gorm:"column:date"`
 		TxNum int64  `gorm:"column:tx_num"`
@@ -740,12 +911,59 @@ func getSingleDayMaxTx() int64 {
 	if err := GetDB(nil).Raw(`select to_char(to_timestamp("time"),'yyyy-MM-dd') as date,sum(tx) as tx_num 
 FROM block_chain GROUP BY date ORDER BY tx_num DESC LIMIT 1`).Take(&oneTx).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getSingleDayMaxTx failed")
-		return 0
+		return 0, err
 	}
-	return oneTx.TxNum
+	return oneTx.TxNum, nil
 }
 
-func getTwentyFourTx() int64 {
+func GetSingleDayMaxTxToRedis() {
+	HistoryWG.Add(1)
+	defer func() {
+		HistoryWG.Done()
+	}()
+	rets, err := getSingleDayMaxTx()
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get single day max tx error")
+		return
+	}
+
+	res, err := msgpack.Marshal(rets)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get single day max tx msgpack error")
+		return
+	}
+
+	rd := RedisParams{
+		Key:   "day_max_tx",
+		Value: string(res),
+	}
+	if err := rd.Set(); err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get single day max tx set redis error")
+		return
+	}
+}
+
+func getSingleDayMaxTxFromRedis() (int64, error) {
+	var rets int64
+	var err error
+	rd := RedisParams{
+		Key:   "day_max_tx",
+		Value: "",
+	}
+	if err := rd.Get(); err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get Single Day Max Tx From Redis getDb err")
+		return rets, err
+	}
+	err = msgpack.Unmarshal([]byte(rd.Value), &rets)
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get Single Day Max Tx From Redis msgpack err")
+		return rets, err
+	}
+
+	return rets, nil
+}
+
+func getTwentyFourTx() (int64, error) {
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	t1 := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 
@@ -753,12 +971,12 @@ func getTwentyFourTx() int64 {
 	var bk Block
 	if err := GetDB(nil).Table(bk.TableName()).Select("sum(tx)").Where("time >= ?", t1.Unix()).Take(&res).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getSingleDayMaxTx failed")
-		return 0
+		return 0, err
 	}
-	return res.Sum
+	return res.Sum, nil
 }
 
-func getWeekAverageValueTx() int64 {
+func getWeekAverageValueTx() (int64, error) {
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
 	t1 := yesterday.AddDate(0, 0, -1*7)
@@ -767,18 +985,57 @@ func getWeekAverageValueTx() int64 {
 	var bk Block
 	if err := GetDB(nil).Table(bk.TableName()).Select("sum(tx)").Where("time >= ? and time < ?", t1.AddDate(0, 0, 1).Unix(), yesterday.AddDate(0, 0, 1).Unix()).Take(&res).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getSingleDayMaxTx failed")
-		return 0
+		return 0, err
 	}
 	if res.Sum != 0 {
-		return res.Sum / 7
+		return res.Sum / 7, nil
 	} else {
-		return 0
+		return 0, nil
 	}
 }
 
-func getHalveNumber() (int64, float64) {
+func GetWeekAverageValueTxToRedis() {
+	HistoryWG.Add(1)
+	defer func() {
+		HistoryWG.Done()
+	}()
+	rets, err := getWeekAverageValueTx()
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get week avg tx error")
+		return
+	}
+
+	rd := RedisParams{
+		Key:   "week_tx_avg",
+		Value: strconv.FormatInt(rets, 10),
+	}
+	if err := rd.Set(); err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get week avg tx set redis error")
+		return
+	}
+}
+
+func getWeekAverageValueTxFromRedis() (int64, error) {
+	rd := RedisParams{
+		Key:   "week_tx_avg",
+		Value: "",
+	}
+	if err := rd.Get(); err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get week avg tx From Redis getDb err")
+		return 0, err
+	}
+	avgTx, err := strconv.ParseInt(rd.Value, 10, 64)
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get week avg tx From Redis prase int err")
+		return 0, err
+	}
+
+	return avgTx, nil
+}
+
+func getHalveNumber() (int64, float64, error) {
 	if !NftMinerReady {
-		return 0, 0
+		return 0, 0, nil
 	}
 	var halvingNumber int64
 	const halvingInterval int64 = 80000
@@ -790,7 +1047,7 @@ func getHalveNumber() (int64, float64) {
 		if err != gorm.ErrRecordNotFound {
 			log.WithFields(log.Fields{"warn": err}).Warn("getHavleNumber staking failed")
 		}
-		return 0, 0
+		return 0, 0, err
 	}
 	if stakNumber >= halvingInterval {
 		st1, _ := smart.Log(int64(4))
@@ -803,16 +1060,16 @@ func getHalveNumber() (int64, float64) {
 	}
 	subsidy = subsidy / math.Pow(float64(2), float64(halvingNumber))
 	//str := smart.Int(smart.Log(smart.Float(stakNumber)/smart.Float(halvingInterval))/smart.Log(4)) + 1
-	return halvingNumber, subsidy / 100000000000
+	return halvingNumber, subsidy / 100000000000, nil
 
 }
 
-func getEcoLibsInfo() EcoLibsRet {
+func getEcoLibsInfo() (EcoLibsRet, error) {
 	var rets EcoLibsRet
 
 	var ecosystems Ecosystem
-	if !HasTableOrView(nil, ecosystems.TableName()) {
-		return rets
+	if !HasTableOrView(ecosystems.TableName()) {
+		return rets, nil
 	}
 
 	contractNum := getAllContracts()
@@ -821,29 +1078,29 @@ func getEcoLibsInfo() EcoLibsRet {
 	var total int64
 
 	if err := GetDB(nil).Table(ecosystems.TableName()).Count(&total).Error; err != nil {
-		return rets
+		return rets, err
 	}
 
 	err := GetDB(nil).Table(ecosystems.TableName()).Where("id = 1 or token_symbol != ''").Count(&symbolTotal).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getAllTokenCount symbolTotal failed")
-		return rets
+		return rets, err
 	}
 
 	err = GetDB(nil).Table(ecosystems.TableName()).Where("control_mode = 2").Count(&daoGovern).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getAllTokenCount daoGovern failed")
-		return rets
+		return rets, err
 	}
 	rets.DaoGovern = daoGovern
 	rets.Contract = contractNum
 	rets.EcoTokenTotal = symbolTotal
 	rets.Ecosystems = total
 
-	return rets
+	return rets, nil
 }
 
-func getScanOutKeyInfo(ecosystem int64) KeysRet {
+func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 	var (
 		key Key
 		ret KeysRet
@@ -853,33 +1110,50 @@ func getScanOutKeyInfo(ecosystem int64) KeysRet {
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	nowDay := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 	t1 := nowDay.AddDate(0, 0, -1*30)
-	if NftMinerReady {
+	if NftMinerReady || NodeReady {
 		err = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
-(SELECT count(1) AS has_token_key FROM "1_keys" as k2 WHERE (k2.amount > 0 OR to_number(coalesce(NULLIF(k2.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') > 0) AND ecosystem = ?),
+(SELECT count(1) AS has_token_key FROM "1_keys" as k2 WHERE (k2.amount > 0 OR 
+	to_number(coalesce(NULLIF(k2.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') > 0 OR
+	to_number(coalesce(NULLIF(k2.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') > 0 OR 
+	to_number(coalesce(NULLIF(k2.lock->>'candidate_substitute',''),'0'),'999999999999999999999999') > 0 OR
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k2.ecosystem AND output_key_id = k2.id),0) > 0
+) AND ecosystem = ?),
 (SELECT count(1) AS month_active_key FROM(
-SELECT sender_id as keyid FROM "1_history" WHERE sender_id <> 0 AND created_at >= ? and ecosystem = ? GROUP BY sender_id
- UNION 
-SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id 
-) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem).Where("ecosystem = ? AND id <> 0", ecosystem).Take(&ret).Error
+	SELECT sender_id as keyid FROM "1_history" WHERE sender_id <> 0 AND created_at >= ? and ecosystem = ? GROUP BY sender_id
+ 		UNION 
+	SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id
+		UNION
+	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
+	 log_transactions AS l1 ON(l1.hash = s1.output_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
+		UNION
+	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
+	 log_transactions AS l1 ON(l1.hash = s1.input_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
+) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ? AND id <> 0", ecosystem).Take(&ret).Error
 	} else {
 		err = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
 (SELECT count(1) AS has_token_key FROM "1_keys" as k2 WHERE k2.amount > 0 AND ecosystem = ?),
 (SELECT count(1) AS month_active_key FROM(
-SELECT sender_id as keyid FROM "1_history" WHERE sender_id <> 0 AND created_at >= ? and ecosystem = ? GROUP BY sender_id
- UNION 
-SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id 
-) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem).Where("ecosystem = ? AND id <> 0", ecosystem).Take(&ret).Error
+	SELECT sender_id as keyid FROM "1_history" WHERE sender_id <> 0 AND created_at >= ? and ecosystem = ? GROUP BY sender_id
+	 UNION 
+	SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id
+	 UNION
+	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
+	 log_transactions AS l1 ON(l1.hash = s1.output_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
+	 UNION
+	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
+	 log_transactions AS l1 ON(l1.hash = s1.input_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
+) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ? AND id <> 0", ecosystem).Take(&ret).Error
 	}
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getScanOutKeyInfo ecosystem keysRet failed")
-		return ret
+		return ret, err
 	}
 
-	var bk Block
-	f, err := bk.GetByTimeBlockId(nowDay.Unix())
+	bk := &Block{}
+	f, err := bk.GetByTimeBlockId(nil, nowDay.Unix())
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err, "ecosystem": ecosystem}).Warn("getScanOutKeyInfo nowDay block failed")
-		return ret
+		return ret, err
 	}
 
 	var rk sqldb.RollbackTx
@@ -888,10 +1162,57 @@ SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND create
 	if f {
 		if err := req.Where("table_name = '1_keys' AND data = '' AND block_id >= ? AND table_id like ?", bk.ID, like).Count(&ret.TwentyFourKey).Error; err != nil {
 			log.WithFields(log.Fields{"warn": err, "ecosystem": ecosystem}).Warn("getScanOutKeyInfo rollback oneDay failed")
-			return ret
+			return ret, err
 		}
 	}
-	return ret
+	return ret, nil
+}
+
+func GetScanOutKeyInfoToRedis() {
+	HistoryWG.Add(1)
+	defer func() {
+		HistoryWG.Done()
+	}()
+	rets, err := getScanOutKeyInfo(1)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get Scan Out Key Info error")
+		return
+	}
+
+	res, err := msgpack.Marshal(rets)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get Scan Out Key Info msgpack error")
+		return
+	}
+
+	rd := RedisParams{
+		Key:   "key_info",
+		Value: string(res),
+	}
+	if err := rd.Set(); err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get Scan Out Key Info set redis error")
+		return
+	}
+}
+
+func getScanOutKeyInfoFromRedis() (KeysRet, error) {
+	var rets KeysRet
+	var err error
+	rd := RedisParams{
+		Key:   "key_info",
+		Value: "",
+	}
+	if err := rd.Get(); err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get Scan Out Key Info From Redis getDb err")
+		return rets, err
+	}
+	err = msgpack.Unmarshal([]byte(rd.Value), &rets)
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get Scan Out Key Info From Redis msgpack err")
+		return rets, err
+	}
+
+	return rets, nil
 }
 
 func idIsRepeat(id int64, list []int64) bool {
@@ -903,10 +1224,10 @@ func idIsRepeat(id int64, list []int64) bool {
 	return false
 }
 
-func getScanOutNodeInfo() CandidateHonorNodeRet {
+func getScanOutNodeInfo() (CandidateHonorNodeRet, error) {
 	var rets CandidateHonorNodeRet
 	if !NodeReady {
-		return rets
+		return rets, nil
 	}
 	var nodeStakeAmounts SumAmount
 	var vote SumAmount
@@ -915,31 +1236,31 @@ func getScanOutNodeInfo() CandidateHonorNodeRet {
 	var ds CandidateNodeDecisions
 	if err := GetDB(nil).Table(cn.TableName()).Where("deleted = 0").Count(&rets.CandidateNode).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get candidate failed")
-		return rets
+		return rets, err
 	}
 
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	nowDay := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 	if err := GetDB(nil).Table(cn.TableName()).Where("deleted = 0 AND date_created > ?", nowDay.Unix()).Count(&rets.TwentyFourNode).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get twenty Four failed")
-		return rets
+		return rets, err
 	}
 
 	if err := GetDB(nil).Table(cn.TableName()).Select("sum(earnest_total)").Where("deleted = 0").Take(&nodeStakeAmounts).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get node Stake Amounts failed")
-		return rets
+		return rets, err
 	}
 	rets.NodeStakeAmounts = nodeStakeAmounts.Sum.String()
 
 	if err := GetDB(nil).Table(ds.TableName()).Select("sum(earnest)").Where(`decision_type = 1 AND decision <> 3 
 		AND request_id IN (SELECT id FROM "1_candidate_node_requests" WHERE deleted = 0)`).Take(&vote).Error; err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("get node Vote failed")
-		return rets
+		return rets, err
 	}
 	moneyDec := decimal.NewFromInt(1e12)
 	rets.NodeVote = vote.Sum.Div(moneyDec).IntPart()
 
-	return rets
+	return rets, nil
 }
 
 func getDatabaseSize() (size string, err error) {

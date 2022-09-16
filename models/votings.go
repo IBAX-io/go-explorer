@@ -501,7 +501,7 @@ LEFT JOIN(
 
 func VotingTableExist() bool {
 	var p Voting
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		return false
 	}
 	return true
@@ -517,6 +517,10 @@ func GetNodeVotingHistory(search any, page, limit int, order string) (*GeneralRe
 	)
 	if order == "" {
 		order = "id DESC"
+	} else {
+		if !CheckSql(order) {
+			return nil, errors.New("params invalid")
+		}
 	}
 
 	type voteHistory struct {
@@ -549,7 +553,7 @@ func GetNodeVotingHistory(search any, page, limit int, order string) (*GeneralRe
 		return nil, err
 	}
 
-	err = GetDB(nil).Raw(`
+	err = GetDB(nil).Raw(fmt.Sprintf(`
 SELECT encode(txhash, 'hex') AS tx_hash,id,created_at as time,
 CASE WHEN sender_id = 0 THEN
 	recipient_id
@@ -559,10 +563,10 @@ END AS address,type AS events,case WHEN coalesce(amount,0) > 0 THEN
 			round(coalesce(amount,0) / 1e12,0)
 		ELSE
 			0
-		END as vote,amount FROM "1_history" WHERE (type = 20 AND comment = 'Candidate Node Referendum #?') OR 
-		(type = 22 AND comment = 'Candidate Node Withdraw Referendum #?') 
-ORDER BY ? OFFSET ? LIMIT ?
-`, nodeId, nodeId, order, (page-1)*limit, limit).Find(&list).Error
+		END as vote,amount FROM "1_history" WHERE (type = 20 AND comment = 'Candidate Node Referendum #%d') OR 
+		(type = 22 AND comment = 'Candidate Node Withdraw Referendum #%d') 
+ORDER BY %s OFFSET ? LIMIT ?
+`, nodeId, nodeId, order), (page-1)*limit, limit).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"err": err, "node id": nodeId}).Warn("Get Node Voting History Failed")
 		return nil, err
@@ -602,6 +606,10 @@ func GetNodeStakingHistory(search any, page, limit int, order string) (*GeneralR
 	)
 	if order == "" {
 		order = "id DESC"
+	} else {
+		if !CheckSql(order) {
+			return nil, fmt.Errorf("params invalid")
+		}
 	}
 
 	switch reflect.TypeOf(search).String() {
@@ -635,18 +643,18 @@ func GetNodeStakingHistory(search any, page, limit int, order string) (*GeneralR
 		Amount  string `json:"amount"`
 	}
 	var list []stakingHistory
-	err = GetDB(nil).Raw(`
+	err = GetDB(nil).Raw(fmt.Sprintf(`
 SELECT encode(txhash, 'hex') AS tx_hash,id,created_at as time,
 CASE WHEN sender_id = 0 THEN
 	recipient_id
 ELSE 
 	sender_id
 END AS address,type AS events,amount FROM "1_history" WHERE 
-		(type = 18 AND comment = 'Candidate Node Earnest #?') OR 
-		(type = 19 AND comment = 'Candidate Node Substitute #?') OR 
-		(type = 21 AND comment = 'Candidate Node Withdraw Substitute #?')
-ORDER BY ? OFFSET ? LIMIT ?
-`, nodeId, nodeId, nodeId, order, (page-1)*limit, limit).Find(&list).Error
+		(type = 18 AND comment = 'Candidate Node Earnest #%d') OR 
+		(type = 19 AND comment = 'Candidate Node Substitute #%d') OR 
+		(type = 21 AND comment = 'Candidate Node Withdraw Substitute #%d')
+ORDER BY %s OFFSET ? LIMIT ?
+`, nodeId, nodeId, nodeId, order), (page-1)*limit, limit).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"err": err, "node id": nodeId}).Warn("Get Node Staking History Failed")
 		return nil, err

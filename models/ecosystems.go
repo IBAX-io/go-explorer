@@ -15,6 +15,7 @@ import (
 	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
+	"github.com/vmihailenco/msgpack/v5"
 	"reflect"
 	"strconv"
 	"strings"
@@ -179,7 +180,7 @@ func (sys *Ecosystem) GetTokenSymbol(id int64) (bool, error) {
 	return isFound(GetDB(nil).Select("token_symbol,name").First(sys, "id = ?", id))
 }
 
-func GetActiveEcoLibs() string {
+func GetActiveEcoLibs() (string, error) {
 	//default ecoLibs: 1
 	type countEcosystem struct {
 		Ecosystem int64 `gorm:"column:ecosystem"`
@@ -189,15 +190,62 @@ func GetActiveEcoLibs() string {
 	f, err := isFound(GetDB(nil).Raw(`SELECT count(*),ecosystem FROM "1_history" WHERE type = 1 GROUP BY ecosystem ORDER BY count DESC`).Limit(1).Take(&rets))
 	if err != nil {
 		log.Info("get active ecoLibs err:", err.Error())
-		return SysEcosystemName
+		return SysEcosystemName, err
 	}
 	if !f {
-		return SysEcosystemName
+		return SysEcosystemName, nil
 	}
 
 	name := EcoNames.Get(rets.Ecosystem)
 
-	return name
+	return name, nil
+}
+
+func GetActiveEcoLibsToRedis() {
+	HistoryWG.Add(1)
+	defer func() {
+		HistoryWG.Done()
+	}()
+	rets, err := GetActiveEcoLibs()
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get active ecosystem error")
+		return
+	}
+
+	res, err := msgpack.Marshal(rets)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get active ecosystem msgpack error")
+		return
+	}
+
+	rd := RedisParams{
+		Key:   "active_ecosystem",
+		Value: string(res),
+	}
+	if err := rd.Set(); err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get active ecosystem set redis error")
+		return
+	}
+}
+
+func GetActiveEcoLibsFromRedis() (string, error) {
+	var rets string
+	var err error
+	rd := RedisParams{
+		Key:   "active_ecosystem",
+		Value: "",
+	}
+	if err := rd.Get(); err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get active ecosystem From Redis getDb err")
+		return rets, err
+	}
+	err = msgpack.Unmarshal([]byte(rd.Value), &rets)
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("get active ecosystem From Redis msgpack err")
+		return rets, err
+	}
+
+	return rets, nil
 }
 
 func (p *Ecosystem) GetBasisEcosystem() (*BasisEcosystemResponse, error) {
@@ -702,11 +750,11 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 		}
 	}
 	rets.Combustion = getEcosystemCombustion(eco.ID)
-	cir, err := GetTotalAmount(eco.ID)
+	cir, err := GetCirculations(eco.ID)
 	if err != nil {
 		return nil, err
 	}
-	rets.Circulations = cir.String()
+	rets.Circulations = cir
 
 	rets.GovernModel = eco.ControlMode
 	creatorId, err := strconv.ParseInt(eco.Creator, 10, 64)
@@ -1133,6 +1181,10 @@ func InitEcosystemInfo() {
 }
 
 func SyncEcosystemInfo() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	list, err := GetAllTokenSymbol()
 	if err == nil {
 		for _, val := range list {

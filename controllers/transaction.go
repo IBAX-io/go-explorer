@@ -10,6 +10,7 @@ import (
 	"github.com/IBAX-io/go-explorer/services"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"strconv"
 	"unicode/utf8"
 )
 
@@ -348,7 +349,7 @@ func GetAccountTransactionHistory(c *gin.Context) {
 	}
 
 	lt := &models.LogTransaction{}
-	rets, err := lt.GetEcosystemAccountTransaction(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Order, req.Where)
+	rets, err := lt.GetEcosystemAccountTransactionNew(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Order, req.Where)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)
@@ -473,7 +474,7 @@ func GetAccountDetailBasisEcosystem(c *gin.Context) {
 	ret := &Response{}
 	//wallet
 	ts := &models.Key{}
-	wallet := c.Param("wallet")
+	wallet := c.Param("account")
 	rets, err := ts.GetWalletTotalBasisEcosystem(wallet)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
@@ -487,7 +488,7 @@ func GetAccountDetailBasisEcosystem(c *gin.Context) {
 
 func GetAccountDetailBasisTokenChange(c *gin.Context) {
 	ret := &Response{}
-	wallet := c.Param("wallet")
+	wallet := c.Param("account")
 	rets, err := models.GetWalletTokenChangeBasis(wallet)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
@@ -631,6 +632,32 @@ func GetUtxoTransactionDetails(c *gin.Context) {
 		return
 	}
 	rets, err := services.GetUtxoTransactionDetailedInfo(hash)
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+
+	ret.Return(rets, CodeSuccess)
+	JsonResponse(c, ret)
+
+}
+
+func GetAccountTxCountHandler(c *gin.Context) {
+	ret := &Response{}
+	account := c.Param("account")
+	var ecosystem int64
+	ecosystemStr := c.Param("ecosystem")
+	if ecosystemStr != "all" {
+		id, err := strconv.ParseInt(ecosystemStr, 10, 64)
+		if err != nil {
+			ret.ReturnFailureString("request params invalid")
+			JsonResponse(c, ret)
+			return
+		}
+		ecosystem = id
+	}
+	rets, err := models.GetAccountTxCount(ecosystem, account)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)

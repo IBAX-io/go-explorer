@@ -229,8 +229,8 @@ func GetBlocksDetailedInfoHexByScanOut(mc *Block) (*BlockDetailedInfoHex, error)
 		SysUpdate:     blck.SysUpdate,
 		GenBlock:      blck.GenBlock,
 		//StopCount:     blck.s,
-		BlockSize:    TocapacityString(int64(len(mc.Data))),
-		TxTotalSize:  TocapacityString(transize),
+		BlockSize:    ToCapacityString(int64(len(mc.Data))),
+		TxTotalSize:  ToCapacityString(transize),
 		Transactions: txDetailedInfoCollection,
 	}
 
@@ -308,8 +308,8 @@ func GetBlocksTransactionInfoByBlockInfo(mc *Block) (*BlockDetailedInfoHex, erro
 		SysUpdate:     blck.SysUpdate,
 		GenBlock:      blck.GenBlock,
 		//StopCount:     blck.s,
-		BlockSize:   TocapacityString(int64(len(mc.Data))),
-		TxTotalSize: TocapacityString(transize),
+		BlockSize:   ToCapacityString(int64(len(mc.Data))),
+		TxTotalSize: ToCapacityString(transize),
 	}
 
 	if bdi.EcosystemID == 0 {
@@ -344,7 +344,7 @@ func GetBlocksTransactionListByBlockInfo(mc *Block) (*[]TxDetailedInfoResponse, 
 			txDetailedInfo.KeyID = converter.AddressToString(tx.KeyID())
 			txDetailedInfo.Time = MsToSeconds(tx.Timestamp())
 			txDetailedInfo.Type = int64(tx.Type())
-			txDetailedInfo.Size = TocapacityString(int64(len(tx.FullData)))
+			txDetailedInfo.Size = ToCapacityString(int64(len(tx.FullData)))
 		}
 
 		if txDetailedInfo.Time == 0 {

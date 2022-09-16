@@ -55,6 +55,10 @@ func (p *CandidateNodeRequests) TableName() string {
 }
 
 func InitPledgeAmount() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
 	if NodeReady {
 		pledgeAmount, err := sqldb.GetPledgeAmount()
 		if err != nil {
@@ -513,7 +517,7 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 
 func CandidateTableExist() bool {
 	var p CandidateNodeRequests
-	if !HasTableOrView(nil, p.TableName()) {
+	if !HasTableOrView(p.TableName()) {
 		return false
 	}
 	return true
