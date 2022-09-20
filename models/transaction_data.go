@@ -16,12 +16,10 @@ import (
 )
 
 type TransactionData struct {
-	Hash      []byte `gorm:"primary_key;not null"`
-	Block     int64  `gorm:"not null"`
-	TxData    []byte `gorm:"not null"`
-	Amount    string `gorm:"column:amount;type:decimal(40);default:'0';not null"` //the transaction occurs ecosystem generates transaction amount
-	Ecosystem int64  `gorm:"not null"`
-	TxTime    int64  `gorm:"not null"`
+	Hash   []byte `gorm:"primary_key;not null"`
+	Block  int64  `gorm:"not null"`
+	TxData []byte `gorm:"not null"`
+	TxTime int64  `gorm:"not null"`
 }
 
 var getTransactionData chan bool
@@ -46,7 +44,7 @@ func InitTransactionData() error {
 	if err != nil {
 		return err
 	}
-	TxDataSyncSignalReceive()
+	go TxDataSyncSignalReceive()
 
 	return nil
 }
@@ -60,7 +58,7 @@ func (p *TransactionData) GetTxDataByHash(hash []byte) (bool, error) {
 }
 
 func (p *TransactionData) GetLast() (bool, error) {
-	return isFound(GetDB(nil).Order("block desc").Limit(1).Take(p))
+	return isFound(GetDB(nil).Order("tx_time desc").Take(p))
 }
 
 func (p *TransactionData) RollbackTransaction() error {
@@ -113,7 +111,7 @@ func transactionDataSync() error {
 		}
 	}
 
-	bkList, err := GetBlockchain(tr.Block, tr.Block+100, "asc")
+	bkList, err := GetBlockData(tr.Block, tr.Block+100, "asc")
 	if err != nil {
 		return err
 	}
@@ -129,9 +127,6 @@ func transactionDataSync() error {
 			data.Block = val.ID
 			if data.TxTime == 0 {
 				data.TxTime = val.Time
-			}
-			if data.Ecosystem == 0 {
-				data.Ecosystem = 1
 			}
 			insertData = append(insertData, data)
 		}
@@ -199,16 +194,7 @@ func UnmarshallBlockTxData(blockBuffer *bytes.Buffer) (map[string]TransactionDat
 		info.Hash = tx.Hash()
 
 		if tx.IsSmartContract() {
-			if tx.SmartContract().TxSmart.UTXO != nil {
-				info.Amount = tx.SmartContract().TxSmart.UTXO.Value
-			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				//info.Amount = tx.SmartContract().TxSmart.TransferSelf.Value
-			} else {
-				var his History
-				info.Amount = his.GetHashSum(info.Hash, tx.SmartContract().TxSmart.EcosystemID, block.Header.BlockId)
-			}
 			info.TxTime = MsToSeconds(tx.Timestamp())
-			info.Ecosystem = tx.SmartContract().TxSmart.EcosystemID
 		}
 		txList[hex.EncodeToString(tx.Hash())] = info
 	}

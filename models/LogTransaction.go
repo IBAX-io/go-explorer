@@ -316,7 +316,7 @@ func (lt *LogTransaction) getHashListByBlockId(blockId int64) ([]LogTransaction,
 	return rets, nil
 }
 
-func (lt *LogTransaction) UnmarshalTxTransaction(txData []byte) (*TxDetailedInfoHex, error) {
+func (lt *LogTransaction) UnmarshalTransaction(txData []byte) (*TxDetailedInfoHex, error) {
 	if len(txData) == 0 {
 		return nil, errors.New("tx data length is empty")
 	}
@@ -484,100 +484,6 @@ func (lt *LogTransaction) GetEcosystemTransactionFind(ecosystem int64, page, lim
 
 func (lt *LogTransaction) GetEcosystemAccountTransaction(ecosystem int64, page int, size int, wallet, order string, where map[string]any) (*GeneralResponse, error) {
 	var (
-		tss   []LogTransaction
-		ret   []AccountTxListResponse
-		count int64
-		keyId int64
-		err   error
-		rets  GeneralResponse
-		q     *gorm.DB
-	)
-	rets.Limit = size
-	rets.Page = page
-	if order == "" {
-		order = "timestamp desc"
-	}
-
-	keyId = converter.StringToAddress(wallet)
-	if wallet == "0000-0000-0000-0000-0000" {
-	} else if keyId == 0 {
-		return &rets, errors.New("wallet does not meet specifications")
-	}
-	if page < 1 || size < 1 {
-		return &rets, err
-	}
-	if ecosystem != 0 {
-		if where == nil {
-			where = make(map[string]any)
-		}
-		where["ecosystem_id ="] = ecosystem
-		dayTime := int64(60 * 60 * 24)
-		if value, ok := where["timestamp >="]; ok {
-			if reflect.TypeOf(value).String() == "json.Number" {
-				val, err := value.(json.Number).Int64()
-				if err != nil {
-					return nil, err
-				}
-				where["timestamp >="] = val * 1000
-			}
-		}
-		if value, ok := where["timestamp <="]; ok {
-			if reflect.TypeOf(value).String() == "json.Number" {
-				val, err := value.(json.Number).Int64()
-				if err != nil {
-					return nil, err
-				}
-				where["timestamp <="] = (val + dayTime) * 1000
-			}
-		}
-	}
-	if len(where) != 0 {
-		cond, vals, err := WhereBuild(where)
-		if err != nil {
-			return &rets, err
-		}
-		fmt.Printf("cond:%s\n", cond)
-		fmt.Println("vals:", vals)
-		q = GetDB(nil).Table(lt.TableName()).Where(cond, vals...).Where("address = ?", keyId)
-	} else {
-		q = GetDB(nil).Table(lt.TableName()).Where("address = ?", keyId)
-	}
-	if err = q.Count(&count).Error; err != nil {
-		return &rets, err
-	}
-	if count > 0 {
-		err = q.Order(order).Offset((page - 1) * size).Limit(size).Find(&tss).Error
-	}
-
-	if err != nil {
-		return &rets, err
-	}
-
-	length := len(tss)
-	for i := 0; i < length; i++ {
-		da := AccountTxListResponse{}
-		da.Hash = hex.EncodeToString(tss[i].Hash)
-		da.BlockId = tss[i].Block
-		da.Timestamp = MsToSeconds(tss[i].Timestamp)
-		da.Address = converter.AddressToString(tss[i].Address)
-		da.ContractName = tss[i].ContractName
-		if da.ContractName == "" {
-			da.ContractName = GetUtxoTxContractNameByHash(tss[i].Hash)
-		}
-		da.Status = tss[i].Status
-
-		ret = append(ret, da)
-	}
-	if length < rets.Limit {
-		rets.Limit = length
-	}
-	rets.Total = count
-	rets.List = ret
-	return &rets, nil
-}
-
-func (lt *LogTransaction) GetEcosystemAccountTransactionNew(ecosystem int64, page int, size int, wallet, order string, where map[string]any) (*GeneralResponse, error) {
-	var (
 		ret   []AccountTxListResponse
 		count int64
 		keyId int64
@@ -604,7 +510,7 @@ func (lt *LogTransaction) GetEcosystemAccountTransactionNew(ecosystem int64, pag
 	if page < 1 || size < 1 {
 		return &rets, err
 	}
-	recipientLike := "%" + fmt.Sprintf("%d", keyId) + "%"
+	keyIdLike := "%" + fmt.Sprintf("%d", keyId) + "%"
 	if ecosystem != 0 {
 		if where == nil {
 			where = make(map[string]any)
@@ -629,16 +535,18 @@ func (lt *LogTransaction) GetEcosystemAccountTransactionNew(ecosystem int64, pag
 				where["timestamp <="] = (val + dayTime) * 1000
 			}
 		}
-		where["recipient_id like"] = recipientLike
+		where["recipient_id like"] = keyIdLike
 	}
 	type accountTxList struct {
-		Hash         []byte
-		Block        int64
-		SenderId     int64
+		Hash  []byte
+		Block int64
+		//SenderId     string
+		//RecipientId  string
 		Timestamp    int64
 		ContractName string
 		Ecosystem    int64
 		Status       int32
+		Address      int64
 	}
 	var (
 		list       []accountTxList
@@ -653,85 +561,115 @@ func (lt *LogTransaction) GetEcosystemAccountTransactionNew(ecosystem int64, pag
 		}
 		countQuery = fmt.Sprintf(`
 SELECT count(1) FROM(
-	SELECT v1.*,v2.recipient_id,v2.ecosystem FROM(
-		SELECT hash,block,address AS sender_id,timestamp,contract_name,status FROM log_transactions AS log 
+	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,v2.recipient_id,
+	CASE WHEN v2.sender_id is NULL THEN 
+		v1.ecosystem_id
+	ELSE
+		v2.ecosystem
+	END AS ecosystem
+	FROM(
+		SELECT hash,block,address,ecosystem_id FROM log_transactions
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-			SELECT recipient_id AS keyid,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+			SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
 		)AS v1 GROUP BY hash,ecosystem
 			UNION
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-			SELECT output_key_id AS keyid,output_tx_hash AS hash,ecosystem FROM spent_info GROUP BY output_tx_hash,ecosystem,output_key_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+			SELECT recipient_id,sender_id, hash,ecosystem FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
 		)AS v1 GROUP BY hash,ecosystem
-
 	)AS v2 ON(v2.hash = v1.hash)
-)AS v1 
-WHERE %s OR (sender_id = %d AND ecosystem = %d) 
-`, cond, keyId, ecosystem)
+)AS v1
+WHERE %s AND sender_id NOT like %s OR (sender_id LIKE %s AND ecosystem = %d)
+`, cond, "'"+keyIdLike+"'", "'"+keyIdLike+"'", ecosystem)
 		sqlQuery = fmt.Sprintf(`
 SELECT * FROM(
-	SELECT v1.*,v2.recipient_id,v2.ecosystem FROM(
-		SELECT hash,block,address AS sender_id,timestamp,contract_name,status FROM log_transactions AS log 
+	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,v2.recipient_id,
+	CASE WHEN v2.sender_id is NULL THEN 
+		v1.ecosystem_id
+	ELSE
+		v2.ecosystem
+	END AS ecosystem 
+
+	FROM(
+		SELECT hash,block,address,timestamp,contract_name,ecosystem_id,status FROM log_transactions AS log 
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-			SELECT recipient_id AS keyid,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+			SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
 		)AS v1 GROUP BY hash,ecosystem
 			UNION
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-			SELECT output_key_id AS keyid,output_tx_hash AS hash,ecosystem FROM spent_info GROUP BY output_tx_hash,ecosystem,output_key_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+			SELECT recipient_id,sender_id, hash,ecosystem FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
 		)AS v1 GROUP BY hash,ecosystem
 
 	)AS v2 ON(v2.hash = v1.hash)
 	ORDER BY %s
 )AS v1 
-WHERE %s OR (sender_id = %d AND ecosystem = %d) 
-`, order, cond, keyId, ecosystem)
+WHERE %s AND sender_id NOT like %s OR (sender_id LIKE %s AND ecosystem = %d)
+OFFSET %d LIMIT %d
+`, order, cond, "'"+keyIdLike+"'", "'"+keyIdLike+"'", ecosystem, (page-1)*size, size)
 		q1 = GetDB(nil).Raw(sqlQuery, vals...)
 		q2 = GetDB(nil).Raw(countQuery, vals...)
 	} else {
 		countQuery = `
 SELECT count(1) FROM(
-	SELECT v1.*,v2.recipient_id FROM(
-		SELECT hash,block,address AS sender_id,timestamp,contract_name,status,ecosystem_id as ecosystem FROM log_transactions AS log 
+	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,v2.recipient_id
+	FROM(
+		SELECT hash,block,address FROM log_transactions
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-			SELECT recipient_id AS keyid,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+			SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
 		)AS v1 GROUP BY hash
 			UNION
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-			SELECT output_key_id AS keyid,output_tx_hash AS hash FROM spent_info GROUP BY output_tx_hash,output_key_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+			SELECT recipient_id,sender_id,hash FROM spent_info_history GROUP BY hash,recipient_id,sender_id
 		)AS v1 GROUP BY hash
-
 	)AS v2 ON(v2.hash = v1.hash)
-)AS v1 
-WHERE (recipient_id like ?) OR(sender_id = ?)
+)AS v1
+WHERE (recipient_id like ? AND sender_id NOT like ?) OR (sender_id LIKE ?)
 `
 
 		sqlQuery = fmt.Sprintf(`
 SELECT * FROM(
-	SELECT v1.*,v2.recipient_id FROM(
-		SELECT hash,block,address AS sender_id,timestamp,contract_name,status,ecosystem_id as ecosystem FROM log_transactions AS log 
+	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id 
+	END AS sender_id,v2.recipient_id
+	FROM(
+		SELECT hash,block,address,timestamp,contract_name,status FROM log_transactions AS log 
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-			SELECT recipient_id AS keyid,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+			SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
 		)AS v1 GROUP BY hash
 			UNION
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-			SELECT output_key_id AS keyid,output_tx_hash AS hash FROM spent_info GROUP BY output_tx_hash,output_key_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+			SELECT recipient_id,sender_id,hash FROM spent_info_history GROUP BY hash,recipient_id,sender_id
 		)AS v1 GROUP BY hash
 
 	)AS v2 ON(v2.hash = v1.hash)
 	ORDER BY %s
 )AS v1 
-WHERE (recipient_id like ?) OR(sender_id = ?)
+WHERE (recipient_id like ? AND sender_id NOT like ?) OR (sender_id LIKE ?)
 OFFSET %d LIMIT %d
 `, order, (page-1)*size, size)
-		q1 = GetDB(nil).Raw(sqlQuery, recipientLike, keyId)
-		q2 = GetDB(nil).Raw(countQuery, recipientLike, keyId)
+		q1 = GetDB(nil).Raw(sqlQuery, keyIdLike, keyIdLike, keyIdLike)
+		q2 = GetDB(nil).Raw(countQuery, keyIdLike, keyIdLike, keyIdLike)
 	}
 	if err = q2.Take(&count).Error; err != nil {
 		return &rets, err
@@ -750,7 +688,7 @@ OFFSET %d LIMIT %d
 		da.Hash = hex.EncodeToString(list[i].Hash)
 		da.BlockId = list[i].Block
 		da.Timestamp = MsToSeconds(list[i].Timestamp)
-		da.Address = converter.AddressToString(list[i].SenderId)
+		da.Address = converter.AddressToString(list[i].Address)
 		da.ContractName = list[i].ContractName
 		if da.ContractName == "" {
 			da.ContractName = GetUtxoTxContractNameByHash(list[i].Hash)
@@ -760,9 +698,6 @@ OFFSET %d LIMIT %d
 		da.Ecosystem = list[i].Ecosystem
 
 		ret = append(ret, da)
-	}
-	if length < rets.Limit {
-		rets.Limit = length
 	}
 	rets.Total = count
 	rets.List = ret

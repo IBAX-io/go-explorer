@@ -62,6 +62,10 @@ func StartDaemons(ctx context.Context) {
 		if err != nil {
 			ExitCh <- fmt.Errorf("Init transaction data err:%s\n", err.Error())
 		}
+		err = models.InitSpentInfoHistory()
+		if err != nil {
+			ExitCh <- fmt.Errorf("Init Spent Info History err:%s\n", err.Error())
+		}
 	}()
 	err := models.InitCountryLocator()
 	if err != nil {

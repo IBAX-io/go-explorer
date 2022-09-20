@@ -93,17 +93,17 @@ func (b *Block) GetMaxBlock() (bool, error) {
 	return isFound(conf.GetDbConn().Conn().Last(b))
 }
 
-// GetBlockchain is retrieving chain of blocks from database
-func GetBlockchain(startId int64, endId int64, order string) (*[]Block, error) {
+// GetBlockData is retrieving chain of blocks from database
+func GetBlockData(startId int64, endId int64, order string) (*[]Block, error) {
 	var err error
 	blockchain := new([]Block)
 
 	orderStr := "id " + string(order)
 	query := conf.GetDbConn().Conn().Model(&Block{}).Order(orderStr)
 	if endId > 0 {
-		query = query.Where("id > ? AND id <= ?", startId, endId).Find(&blockchain)
+		query = query.Select("id,time,data").Where("id > ? AND id <= ?", startId, endId).Find(&blockchain)
 	} else {
-		query = query.Where("id > ?", startId).Find(&blockchain)
+		query = query.Select("id,time,data").Where("id > ?", startId).Find(&blockchain)
 	}
 
 	if query.Error != nil {

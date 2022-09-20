@@ -37,3 +37,8 @@ func GetAppValue(appId int64, name string, ecosystem int64) (string, error) {
 	}
 	return sp.Value, nil
 }
+
+func (sp *AppParam) GetByName(ecosystem int64, name string) (bool, error) {
+	return isFound(GetDB(nil).Where("ecosystem = ? AND name = ?",
+		ecosystem, name).First(sp))
+}

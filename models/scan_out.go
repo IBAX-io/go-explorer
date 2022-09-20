@@ -16,7 +16,6 @@ import (
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"math"
 	"strconv"
 	"time"
 
@@ -1037,30 +1036,52 @@ func getHalveNumber() (int64, float64, error) {
 	if !NftMinerReady {
 		return 0, 0, nil
 	}
-	var halvingNumber int64
-	const halvingInterval int64 = 80000
+	var (
+		halvingNumber int64
+		interval      int64
+		reward        float64
+	)
 	var stak NftMinerStaking
 	var stakNumber int64
-	subsidy := float64(25) * 100000000000
+
+	var app AppParam
+	f, err := app.GetByName(1, "nft_miner_per_reward")
+	if err != nil {
+		return 0, 0, err
+	}
+	if !f {
+		return 0, 0, nil
+	}
+	reward, err = strconv.ParseFloat(app.Value, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	intervalStr, err := GetAppValue(app.AppID, "nft_miner_halving_interval", 1)
+	if err != nil {
+		return 0, 0, err
+	}
+	interval, err = strconv.ParseInt(intervalStr, 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
 
 	if err := GetDB(nil).Table(stak.TableName()).Select("token_id").Group("token_id").Count(&stakNumber).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
-			log.WithFields(log.Fields{"warn": err}).Warn("getHavleNumber staking failed")
+			log.WithFields(log.Fields{"warn": err}).Warn("get Havle Number staking failed")
 		}
 		return 0, 0, err
 	}
-	if stakNumber >= halvingInterval {
+	if stakNumber >= interval {
 		st1, _ := smart.Log(int64(4))
-		st2, _ := smart.Log(smart.Float(stakNumber) / smart.Float(halvingInterval))
+		st2, _ := smart.Log(smart.Float(stakNumber) / smart.Float(interval))
 		num, _ := smart.Int(st2 / st1)
 		halvingNumber = num + 1
 	}
 	if (halvingNumber) < 0 {
 		halvingNumber = 0
 	}
-	subsidy = subsidy / math.Pow(float64(2), float64(halvingNumber))
-	//str := smart.Int(smart.Log(smart.Float(stakNumber)/smart.Float(halvingInterval))/smart.Log(4)) + 1
-	return halvingNumber, subsidy / 100000000000, nil
+	return halvingNumber, reward / 1e12, nil
 
 }
 
@@ -1119,30 +1140,30 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k2.ecosystem AND output_key_id = k2.id),0) > 0
 ) AND ecosystem = ?),
 (SELECT count(1) AS month_active_key FROM(
-	SELECT sender_id as keyid FROM "1_history" WHERE sender_id <> 0 AND created_at >= ? and ecosystem = ? GROUP BY sender_id
+	SELECT sender_id as keyid FROM "1_history" WHERE created_at >= ? and ecosystem = ? GROUP BY sender_id
  		UNION 
-	SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id
+	SELECT recipient_id as keyid FROM "1_history" WHERE created_at >= ? AND ecosystem = ? GROUP BY recipient_id
 		UNION
 	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
 	 log_transactions AS l1 ON(l1.hash = s1.output_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
 		UNION
 	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
 	 log_transactions AS l1 ON(l1.hash = s1.input_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
-) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ? AND id <> 0", ecosystem).Take(&ret).Error
+) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ?", ecosystem).Take(&ret).Error
 	} else {
 		err = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
 (SELECT count(1) AS has_token_key FROM "1_keys" as k2 WHERE k2.amount > 0 AND ecosystem = ?),
 (SELECT count(1) AS month_active_key FROM(
-	SELECT sender_id as keyid FROM "1_history" WHERE sender_id <> 0 AND created_at >= ? and ecosystem = ? GROUP BY sender_id
+	SELECT sender_id as keyid FROM "1_history" WHERE created_at >= ? and ecosystem = ? GROUP BY sender_id
 	 UNION 
-	SELECT recipient_id as keyid FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id
+	SELECT recipient_id as keyid FROM "1_history" WHERE AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id
 	 UNION
 	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
 	 log_transactions AS l1 ON(l1.hash = s1.output_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
 	 UNION
 	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
 	 log_transactions AS l1 ON(l1.hash = s1.input_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
-) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ? AND id <> 0", ecosystem).Take(&ret).Error
+) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ?", ecosystem).Take(&ret).Error
 	}
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getScanOutKeyInfo ecosystem keysRet failed")

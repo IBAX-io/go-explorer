@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/shopspring/decimal"
 )
@@ -21,12 +22,8 @@ type SpentInfo struct {
 	OutputIndex  int32  `gorm:"not null"`
 	OutputKeyId  int64  `gorm:"not null"`
 	OutputValue  string `gorm:"not null"`
-	Scene        string
 	Ecosystem    int64
-	Contract     string
 	BlockId      int64
-	Asset        string
-	Action       string `gorm:"-"` // UTXO operation control : change
 }
 
 // TableName returns name of table
@@ -64,7 +61,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 		return nil, errors.New("waiting for transactions to sync")
 	}
 
-	info, err := si.UnmarshalTxTransaction(txData.TxData)
+	info, err := si.UnmarshalTransaction(txData.TxData)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +228,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	return &rets, nil
 }
 
-func (si *SpentInfo) UnmarshalTxTransaction(txData []byte) (*UtxoExplorer, error) {
+func (si *SpentInfo) UnmarshalTransaction(txData []byte) (*UtxoExplorer, error) {
 	if len(txData) == 0 {
 		return nil, errors.New("tx data length is empty")
 	}
@@ -245,6 +242,8 @@ func (si *SpentInfo) UnmarshalTxTransaction(txData []byte) (*UtxoExplorer, error
 		result.Ecosystem = tx.SmartContract().TxSmart.Header.EcosystemID
 		result.TokenSymbol = Tokens.Get(result.Ecosystem)
 		result.Expedite = tx.SmartContract().TxSmart.Expedite
+		result.Size = int64(len(tx.Payload()))
+
 		if tx.SmartContract().TxSmart.UTXO != nil {
 			result.Comment = tx.SmartContract().TxSmart.UTXO.Comment
 			result.Sender = converter.AddressToString(tx.KeyID())
@@ -264,7 +263,8 @@ func (si *SpentInfo) UnmarshalTxTransaction(txData []byte) (*UtxoExplorer, error
 		} else {
 			return &result, errors.New("doesn't not UTXO transaction")
 		}
-		result.Size = int64(len(tx.FullData))
+	} else {
+		return &result, errors.New("doesn't not Smart Contract transaction")
 	}
 	return &result, nil
 }
@@ -288,4 +288,33 @@ func (si *SpentInfo) GetOutputs(txHash []byte) (rlts []utxoDetail, list []SpentI
 		rlts = append(rlts, utxoDetail{Address: converter.AddressToString(val.OutputKeyId), Amount: val.OutputValue, Hash: hex.EncodeToString(val.OutputTxHash), TokenSymbol: Tokens.Get(val.Ecosystem)})
 	}
 	return
+}
+
+func (si *SpentInfo) GetLast() (bool, error) {
+	return isFound(GetDB(nil).Order("block_id desc").Take(si))
+}
+
+func getSpentInfoHashList(startId int64, endId int64, order string) (*[]spentInfoTxData, error) {
+	var (
+		err error
+	)
+	var rlt []spentInfoTxData
+
+	orderStr := "block_id " + string(order)
+
+	err = GetDB(nil).Raw(fmt.Sprintf(`
+SELECT v1.output_tx_hash,v2.tx_data,v1.block_id,v2.tx_time FROM(
+	SELECT output_tx_hash,block_id FROM spent_info WHERE block_id > ? AND block_id <= ? 
+	GROUP BY output_tx_hash,block_id ORDER BY %s
+)AS v1
+LEFT JOIN(
+	SELECT tx_data,tx_time,hash,block FROM transaction_data
+)AS v2 ON(v2.hash = v1.output_tx_hash)
+WHERE v2.block > 0
+`, orderStr), startId, endId).Find(&rlt).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &rlt, nil
 }

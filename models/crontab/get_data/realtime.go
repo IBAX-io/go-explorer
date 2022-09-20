@@ -48,4 +48,5 @@ func realTimeDataServer() {
 	go models.SendTxDataSyncSignal()
 	go models.InitGlobalSwitch()
 	go models.SyncEcosystemInfo()
+	go models.SendUtxoTxSyncSignal()
 }
