@@ -51,6 +51,7 @@ func GetAccountTokenChangeChart(ecosystem, keyId int64, findTime int64) (Account
 		rets        AccountAmountChangeBarChart
 		balanceList []DaysAmount
 	)
+	//account getTime balance + utxo(input time < getTime <= output time) balance
 	err := GetDB(nil).Raw(`
 SELECT h3.days, h4.amount + 
 		COALESCE((
@@ -688,47 +689,12 @@ func GetEcoTopTenTxAccountChart(ecosystem int64) (*EcoTopTenTxAmountResponse, er
 		Amount decimal.Decimal `json:"amount"`
 	}
 	var ret []findStruct
-	getTime := t1.UnixMilli()
 	err = GetDB(nil).Raw(`
-SELECT COALESCE(sum(amount)*2+ 
-		(
-			SELECT COALESCE(sum(v4.in_amount),0)+COALESCE(sum(v4.out_amount),0)amount
-			FROM(
-				SELECT v3.*,CASE WHEN v3.diff >= 0 THEN 
-						v3.diff 
-					ELSE
-						0
-					END AS in_amount,
-					CASE WHEN v3.diff < 0 THEN 
-						v3.diff*-1 
-					ELSE
-						0
-					END AS out_amount
-				FROM(
-					SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
-							CASE WHEN v2.pre_sum < v1.output_value THEN
-								(v1.output_value - v2.pre_sum)*-1
-							ELSE
-								v2.pre_sum - v1.output_value
-							END
-						ELSE
-							0
-					END diff
-					 FROM(
-						SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-							FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_tx_hash 
-						ORDER BY timestamp asc
-					)AS v1
-					LEFT JOIN(
-						SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-							FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_tx_hash 
-						ORDER BY timestamp asc
-					)AS v2 ON(v2.num+1 = v1.num)
-				)AS v3
-			)as v4
-		),0)as tx_amount
+SELECT COALESCE(sum(amount)*2,0)+
+	(SELECT COALESCE(sum(amount),0)*2 FROM spent_info_history WHERE ecosystem = ? AND type <> 1 AND created_at >= ?)
+AS total
 FROM "1_history" AS h1 WHERE ecosystem = ? AND created_at >= ?
-`, ecosystem, getTime, ecosystem, getTime, ecosystem, getTime).Take(&total).Error
+`, ecosystem, t1.Unix(), ecosystem, t1.UnixMilli()).Take(&total).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Eco TopTen Tx Account Chart Total Failed")
 		return nil, err
@@ -738,60 +704,31 @@ FROM "1_history" AS h1 WHERE ecosystem = ? AND created_at >= ?
 SELECT keyid,amount
 FROM(
 	SELECT keyid,ecosystem,
-		(SELECT case when sum(amount) > 0 THEN
-		 sum(amount)
-		ELSE
-		 0
-		END
-		+coalesce((SELECT sum(amount) FROM "1_history" WHERE recipient_id = t1.keyid AND ecosystem = t1.ecosystem AND created_at >= ?),0) +
-			(SELECT COALESCE(sum(v4.in_amount),0)+COALESCE(sum(v4.out_amount),0) FROM(
-				SELECT v3.*,CASE WHEN v3.diff >= 0 THEN 
-						v3.diff 
-					ELSE
-						0
-					END AS in_amount,
-					CASE WHEN v3.diff < 0 THEN 
-						v3.diff*-1 
-					ELSE
-						0
-					END AS out_amount
-				FROM(
-					SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
-							CASE WHEN v2.pre_sum < v1.output_value THEN
-								(v1.output_value - v2.pre_sum)*-1
-							ELSE
-								v2.pre_sum - v1.output_value
-							END
-						ELSE
-							0
-					END diff
-					 FROM(
-						SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-							FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE ecosystem = t1.ecosystem AND timestamp >= ? AND output_key_id = t1.keyid GROUP BY output_tx_hash 
-						ORDER BY timestamp asc
-					)AS v1
-					LEFT JOIN(
-						SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-							FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE ecosystem = t1.ecosystem AND timestamp >= ? AND output_key_id = t1.keyid GROUP BY output_tx_hash 
-						ORDER BY timestamp asc
-					)AS v2 ON(v2.num+1 = v1.num)
-				)AS v3
-			)as v4)
-
-		FROM "1_history" WHERE sender_id = t1.keyid AND ecosystem = t1.ecosystem AND created_at >= ?) AS amount
-		
-		
+		(SELECT COALESCE(sum(amount),0)+
+			(SELECT COALESCE(sum(amount),0) FROM "1_history" WHERE recipient_id = t1.keyid AND ecosystem = t1.ecosystem AND created_at >= ?)+
+			(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE recipient_id = t1.keyid AND ecosystem = t1.ecosystem AND type <> 1 AND created_at >= ?)+
+			(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE sender_id = t1.keyid AND ecosystem = t1.ecosystem AND type <> 1 AND created_at >= ?)
+		FROM "1_history" WHERE sender_id = t1.keyid AND ecosystem = t1.ecosystem AND created_at >= ?)AS amount
 	FROM(
 		SELECT sender_id as keyid,max(ecosystem) ecosystem FROM "1_history" WHERE ecosystem = ? AND created_at >= ? GROUP BY sender_id
-		 UNION 
+		 UNION
 		SELECT recipient_id as keyid,max(ecosystem) ecosystem FROM "1_history" WHERE ecosystem = ? AND created_at >= ? GROUP BY recipient_id
 		 UNION
-		SELECT output_key_id AS keyid,max(ecosystem) ecosystem FROM spent_info AS s1 LEFT JOIN log_transactions AS l1 ON(l1.hash = s1.output_tx_hash) WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
+		SELECT output_key_id AS keyid,max(ecosystem) ecosystem FROM spent_info AS s1 LEFT JOIN log_transactions AS l1 ON(l1.hash = s1.output_tx_hash) 
+			WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
 		 UNION
-		SELECT output_key_id AS keyid,max(ecosystem) ecosystem FROM spent_info AS s1 LEFT JOIN log_transactions AS l1 ON(l1.hash = s1.input_tx_hash) WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
-	) AS t1
-) as tt order by amount desc limit 10
-`, getTime, getTime, getTime, getTime, ecosystem, getTime, ecosystem, getTime, ecosystem, getTime, ecosystem, getTime).Find(&ret).Error
+		SELECT output_key_id AS keyid,max(ecosystem) ecosystem FROM spent_info AS s1 LEFT JOIN log_transactions AS l1 ON(l1.hash = s1.input_tx_hash) 
+			WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
+	)AS t1
+)AS tt order by amount desc limit 10
+`, t1.UnixMilli(),
+		t1.Unix(),
+		t1.Unix(),
+		t1.UnixMilli(),
+		ecosystem, t1.UnixMilli(),
+		ecosystem, t1.UnixMilli(),
+		ecosystem, t1.UnixMilli(),
+		ecosystem, t1.UnixMilli()).Find(&ret).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Eco TopTen Tx Account Chart Failed")
 		return nil, err
@@ -898,9 +835,19 @@ func GetEco15DayTxAmountChart(ecosystem int64) (EcoTxAmountDiffResponse, error) 
 
 	var list []DaysAmount
 	err := GetDB(nil).Raw(`
-	SELECT to_char(to_timestamp(tx_time),'yyyy-MM-dd') AS days,sum(amount)amount FROM 
-	transaction_data WHERE ecosystem = ? GROUP BY days ORDER BY days DESC LIMIT ?
-`, ecosystem, getDays).Find(&list).Error
+	SELECT CASE WHEN v1.days <> '' THEN
+		v1.days
+	ELSE
+		v2.days
+	END,COALESCE(v1.tx_amount,0)+COALESCE(v2.tx_amount,0)AS amount
+	FROM(
+		SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,sum(amount)tx_amount FROM "1_history" WHERE ecosystem = ? GROUP BY days
+	)AS v1
+	FULL JOIN(
+		SELECT to_char(to_timestamp(created_at),'yyyy-MM-dd') AS days,sum(amount)tx_amount FROM spent_info_history WHERE ecosystem = ? AND type <> 1 GROUP BY days 
+	)AS v2 ON(v2.days = v1.days)
+	ORDER BY days DESC LIMIT ?
+`, ecosystem, ecosystem, getDays).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Eco 15 Day Tx Amount Chart Failed")
 		return rets, err

@@ -38,33 +38,6 @@ type History struct {
 	Ecosystem        int64           `gorm:"not null"`
 	Type             int64           `gorm:"not null"`
 	Status           int32           `gorm:"not null"`
-	//Createdat   time.Time       `gorm:"column:created_at;not null"`
-}
-
-type fuelDetail_old struct {
-	FuelRate  string `json:"fuel_rate"`
-	TaxesSize int    `json:"taxes_size"`
-	VmCostFee struct {
-		Value      string `json:"value"`
-		Decimal    string `json:"decimal"`
-		Percentage int    `json:"percentage"`
-	} `json:"vmCost_fee"`
-	ElementFee struct {
-		Value      string `json:"value"`
-		Decimal    string `json:"decimal"`
-		Percentage int    `json:"percentage"`
-	} `json:"element_fee"`
-	StorageFee struct {
-		Value      string `json:"value"`
-		Decimal    string `json:"decimal"`
-		Percentage int    `json:"percentage"`
-	} `json:"storage_fee"`
-	ExpediteFee struct {
-		Value      string `json:"value"`
-		Decimal    string `json:"decimal"`
-		Percentage int    `json:"percentage"`
-	} `json:"expedite_fee"`
-	PaymentType string `json:"payment_type"`
 }
 
 type FeeDetail struct {
@@ -116,13 +89,12 @@ type HistoryHex struct {
 	Comment          string          `json:"comment"`
 	BlockId          int64           `json:"block_id"`
 	Txhash           string          `json:"txhash"`
-	//Createdat        time.Time       `json:"created_at"`
-	Createdat     int64  `json:"created_at"`
-	Ecosystem     int64  `json:"ecosystem"`
-	Type          int64  `json:"type"`
-	Ecosystemname string `json:"ecosystemname"`
-	TokenSymbol   string `json:"token_symbol"`
-	ContractName  string `json:"contract_name"`
+	Createdat        int64           `json:"created_at"`
+	Ecosystem        int64           `json:"ecosystem"`
+	Type             int64           `json:"type"`
+	Ecosystemname    string          `json:"ecosystemname"`
+	TokenSymbol      string          `json:"token_symbol"`
+	ContractName     string          `json:"contract_name"`
 }
 
 type HistoryMergeHex struct {
@@ -143,7 +115,6 @@ type HistoryMergeHex struct {
 	Createdat     time.Time       `json:"created_at"`
 	Ecosystemname string          `json:"ecosystemname"`
 	TokenSymbol   string          `json:"token_symbol"`
-	//Ecosystem     int64    `json:"ecosystem"`
 }
 
 type HistoryItem struct {
@@ -185,13 +156,6 @@ type ecosystemPayInfo struct {
 }
 
 type HistoryExplorer struct {
-	//Ecosystem int64       `json:"ecosystem"`
-	//ID        int64       `json:"id"`
-	//EcoSystemName string           `json:"eco_system_name"`
-	//TokenSymbol   string           `json:"token_symbol"`
-
-	//Senderid string      `json:"sender_id"`
-	//Address string      `json:"address"`
 	Comment string      `json:"comment"`
 	Fees    HistoryItem `json:"fees"`
 	Taxes   HistoryItem `json:"taxes"`
@@ -199,8 +163,7 @@ type HistoryExplorer struct {
 		Amount      decimal.Decimal `json:"amount"`
 		TokenSymbol string          `json:"token_symbol,omitempty"`
 	} `json:"gas_fee"`
-	TxFee HistoryItem `json:"tx_fee"`
-	//CreateSetup   int64        `json:"created_setup"`
+	TxFee     HistoryItem  `json:"tx_fee"`
 	Detail    transDetail  `json:"detail"`
 	EcoDetail *ecoExplorer `json:"eco_detail,omitempty"`
 	Status    int32        `json:"status"`
@@ -210,8 +173,8 @@ type WalletHistoryHex struct {
 	Transaction int64           `json:"transaction"`
 	InTx        int64           `json:"in_tx"`
 	OutTx       int64           `json:"out_tx"`
-	Inamount    decimal.Decimal `json:"inamount"`
-	Outamount   decimal.Decimal `json:"outamount"`
+	InAmount    decimal.Decimal `json:"inamount"`
+	OutAmount   decimal.Decimal `json:"outamount"`
 	Amount      decimal.Decimal `json:"amount,omitempty"`
 }
 
@@ -255,12 +218,11 @@ func (th *History) Get(txHash []byte) (*HistoryMergeHex, error) {
 		if ts[0].Blockid > 0 {
 			sort.Sort(Historys(ts))
 
-			//fmt.Println(ts)
 			tss.Ecosystem = ts[0].Ecosystem
 			tss.TokenSymbol, tss.Ecosystemname = Tokens.Get(tss.Ecosystem), EcoNames.Get(tss.Ecosystem)
 
 			tss.ID = ts[0].ID
-			tss.Senderid = converter.AddressToString(ts[0].Senderid) //strconv.FormatInt(ts[0].Senderid, 10)
+			tss.Senderid = converter.AddressToString(ts[0].Senderid)
 			tss.Comment = ts[0].Comment
 			tss.Blockid = ts[0].Blockid
 			tss.Txhash = hex.EncodeToString(ts[0].Txhash)
@@ -268,18 +230,14 @@ func (th *History) Get(txHash []byte) (*HistoryMergeHex, error) {
 			fmt.Println(string(ts[0].Txhash))
 			tss.Createdat = time.Unix(ts[0].Createdat, 0)
 			if count == 4 {
-				tss.Recipientid1 = converter.AddressToString(ts[3].Recipientid) //strconv.FormatInt(ts[3].Recipientid, 10)
-				tss.Recipientid2 = converter.AddressToString(ts[2].Recipientid) //strconv.FormatInt(ts[2].Recipientid, 10)
-				tss.Recipientid3 = converter.AddressToString(ts[1].Recipientid) //strconv.FormatInt(ts[1].Recipientid, 10)
-				tss.Recipientid4 = converter.AddressToString(ts[0].Recipientid) //strconv.FormatInt(ts[0].Recipientid, 10)
+				tss.Recipientid1 = converter.AddressToString(ts[3].Recipientid)
+				tss.Recipientid2 = converter.AddressToString(ts[2].Recipientid)
+				tss.Recipientid3 = converter.AddressToString(ts[1].Recipientid)
+				tss.Recipientid4 = converter.AddressToString(ts[0].Recipientid)
 				tss.Amount1 = ts[3].Amount
 				tss.Amount2 = ts[2].Amount
 				tss.Amount3 = ts[1].Amount
 				tss.Amount4 = ts[0].Amount
-				//				fmt.Println(ts[2].Amount)
-				//				fmt.Println(ts[1].Amount)
-				//				fmt.Println(ts[0].Amount)
-				//				fmt.Println(tss)
 			} else if count == 3 {
 				tss.Recipientid1 = converter.AddressToString(ts[2].Recipientid) //strconv.FormatInt(ts[2].Recipientid, 10)
 				tss.Recipientid2 = converter.AddressToString(ts[1].Recipientid) //strconv.FormatInt(ts[1].Recipientid, 10)
@@ -287,18 +245,14 @@ func (th *History) Get(txHash []byte) (*HistoryMergeHex, error) {
 				tss.Amount1 = ts[2].Amount
 				tss.Amount2 = ts[1].Amount
 				tss.Amount3 = ts[0].Amount
-				//				fmt.Println(ts[2].Amount)
-				//				fmt.Println(ts[1].Amount)
-				//				fmt.Println(ts[0].Amount)
-				//				fmt.Println(tss)
 			} else if count == 2 {
-				tss.Recipientid2 = converter.AddressToString(ts[1].Recipientid) //strconv.FormatInt(ts[1].Recipientid, 10)
-				tss.Recipientid3 = converter.AddressToString(ts[0].Recipientid) //strconv.FormatInt(ts[0].Recipientid, 10)
+				tss.Recipientid2 = converter.AddressToString(ts[1].Recipientid)
+				tss.Recipientid3 = converter.AddressToString(ts[0].Recipientid)
 				tss.Amount2 = ts[1].Amount
 				tss.Amount3 = ts[0].Amount
 				//tss.Amount1 =decimal.NewFromFloat(0)
 			} else if count == 1 {
-				tss.Recipientid1 = converter.AddressToString(ts[0].Recipientid) //strconv.FormatInt(ts[0].Recipientid, 10)
+				tss.Recipientid1 = converter.AddressToString(ts[0].Recipientid)
 				tss.Amount1 = ts[0].Amount
 			}
 		}
@@ -912,39 +866,6 @@ func (th *History) GetEcosytemWallets(id int64, page int, size int, wallet strin
 	return &ret, num, total, err
 }
 
-func (th *History) GetWalletTotals(wallet string) (*WalletHistoryHex, error) {
-	var (
-		tss1  []History
-		tss2  []History
-		ret   WalletHistoryHex
-		keyId int64
-		err   error
-	)
-
-	keyId, err = strconv.ParseInt(wallet, 10, 64)
-	if err != nil {
-		return &ret, err
-	}
-
-	err = conf.GetDbConn().Conn().Table("1_history").
-		Where("recipient_id = ?", keyId).
-		Order("created_at desc").Find(&tss1).Error
-	if err != nil {
-		return &ret, err
-	}
-	err = conf.GetDbConn().Conn().Table("1_history").
-		Where("sender_id = ?", keyId).
-		Order("created_at desc").Find(&tss2).Error
-	if err != nil {
-		return &ret, err
-	}
-	ret.Transaction = int64(len(tss1)) + int64(len(tss2))
-	ret.Inamount = deal_history_total(&tss1)
-	ret.Outamount = deal_history_total(&tss2)
-
-	return &ret, err
-}
-
 func (th *History) GetAccountHistoryTotals(id int64, keyId int64) (*WalletHistoryHex, error) {
 	var (
 		ret    WalletHistoryHex
@@ -953,13 +874,7 @@ func (th *History) GetAccountHistoryTotals(id int64, keyId int64) (*WalletHistor
 		in     = "0"
 		out    = "0"
 		err    error
-		his    History
 	)
-	type inOutInfo struct {
-		InAmount  string
-		OutAmount string
-	}
-	var utxoInfo inOutInfo
 
 	rCount, sCount, err = getAccountTxCount(id, keyId)
 	if err != nil {
@@ -968,73 +883,37 @@ func (th *History) GetAccountHistoryTotals(id int64, keyId int64) (*WalletHistor
 
 	//in amount
 	if rCount > 0 {
-		err = GetDB(nil).Table(his.TableName()).Select("sum(amount)").Where("recipient_id = ? and ecosystem = ?", keyId, id).Row().Scan(&in)
+		err = GetDB(nil).Raw(`
+SELECT COALESCE(sum(amount),0)+
+	(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE recipient_id = ? AND ecosystem = ? AND type <> 1)AS in_amount 
+FROM "1_history" WHERE recipient_id = ? AND ecosystem = ?
+`, keyId, id, keyId, id).Row().Scan(&in)
 		if err != nil {
 			return &ret, err
 		}
-	}
-
-	utxoQuery := `
-SELECT COALESCE(sum(v4.in_amount),0)in_amount,
-	COALESCE(sum(v4.out_amount),0)out_amount
-FROM(
-	SELECT v3.*,CASE WHEN v3.diff >=0 THEN 
-			v3.diff 
-		ELSE
-			0
-		END AS in_amount,
-		CASE WHEN v3.diff < 0 THEN 
-			v3.diff*-1 
-		ELSE
-			0
-		END AS out_amount
-	FROM(
-		SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
-				CASE WHEN v2.pre_sum < v1.output_value THEN
-					(v1.output_value - v2.pre_sum)*-1
-				ELSE
-					v2.pre_sum - v1.output_value
-				END
-			ELSE
-				0
-		END diff
-		 FROM(
-			SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? GROUP BY output_tx_hash 
-			ORDER BY timestamp asc
-		)AS v1
-		LEFT JOIN(
-			SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? GROUP BY output_tx_hash 
-			ORDER BY timestamp asc
-		)AS v2 ON(v2.num+1=v1.num)
-	)AS v3
-)as v4`
-
-	err = GetDB(nil).Raw(utxoQuery, keyId, id, keyId, id).Take(&utxoInfo).Error
-	if err != nil {
-		return nil, err
 	}
 
 	//out amount
 	if sCount > 0 {
-		err = GetDB(nil).Table("1_history").Select("sum(amount)").Where("sender_id = ? and ecosystem = ?", keyId, id).Row().Scan(&out)
+		err = GetDB(nil).Raw(`
+SELECT COALESCE(sum(amount),0)+
+	(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE sender_id = ? AND ecosystem = ? AND type <> 1)AS out_amount 
+FROM "1_history" WHERE sender_id = ? AND ecosystem = ?
+`, keyId, id, keyId, id).Row().Scan(&out)
 		if err != nil {
 			return &ret, err
 		}
 	}
 
-	in1Amount, _ := decimal.NewFromString(in)
-	in2Amount, _ := decimal.NewFromString(utxoInfo.InAmount)
-	out1Amount, _ := decimal.NewFromString(out)
-	out2Amount, _ := decimal.NewFromString(utxoInfo.OutAmount)
+	inAmount, _ := decimal.NewFromString(in)
+	outAmount, _ := decimal.NewFromString(out)
 
 	ret.InTx = rCount
 	ret.OutTx = sCount
 
 	ret.Transaction = ret.InTx + ret.OutTx
-	ret.Inamount = in1Amount.Add(in2Amount)
-	ret.Outamount = out1Amount.Add(out2Amount)
+	ret.InAmount = inAmount
+	ret.OutAmount = outAmount
 
 	return &ret, err
 }
@@ -1057,98 +936,126 @@ func GetAccountTxCount(ecosystem int64, account string) (*AccountTxInfoResponse,
 
 func getAccountTxCount(ecosystem int64, keyId int64) (inTx, outTx int64, err error) {
 	var (
-		recipientIdLike = "%" + fmt.Sprintf("%d", keyId) + "%"
-		inSqlQuery      string
-		outSqlQuery     string
+		keyIdLike   = "%" + fmt.Sprintf("%d", keyId) + "%"
+		inSqlQuery  string
+		outSqlQuery string
 	)
 
 	if ecosystem > 0 {
 		//in out tx
 		inSqlQuery = `
 SELECT count(1) FROM(
-	SELECT v1.*,v2.recipient_id,v2.ecosystem FROM(
-		SELECT hash,block,address AS sender_id FROM log_transactions AS log
+	SELECT v1.*,CASE WHEN COALESCE(v2.sender_id,'') = '' THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,
+	CASE WHEN v2.sender_id is NULL THEN 
+		v1.ecosystem_id
+	ELSE
+		v2.ecosystem
+	END AS ecosystem,
+	v2.recipient_id FROM(
+		SELECT hash,block,address,ecosystem_id FROM log_transactions
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-		SELECT recipient_id AS keyid,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+		SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
 	)AS v1 GROUP BY hash,ecosystem
-	UNION
-	SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-		SELECT output_key_id AS keyid,output_tx_hash AS hash,ecosystem FROM spent_info GROUP BY output_tx_hash,ecosystem,output_key_id
+		UNION
+	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+		SELECT recipient_id,sender_id, hash,ecosystem FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
 	)AS v1 GROUP BY hash,ecosystem
 	
 	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block DESC
+	ORDER BY block ASC
 )AS v1
-WHERE recipient_id like ? AND sender_id <> ?
+WHERE recipient_id like ? AND sender_id NOT like ?
 `
 		outSqlQuery = `
 SELECT count(1) FROM(
-	SELECT v1.*,v2.recipient_id,v2.ecosystem FROM(
-			SELECT hash,block,address AS sender_id FROM log_transactions AS log 
+	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,v2.recipient_id,
+	CASE WHEN v2.sender_id is NULL THEN 
+		v1.ecosystem_id
+	ELSE
+		v2.ecosystem
+	END AS ecosystem
+	FROM(
+		SELECT hash,block,address,ecosystem_id FROM log_transactions
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-			SELECT recipient_id AS keyid,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id
-		)AS v1 GROUP BY hash,ecosystem
-			UNION
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash,ecosystem FROM(
-			SELECT output_key_id AS keyid,output_tx_hash AS hash,ecosystem FROM spent_info GROUP BY output_tx_hash,ecosystem,output_key_id
-		)AS v1 GROUP BY hash,ecosystem
-
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+		SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
+	)AS v1 GROUP BY hash,ecosystem
+		UNION
+	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+		SELECT recipient_id,sender_id, hash,ecosystem FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
+	)AS v1 GROUP BY hash,ecosystem
 	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block DESC
-)AS v1 
-WHERE sender_id = ?
+	ORDER BY block ASC
+)AS v1
+WHERE sender_id LIKE ?
 `
 		inSqlQuery += fmt.Sprintf(" AND ecosystem = %d", ecosystem)
 		outSqlQuery += fmt.Sprintf(" AND ecosystem = %d", ecosystem)
 	} else {
 		inSqlQuery = `
 SELECT count(1) FROM(
-	SELECT v1.*,v2.recipient_id FROM(
-		SELECT hash,block,address AS sender_id FROM log_transactions AS log
+	SELECT v1.*,CASE WHEN COALESCE(v2.sender_id,'') = '' THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,
+	v2.recipient_id FROM(
+		SELECT hash,block,address FROM log_transactions
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-		SELECT recipient_id AS keyid,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+		SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
 	)AS v1 GROUP BY hash
-	UNION
-	SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-		SELECT output_key_id AS keyid,output_tx_hash AS hash FROM spent_info GROUP BY output_tx_hash,output_key_id
+		UNION
+	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+		SELECT recipient_id,sender_id, hash FROM spent_info_history GROUP BY hash,recipient_id,sender_id
 	)AS v1 GROUP BY hash
 	
 	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block DESC
+	ORDER BY block ASC
 )AS v1
-WHERE recipient_id like ? AND sender_id <> ?
+WHERE recipient_id like ? AND sender_id NOT like ?
 `
 		outSqlQuery = `
 SELECT count(1) FROM(
-	SELECT v1.*,v2.recipient_id FROM(
-			SELECT hash,block,address AS sender_id FROM log_transactions AS log 
+	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,v2.recipient_id
+	FROM(
+		SELECT hash,block,address FROM log_transactions
 	)AS v1
 	LEFT JOIN(
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-			SELECT recipient_id AS keyid,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id
-		)AS v1 GROUP BY hash
-			UNION
-		SELECT array_to_string(array_agg(keyid),',') AS recipient_id,hash FROM(
-			SELECT output_key_id AS keyid,output_tx_hash AS hash FROM spent_info GROUP BY output_tx_hash,output_key_id
-		)AS v1 GROUP BY hash
-
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+		SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
+	)AS v1 GROUP BY hash
+		UNION
+	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
+		SELECT recipient_id,sender_id, hash FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
+	)AS v1 GROUP BY hash
 	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block DESC
-)AS v1 
-WHERE sender_id = ?
+	ORDER BY block ASC
+)AS v1
+WHERE sender_id LIKE ?
 `
 	}
-	err = GetDB(nil).Raw(inSqlQuery, recipientIdLike, keyId).Row().Scan(&inTx)
+	err = GetDB(nil).Raw(inSqlQuery, keyIdLike, keyIdLike).Row().Scan(&inTx)
 	if err != nil {
 		return
 	}
-	err = GetDB(nil).Raw(outSqlQuery, keyId).Row().Scan(&outTx)
+	err = GetDB(nil).Raw(outSqlQuery, keyIdLike).Row().Scan(&outTx)
 	if err != nil {
 		return
 	}
@@ -1172,13 +1079,6 @@ func (th *History) GetWalletTimeLineHistoryTotals(ecosystem int64, keyId int64, 
 		Amount decimal.Decimal `gorm:"column:amount"`
 	}
 
-	type utxoDaysAmount struct {
-		Days      string
-		InAmount  decimal.Decimal
-		OutAmount decimal.Decimal
-	}
-	var utxoInfo []utxoDaysAmount
-
 	getDaysAmount := func(dayTime int64, list []daysAmount) decimal.Decimal {
 		for i := 0; i < len(list); i++ {
 			times, _ := time.ParseInLocation("2006-01-02", list[i].Days, time.Local)
@@ -1189,78 +1089,47 @@ func (th *History) GetWalletTimeLineHistoryTotals(ecosystem int64, keyId int64, 
 		return decimal.Zero
 	}
 
-	getUtxoDaysAmount := func(dayTime int64, list []utxoDaysAmount, isGetOut bool) decimal.Decimal {
-		for i := 0; i < len(list); i++ {
-			times, _ := time.ParseInLocation("2006-01-02", list[i].Days, time.Local)
-			if dayTime == times.Unix() {
-				if isGetOut {
-					return list[i].OutAmount
-				} else {
-					return list[i].InAmount
-				}
-			}
-		}
-		return decimal.Zero
-	}
-
 	var (
 		inAmount  []daysAmount
 		outAmount []daysAmount
 	)
-	err = GetDB(nil).Table(th.TableName()).Raw(`SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days ,sum(amount) amount  
-FROM "1_history" WHERE recipient_id <> 0 AND recipient_id = ?
-and ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days asc`, keyId, ecosystem, t1.UnixMilli()).Find(&inAmount).Error
-	if err != nil {
-		return &ret, err
-	}
 
-	err = GetDB(nil).Table(th.TableName()).Raw(`SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days ,sum(amount) amount  
-FROM "1_history" WHERE sender_id <> 0 AND sender_id = ?
-and ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days asc`, keyId, ecosystem, t1.UnixMilli()).Find(&outAmount).Error
+	err = GetDB(nil).Raw(`
+SELECT CASE WHEN v1.days <> '' THEN
+	v1.days
+ELSE
+	v2.days
+END,COALESCE(v1.amount,0)+COALESCE(v2.amount,0) AS amount
+FROM(
+	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM "1_history" 
+	WHERE recipient_id = ? AND ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days ASC
+)AS v1
+FULL JOIN(
+	SELECT to_char(to_timestamp(created_at), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM spent_info_history 
+	WHERE recipient_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? GROUP BY days ORDER BY days ASC
+)AS v2 ON(v2.days = v1.days)
+`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.Unix()).Find(&inAmount).Error
 	if err != nil {
 		return &ret, err
 	}
 
 	err = GetDB(nil).Raw(`
-SELECT to_char(to_timestamp(v4.timestamp/1000), 'yyyy-mm-dd') AS days,
-COALESCE(sum(v4.in_amount),0)in_amount,COALESCE(sum(v4.out_amount),0)out_amount
+SELECT CASE WHEN v1.days <> '' THEN
+	v1.days
+ELSE
+	v2.days
+END,COALESCE(v1.amount,0)+COALESCE(v2.amount,0) AS amount
 FROM(
-	SELECT v3.*,CASE WHEN v3.diff >= 0 THEN 
-			v3.diff 
-		ELSE
-			0
-		END AS in_amount,
-		CASE WHEN v3.diff < 0 THEN 
-			v3.diff*-1 
-		ELSE
-			0
-		END AS out_amount
-	FROM(
-		SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
-				CASE WHEN v2.pre_sum < v1.output_value THEN
-					(v1.output_value - v2.pre_sum)*-1
-				ELSE
-					v2.pre_sum - v1.output_value
-				END
-			ELSE
-				0
-		END diff
-		 FROM(
-			SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? GROUP BY output_tx_hash 
-			ORDER BY timestamp asc
-		)AS v1
-		LEFT JOIN(
-			SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? GROUP BY output_tx_hash 
-			ORDER BY timestamp asc
-		)AS v2 ON(v2.num+1 = v1.num)
-	)AS v3
-)as v4
-GROUP BY days
-`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.UnixMilli()).Find(&utxoInfo).Error
+	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM "1_history" 
+	WHERE sender_id = ? AND ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days ASC
+)AS v1
+FULL JOIN(
+	SELECT to_char(to_timestamp(created_at), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM spent_info_history 
+	WHERE sender_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? GROUP BY days ORDER BY days ASC
+)AS v2 ON(v2.days = v1.days)
+`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.Unix()).Find(&outAmount).Error
 	if err != nil {
-		return nil, err
+		return &ret, err
 	}
 
 	var startTime time.Time
@@ -1280,8 +1149,8 @@ GROUP BY days
 	today := yesterday.AddDate(0, 0, 1)
 	for startTime.Unix() <= today.Unix() {
 		ret.Time = append(ret.Time, startTime.Unix())
-		ret.Inamount = append(ret.Inamount, getDaysAmount(startTime.Unix(), inAmount).Add(getUtxoDaysAmount(startTime.Unix(), utxoInfo, false)).String())
-		ret.Outamount = append(ret.Outamount, getDaysAmount(startTime.Unix(), outAmount).Add(getUtxoDaysAmount(startTime.Unix(), utxoInfo, true)).String())
+		ret.Inamount = append(ret.Inamount, getDaysAmount(startTime.Unix(), inAmount).String())
+		ret.Outamount = append(ret.Outamount, getDaysAmount(startTime.Unix(), outAmount).String())
 		startTime = startTime.AddDate(0, 0, 1)
 	}
 
@@ -1576,8 +1445,8 @@ func (th *History) GetWalletTotals_Sqlites(wallet string) (*WalletHistoryHex, er
 		return &ret, err
 	}
 	ret.Transaction = int64(len(tss1)) + int64(len(tss2))
-	ret.Inamount = deal_history_total(&tss1)
-	ret.Outamount = deal_history_total(&tss2)
+	ret.InAmount = deal_history_total(&tss1)
+	ret.OutAmount = deal_history_total(&tss2)
 
 	return &ret, err
 }
@@ -1613,8 +1482,10 @@ func (th *History) Get24HourTxAmount() (string, error) {
 	var res result
 
 	err := GetDB(nil).Raw(`
-	SELECT COALESCE(sum(amount),0) as amount FROM transaction_data WHERE tx_time >= ? AND ecosystem = 1
-`, t1.UnixMilli()).Scan(&res).Error
+SELECT COALESCE(sum(amount),0)+
+	(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE type <> 1 AND created_at >= ? AND ecosystem = 1 ) AS amount 
+FROM "1_history" WHERE created_at >= ? AND ecosystem = 1
+`, t1.Unix(), t1.UnixMilli()).Scan(&res).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("Get scan 24 Hour tx amount err")
 		return "0", err
@@ -1629,13 +1500,11 @@ func (th *History) GetEcosystem(ecosystem int64) (bool, error) {
 
 func GetAmountChangePieChart(ecosystem int64, account string, stTime, edTime int64) (AccountAmountChangePieChart, error) {
 	var (
-		rets      AccountAmountChangePieChart
-		err       error
-		f         bool
-		endTime   time.Time
-		startTime time.Time
-		r1        AccountAmountChangePieChart
-		r2        AccountAmountChangePieChart
+		rets AccountAmountChangePieChart
+		err  error
+		f    bool
+		ed   time.Time
+		st   time.Time
 	)
 	keyId := converter.StringToAddress(account)
 	if keyId == 0 {
@@ -1643,65 +1512,28 @@ func GetAmountChangePieChart(ecosystem int64, account string, stTime, edTime int
 	}
 	if stTime == 0 && edTime == 0 {
 		tz := time.Unix(GetNowTimeUnix(), 0)
-		endTime = time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
+		ed = time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 		const getDays = 15
-		t1 := endTime.AddDate(0, 0, -1*getDays)
-		startTime = t1.AddDate(0, 0, 1)
+		t1 := ed.AddDate(0, 0, -1*getDays)
+		st = t1.AddDate(0, 0, 1)
 	} else {
-		startTime = time.Unix(stTime, 0)
-		endTime = time.Unix(edTime, 0)
-	}
-
-	f, err = isFound(GetDB(nil).Raw(fmt.Sprintf(`SELECT sum(amount) AS outcome,
-(SELECT sum(amount)AS income FROM "1_history" WHERE recipient_id = %d AND ecosystem = max(h1.ecosystem) AND created_at >= %d AND created_at < %d)
-FROM "1_history" AS h1 WHERE sender_id = %d AND ecosystem = %d AND created_at >= %d AND created_at < %d`,
-		keyId, startTime.UnixMilli(), endTime.UnixMilli(), keyId, ecosystem, startTime.UnixMilli(), endTime.UnixMilli())).Take(&r1))
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Pie Chart Failed")
-		return rets, nil
-	}
-	if !f {
-		return rets, errors.New("unknown account:" + converter.AddressToString(keyId) + " in ecosystem:" + strconv.FormatInt(ecosystem, 10))
+		st = time.Unix(stTime, 0)
+		ed = time.Unix(edTime, 0)
 	}
 
 	f, err = isFound(GetDB(nil).Raw(`
-SELECT COALESCE(sum(v4.in_amount),0)income,COALESCE(sum(v4.out_amount),0)outcome
-FROM(
-	SELECT v3.*,CASE WHEN v3.diff >= 0 THEN 
-			v3.diff 
-		ELSE
-			0
-		END AS in_amount,
-		CASE WHEN v3.diff < 0 THEN 
-			v3.diff*-1 
-		ELSE
-			0
-		END AS out_amount
-	FROM(
-		SELECT v1.*,COALESCE(v2.pre_sum,0)pre_sum,CASE WHEN v1.num > 1 THEN
-				CASE WHEN v2.pre_sum < v1.output_value THEN
-					(v1.output_value - v2.pre_sum)*-1
-				ELSE
-					v2.pre_sum - v1.output_value
-				END
-			ELSE
-				0
-		END diff
-		 FROM(
-			SELECT sum(output_value)output_value,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  
-				WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? AND timestamp < ?  GROUP BY output_tx_hash 
-			ORDER BY timestamp asc
-		)AS v1
-		LEFT JOIN(
-			SELECT sum(output_value)pre_sum,output_tx_hash,max(output_key_id) output_key_id,max(lt."timestamp") AS timestamp,row_number() OVER (ORDER BY max(lt."timestamp") ASC) num
-				FROM spent_info as si LEFT JOIN log_transactions AS lt ON(lt.hash = si.output_tx_hash)  
-				WHERE output_key_id = ? AND ecosystem = ? AND timestamp >= ? AND timestamp < ? GROUP BY output_tx_hash 
-			ORDER BY timestamp asc
-		)AS v2 ON(v2.num+1 = v1.num)
-	)AS v3
-)as v4
-`, keyId, ecosystem, startTime.UnixMilli(), endTime.UnixMilli(), keyId, ecosystem, startTime.UnixMilli(), endTime.UnixMilli()).Take(&r2))
+SELECT COALESCE(sum(amount),0)+
+	(SELECT COALESCE(sum(amount),0) FROM spent_info_history 
+		WHERE recipient_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? AND created_at < ?)AS income,
+(SELECT COALESCE(sum(amount),0)+
+	(SELECT COALESCE(sum(amount),0) FROM spent_info_history 
+		WHERE sender_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? AND created_at < ?) 
+	FROM "1_history" WHERE sender_id = ? AND ecosystem = ? AND created_at >= ? AND created_at < ?)AS outcome
+FROM "1_history" WHERE recipient_id = ? AND ecosystem = ? AND created_at >= ? AND created_at < ?
+`, keyId, ecosystem, st.Unix(), ed.Unix(),
+		keyId, ecosystem, st.Unix(), ed.Unix(),
+		keyId, ecosystem, st.UnixMilli(), ed.UnixMilli(),
+		keyId, ecosystem, st.UnixMilli(), ed.UnixMilli()).Take(&rets))
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Pie Chart Failed")
 		return rets, nil
@@ -1710,8 +1542,6 @@ FROM(
 		return rets, errors.New("unknown account:" + converter.AddressToString(keyId) + " in ecosystem:" + strconv.FormatInt(ecosystem, 10))
 	}
 
-	rets.Outcome = r1.Outcome.Add(r2.Outcome)
-	rets.Income = r1.Income.Add(r2.Income)
 	rets.TokenSymbol = Tokens.Get(ecosystem)
 	return rets, nil
 }
@@ -1819,32 +1649,37 @@ func GetAccountTxChart(ecosystem int64, account string) (AccountTxChart, error) 
 	if keyId == 0 && account != "0000-0000-0000-0000-0000" {
 		return rets, errors.New("account invalid")
 	}
+	keyIdLike := "%" + fmt.Sprintf("%d", keyId) + "%"
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	today := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 	err := GetDB(nil).Raw(`
-SELECT CASE WHEN n1.days = ''THEN
-	n2.days
-ELSE
-	n1.days
-END,COALESCE(n1.num,0)+COALESCE(n2.num,0)AS num
-FROM(
-	SELECT days,count(1)num FROM (
-		SELECT txhash,to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days FROM "1_history" WHERE (sender_id = ? or recipient_id = ?) AND ecosystem = ? GROUP BY txhash,created_at
-		ORDER BY days asc
+SELECT to_char(to_timestamp(timestamp/1000),'yyyy-MM-dd') AS days,count(1)num FROM(
+	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
+		CAST(v1.address AS VARCHAR)
+	ELSE
+	 v2.sender_id
+	END AS sender_id,v2.recipient_id,
+	CASE WHEN v2.sender_id is NULL THEN 
+		v1.ecosystem_id
+	ELSE
+		v2.ecosystem
+	END AS ecosystem
+	FROM(
+		SELECT hash,block,address,timestamp,ecosystem_id FROM log_transactions
 	)AS v1
-	GROUP BY days
-)AS n1
-FULL JOIN(
-
-	SELECT days,count(1)num FROM(
-		SELECT output_tx_hash,to_char(to_timestamp(timestamp/1000),'yyyy-MM-dd') AS days FROM spent_info AS v1 
-			LEFT JOIN log_transactions AS v2 ON(v1.output_tx_hash = v2.hash) WHERE output_key_id = ? AND ecosystem = ?
-		GROUP BY output_tx_hash,"timestamp"
-		ORDER BY days asc
-	)AS v1
-	GROUP BY days
-)AS n2 ON(n2.days = n1.days)
-`, keyId, keyId, ecosystem, keyId, ecosystem).Find(&list).Error
+	LEFT JOIN(
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+			SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
+		)AS v1 GROUP BY hash,ecosystem
+			UNION
+		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
+			SELECT recipient_id,sender_id, hash,ecosystem FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
+		)AS v1 GROUP BY hash,ecosystem
+	)AS v2 ON(v2.hash = v1.hash)
+)AS v1
+WHERE (sender_id LIKE ? AND ecosystem = ?) OR (recipient_id like ? AND sender_id NOT like ? AND ecosystem = ?)
+GROUP BY days ORDER BY days ASC
+`, keyIdLike, ecosystem, keyIdLike, keyIdLike, ecosystem).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Amount Change Bar Chart balance list Failed")
 		return rets, nil

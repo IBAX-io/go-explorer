@@ -677,8 +677,7 @@ func SendAllWebsocketData() {
 		log.Info("Get Transaction Block From Redis Failed:", err.Error())
 	} else {
 		if err := SendBlockListToWebsocket(&ret4.List); err != nil {
-			log.WithFields(log.Fields{"warn": err}).Warn("sendBlockListToWebsocket err")
-			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockList)
+			log.WithFields(log.Fields{"INFO": err, " channel": ChannelBlockList}).Info("Send Websocket Failed")
 		}
 	}
 
@@ -700,7 +699,6 @@ func SendAllWebsocketData() {
 		err = SendDashboardDataToWebsocket(ret6.List, ChannelNodePkgRate)
 		if err != nil {
 			log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodePkgRate}).Info("Send Websocket Failed")
-			return
 		}
 	}
 
@@ -712,7 +710,6 @@ func SendAllWebsocketData() {
 		err = SendDashboardDataToWebsocket(ret7.List, ChannelNodeNewest)
 		if err != nil {
 			log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodeNewest}).Info("Send Websocket Failed")
-			return
 		}
 	}
 }

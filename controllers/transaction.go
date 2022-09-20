@@ -349,7 +349,7 @@ func GetAccountTransactionHistory(c *gin.Context) {
 	}
 
 	lt := &models.LogTransaction{}
-	rets, err := lt.GetEcosystemAccountTransactionNew(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Order, req.Where)
+	rets, err := lt.GetEcosystemAccountTransaction(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Order, req.Where)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)
@@ -358,87 +358,6 @@ func GetAccountTransactionHistory(c *gin.Context) {
 
 	ret.Return(rets, CodeSuccess)
 	JsonResponse(c, ret)
-
-}
-
-// @tags
-// @Description
-// @Summary
-// @Accept   json
-// @Produce  json
-// @Success  200  {string}  json  "{"code":200,"data":{"id":1,"name":"admin","alias":"","email":"admin@block.vc","password":"","roles":[],"openid":"","active":true,"is_admin":true},"message":"success"}}"
-// @Router   /auth/admin/{id} [get]
-func Get_Find_Wallethistory(c *gin.Context) {
-	req := &WebRequest{}
-	rb := &ResponseBoby{
-		Cmd:     "001",
-		Ret:     "1",
-		Retcode: 200,
-		Retinfo: "ok",
-	}
-
-	if err := c.ShouldBindWith(req, binding.JSON); err != nil {
-		rb.Retinfo = err.Error()
-		rb.Retcode = 404
-		GenResponse(c, req.Head, rb)
-	}
-
-	//rb.Page_size = req.Params.Page_size
-	rb.Ecosystem = req.Params.Ecosystem
-	rb.Wallet = req.Params.Wallet
-
-	ret, err := services.GetGroupWalletHistory(req.Params.Ecosystem, req.Params.Wallet)
-	if err == nil {
-		rb.Data = ret
-		GenResponse(c, req.Head, rb)
-	} else {
-		rb.Retinfo = err.Error()
-		rb.Retcode = 404
-		GenResponse(c, req.Head, rb)
-	}
-
-}
-
-// @tags
-// @Description
-// @Summary  Find a list of all currencies under the account
-// @Accept   json
-// @Produce  json
-// @Success  200  {string}  json  "{"code":200,"data":{"id":1,"name":"admin","alias":"","email":"admin@block.vc","password":"","roles":[],"openid":"","active":true,"is_admin":true},"message":"success"}}"
-// @Router   /api/get_wallettotal [post]
-func Get_Wallet_Total(c *gin.Context) {
-	req := &WebRequest{}
-	rb := &ResponseBoby{
-		Cmd:     "001",
-		Ret:     "1",
-		Retcode: 200,
-		Retinfo: "ok",
-	}
-
-	if err := c.ShouldBindWith(req, binding.JSON); err != nil {
-		rb.Retinfo = err.Error()
-		rb.Retcode = 404
-		GenResponse(c, req.Head, rb)
-	}
-
-	//rb.Page_size = req.Params.Page_size
-	//rb.Ecosystem = req.Params.Ecosystem
-	rb.Wallet = req.Params.Wallet
-	rb.CurrentPage = req.Params.CurrentPage
-	rb.PageSize = req.Params.PageSize
-	rb.Order = req.Params.Order
-
-	total, page, ret, err := services.GetGroupWalletTotal(req.Params.CurrentPage, req.Params.PageSize, req.Params.Order, req.Params.Wallet)
-	if err == nil {
-		rb.Data = ret
-		rb.Total = total
-		rb.PageSize = page
-		GenResponse(c, req.Head, rb)
-	} else {
-		rb.Retinfo = err.Error()
-		rb.Retcode = 404
-		GenResponse(c, req.Head, rb)
-	}
 
 }
 

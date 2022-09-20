@@ -39,7 +39,7 @@ func (m AssignGetInfo) TableName() string {
 	return `1_assign_get_info`
 }
 
-// GetId is retrieving model from database
+// GetBalance is retrieving model from database
 func (m *AssignGetInfo) GetBalance(dbTx *DbTransaction, wallet int64) (bool, decimal.Decimal, decimal.Decimal, error) {
 
 	var mps []AssignGetInfo

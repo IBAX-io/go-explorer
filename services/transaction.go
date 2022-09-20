@@ -37,32 +37,6 @@ func GetGroupTransactionEcosystemWallet(id int64, ids int, icount int, wallet st
 	return ts.GetEcosytemWallets(id, ids, icount, wallet, searchType)
 }
 
-func GetGroupWalletHistory(id int64, wallet string) (*models.WalletHistoryHex, error) {
-	ts := &models.History{}
-	key := &models.Key{}
-	ret, err := ts.GetWalletTotals(wallet)
-	if err != nil {
-		return ret, err
-	}
-
-	dat, err := key.Get(id, wallet)
-	if err != nil {
-		return ret, err
-	}
-	amount := decimal.New(0, 0)
-	if len(dat.Amount) > 0 {
-		amount, _ = decimal.NewFromString(dat.Amount)
-	}
-	ret.Amount = amount
-
-	return ret, err
-}
-
-func GetGroupWalletTotal(ids int, icount int, order string, wallet string) (int64, int, *[]models.EcosyKeyTotalHex, error) {
-	key := &models.Key{}
-	return key.GetTotal(ids, icount, order, wallet)
-}
-
 func GetTransactionDetailedInfoHash(hash string) (*models.HistoryExplorer, error) {
 	hashByte := converter.HexToBin(hash)
 	ts := &models.History{}
@@ -97,7 +71,7 @@ func GetTransactionHeadInfoHash(hash string) (*models.TxDetailedInfoHeadResponse
 		return nil, errors.New("waiting for transactions to sync")
 	}
 
-	info, err := lt.UnmarshalTxTransaction(txData.TxData)
+	info, err := lt.UnmarshalTransaction(txData.TxData)
 	if err != nil {
 		return nil, err
 	}

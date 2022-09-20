@@ -35,7 +35,7 @@ type Key struct {
 	Multi     int64           `gorm:"not null"`
 	Deleted   int64           `gorm:"not null"`
 	Blocked   int64           `gorm:"not null"`
-	AccountID string          `gorm:"column:account;not null"`
+	Account   string          `gorm:"column:account;not null"`
 	Lock      string          `gorm:"column:lock;type:jsonb"`
 }
 
@@ -255,78 +255,11 @@ func (ts *Key) GetKeys(id int64, page int, size int, order string) (*[]KeyHex, i
 	return &ret, num, err
 }
 
-func (m *Key) GetTotal(page, limit int, order, wallet string) (int64, int, *[]EcosyKeyTotalHex, error) {
-
-	var (
-		tss   []Key
-		total int64
-	)
-	var da []EcosyKeyTotalHex
-
-	wid := converter.StringToAddress(wallet)
-	err := errors.New("wallet err ")
-	//wid, err := strconv.ParseInt(wallet, 10, 64)
-	if wid != 0 {
-		err = conf.GetDbConn().Conn().Table("1_keys").
-			Where("id = ?", wid).
-			Count(&total).Error
-		if err != nil {
-			return 0, 0, &da, err
-		}
-		err = conf.GetDbConn().Conn().Table("1_keys").Where("id = ?", wid).Order(order).Offset((page - 1) * limit).Limit(limit).Find(&tss).Error
-		if err == nil {
-			dlen := len(tss)
-			for i := 0; i < dlen; i++ {
-				ds := tss[i]
-				d := EcosyKeyTotalHex{}
-				d.Ecosystem = ds.Ecosystem
-				d.Amount = ds.Amount.String()
-
-				//
-				ems := Ecosystem{}
-				f, err := ems.Get(ds.Ecosystem)
-				if err != nil {
-					return 0, 0, &da, err
-				}
-				if f {
-					d.Ecosystemname = ems.Name
-					d.IsValued = ems.IsValued
-					if d.Ecosystem == 1 {
-						d.TokenSymbol = SysTokenSymbol
-					} else {
-						d.TokenSymbol = ems.TokenSymbol
-					}
-				}
-				//
-				ts := &History{}
-				dh, err := ts.GetAccountHistoryTotals(ds.Ecosystem, wid)
-				if err != nil {
-					return 0, 0, &da, err
-				}
-				d.Transaction = dh.Transaction
-				d.InAmount = dh.Inamount
-				d.OutAmount = dh.Outamount
-				d.TxAmount = d.InAmount.Add(d.OutAmount).String()
-				d.InTx = dh.InTx
-				d.OutTx = dh.OutTx
-
-				da = append(da, d)
-			}
-
-			return total, limit, &da, nil
-
-		}
-	}
-
-	return 0, 0, &da, err
-}
-
-func (m *Key) GetEcosyKey(keyid int64, wallet string) (*EcosyKeyTotalHex, error) {
+func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error) {
 	var si SpentInfo
 	d := EcosyKeyTotalHex{}
 	d.Ecosystem = m.Ecosystem
-	d.Amount = m.Amount.String()
-	d.Wallet = m.AccountID
+	d.Wallet = m.Account
 
 	mb := Member{}
 	fm, _ := mb.GetAccount(m.Ecosystem, wallet)
@@ -394,13 +327,13 @@ func (m *Key) GetEcosyKey(keyid int64, wallet string) (*EcosyKeyTotalHex, error)
 	}
 	//
 	ts := &History{}
-	dh, err := ts.GetAccountHistoryTotals(m.Ecosystem, keyid)
+	dh, err := ts.GetAccountHistoryTotals(m.Ecosystem, keyId)
 	if err != nil {
 		return &d, err
 	}
 
 	ag := &AssignGetInfo{}
-	ba, fa, _, err := ag.GetBalance(nil, keyid)
+	ba, fa, _, err := ag.GetBalance(nil, keyId)
 	if err != nil {
 		return &d, err
 	}
@@ -419,25 +352,25 @@ func (m *Key) GetEcosyKey(keyid int64, wallet string) (*EcosyKeyTotalHex, error)
 	d.Transaction = dh.Transaction
 	d.InTx = dh.InTx
 	d.OutTx = dh.OutTx
-	d.InAmount = dh.Inamount
-	d.OutAmount = dh.Outamount
+	d.InAmount = dh.InAmount
+	d.OutAmount = dh.OutAmount
 	d.TxAmount = d.InAmount.Add(d.OutAmount).String()
 	if ba {
 		d.FreezeAmount = fa
 	}
-	amount := decimal.New(0, 0)
-	if len(d.Amount) > 0 {
-		amount, _ = decimal.NewFromString(d.Amount)
+	accountAmount := decimal.Zero
+	if m.Amount.GreaterThan(decimal.Zero) {
+		accountAmount = m.Amount
 	}
-	utxoAmount, err := si.GetAmountByKeyId(m.ID, 1)
+	utxoAmount, err := si.GetAmountByKeyId(keyId, 1)
 	if err != nil {
 		return nil, err
 	}
-	d.TotalAmount = d.TotalAmount.Add(amount)
-	d.TotalAmount = d.TotalAmount.Add(d.StakeAmount).Add(utxoAmount)
+	d.Amount = accountAmount.Add(utxoAmount).String()
+	d.TotalAmount = d.TotalAmount.Add(accountAmount).Add(d.StakeAmount).Add(utxoAmount)
 	//d.TotalAmount = d.TotalAmount.Add(d.FreezeAmount)
-	d.JoinTime = getJoinTime(keyid, m.Ecosystem)
-	d.RolesName = getRolesName(converter.AddressToString(keyid), m.Ecosystem)
+	d.JoinTime = getJoinTime(keyId, m.Ecosystem)
+	d.RolesName = getRolesName(converter.AddressToString(keyId), m.Ecosystem)
 	return &d, err
 }
 
@@ -512,13 +445,22 @@ func (m *Key) GetWalletTotalBasisEcosystem(wallet string) (*EcosyKeyTotalHex, er
 		}
 		if !f {
 			if wallet != "0000-0000-0000-0000-0000" {
-				return nil, errors.New("account doesn't not exist")
+				var sp SpentInfo
+				f, err = isFound(GetDB(nil).Where("output_key_id = ? AND ecosystem = ?", wid, 1).First(&sp))
+				if err != nil {
+					return nil, err
+				}
+				if !f {
+					return nil, errors.New("account doesn't not exist")
+				}
+				ft.Ecosystem = 1
+				ft.Account = wallet
 			} else {
 				ft.Ecosystem = 1
-				ft.AccountID = "0000-0000-0000-0000-0000"
+				ft.Account = "0000-0000-0000-0000-0000"
 			}
 		}
-		df, err := ft.GetEcosyKey(wid, wallet)
+		df, err := ft.GetKeyDetail(wid, wallet)
 		if err != nil {
 			return &ret, err
 		}
@@ -642,7 +584,7 @@ func GetCirculations(ecosystem int64) (string, error) {
 	err = GetDB(nil).Raw(`
 	SELECT coalesce(sum(amount),0)+
 		(SELECT COALESCE(sum(output_value),0) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?) as amount 
-	FROM "1_keys" WHERE ecosystem = ?
+	FROM "1_keys" WHERE ecosystem = ? AND id <> 0 AND id <> 5555
 `, ecosystem, ecosystem).Take(&rets).Error
 	if err != nil {
 		return decimal.Zero.String(), err
