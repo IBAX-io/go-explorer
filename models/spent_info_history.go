@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) IBAX All rights reserved.
+ *  See LICENSE in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
 package models
 
 import (
@@ -66,7 +71,7 @@ func (p *SpentInfoHistory) GetLast() (bool, error) {
 }
 
 func (p *SpentInfoHistory) RollbackTransaction() error {
-	return GetDB(nil).Where("block > ?", p.Block).Delete(&TransactionData{}).Error
+	return GetDB(nil).Where("block > ?", p.Block).Delete(&SpentInfoHistory{}).Error
 }
 
 func InitSpentInfoHistory() error {
@@ -127,7 +132,7 @@ func utxoTxSync() error {
 		}
 	}
 
-	txList, err := getSpentInfoHashList(tr.Block, tr.Block+100, "asc")
+	txList, err := getSpentInfoHashList(tr.Block, 100, "asc")
 	if err != nil {
 		return fmt.Errorf("[utxo sync]get spent info hash list failed:%s", err.Error())
 	}
