@@ -434,7 +434,7 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 			}
 			amount := decimal.New(0, 0)
 			for k, v := range emissionAmount {
-				if v.Type == "emission" && k == 1 {
+				if v.Type == "emission" && k == 0 {
 					amount = amount.Add(v.Val)
 				}
 			}

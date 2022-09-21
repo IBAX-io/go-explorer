@@ -651,7 +651,7 @@ SELECT * FROM(
 	 v2.sender_id 
 	END AS sender_id,v2.recipient_id
 	FROM(
-		SELECT hash,block,address,timestamp,contract_name,status FROM log_transactions AS log 
+		SELECT hash,block,address,timestamp,contract_name,status,ecosystem_id as ecosystem FROM log_transactions AS log 
 	)AS v1
 	LEFT JOIN(
 		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
