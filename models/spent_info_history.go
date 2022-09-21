@@ -132,7 +132,7 @@ func utxoTxSync() error {
 		}
 	}
 
-	txList, err := getSpentInfoHashList(tr.Block, tr.Block+100, "asc")
+	txList, err := getSpentInfoHashList(tr.Block, 100, "asc")
 	if err != nil {
 		return fmt.Errorf("[utxo sync]get spent info hash list failed:%s", err.Error())
 	}
