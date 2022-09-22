@@ -15,8 +15,6 @@ type BlockID struct {
 	Name string
 }
 
-var MaxblockidPrefix = "blockid-"
-
 func (b *BlockID) Marshal() ([]byte, error) {
 	if res, err := msgpack.Marshal(b); err != nil {
 		return nil, err
@@ -32,9 +30,9 @@ func (b *BlockID) Unmarshal(bt []byte) error {
 	return nil
 }
 
-func (b *BlockID) GetbyName(name string) (bool, error) {
+func (b *BlockID) GetByName(name string) (bool, error) {
 	rp := &RedisParams{
-		Key: MaxblockidPrefix + name,
+		Key: name,
 	}
 	if err := rp.Get(); err != nil {
 		return false, err
@@ -45,9 +43,9 @@ func (b *BlockID) GetbyName(name string) (bool, error) {
 	return true, nil
 }
 
-func (b *BlockID) DelbyName(name string) error {
+func (b *BlockID) DelByName(name string) error {
 	rp := &RedisParams{
-		Key: MaxblockidPrefix + name,
+		Key: name,
 	}
 	err := rp.Del()
 	return err
@@ -59,7 +57,7 @@ func (b *BlockID) InsertRedis() error {
 		return err
 	}
 	rp := RedisParams{
-		Key:   MaxblockidPrefix + b.Name,
+		Key:   b.Name,
 		Value: string(val),
 	}
 	for i := 0; i < 5; i++ {

@@ -37,7 +37,7 @@ func (d *DatabaseModel) GormInit() (err error) {
 		DSN: dsn,
 	}), &gorm.Config{
 		//AllowGlobalUpdate: true,                                  //allow global update
-		Logger: logger.Default.LogMode(logger.Silent), // start Logger，show detail log
+		Logger: logger.Default.LogMode(logger.Silent), // start Logger,show detail log
 	})
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func GormDBInit(engine, connect string) (*gorm.DB, error) {
 		DSN: connect,
 	}), &gorm.Config{
 		AllowGlobalUpdate: true,                                  //allow global update
-		Logger:            logger.Default.LogMode(logger.Silent), // start Logger，show detail log
+		Logger:            logger.Default.LogMode(logger.Silent), // start Logger,show detail log
 	})
 	if err != nil {
 		return nil, err

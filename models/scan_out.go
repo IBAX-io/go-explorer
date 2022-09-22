@@ -7,6 +7,7 @@ package models
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/IBAX-io/go-explorer/conf"
@@ -21,6 +22,8 @@ import (
 
 	"github.com/vmihailenco/msgpack/v5"
 )
+
+var MaxBlockId int64
 
 type ScanOut struct {
 	BlockSizes        int64
@@ -42,10 +45,10 @@ type ScanOut struct {
 
 	MintAmounts string
 
-	Blockid          int64
-	MaxTps           int32
-	MaxBlockSize     string
-	StorageCapacitys string
+	BlockId         int64
+	MaxTps          int32
+	MaxBlockSize    string
+	StorageCapacity string
 
 	TotalTx         int64
 	TwentyFourTx    int64
@@ -68,9 +71,9 @@ type ScanOut struct {
 }
 
 type ScanOutRet struct {
-	Blockid           int64  `json:"block_id"`    //Block Id
+	BlockId           int64  `json:"block_id"`    //Block Id
 	BlockSizes        int64  `json:"block_sizes"` //Block Size
-	BlockTranscations int64  `json:"block_transcations"`
+	BlockTransactions int64  `json:"block_transactions"`
 	Hash              string `json:"hash"`
 	RollbacksHash     string `json:"rollbacks_hash"`
 	EcosystemID       int64  `json:"ecosystem_id"`
@@ -81,7 +84,7 @@ type ScanOutRet struct {
 	CurrentVersion    string `json:"current_version"`
 
 	TotalCounts          int64  `json:"total_counts"` //total count
-	BlockTranscationSize int64  `json:"block_transcation_size"`
+	BlockTransactionSize int64  `json:"block_transaction_size"`
 	GuardianNodes        int64  `json:"guardian_nodes"`
 	SubNodes             int64  `json:"sub_nodes"`
 	CLBNodes             int64  `json:"clb_nodes"`
@@ -98,7 +101,7 @@ type ScanOutRet struct {
 }
 
 type BlockRet struct {
-	Blockid          int64  `json:"block_id"` //
+	BlockId          int64  `json:"block_id"` //
 	MaxTps           int32  `json:"max_tps"`
 	MaxBlockSize     string `json:"max_block_size"`
 	StorageCapacitys string `json:"storage_capacitys"`
@@ -159,7 +162,7 @@ type CastNodeRet struct {
 type ScanOutBlockTransactionRet struct {
 	BlockId           int64 `json:"block_id"`            //
 	BlockSizes        int64 `json:"block_size" `         //
-	BlockTranscations int64 `json:"block_transcations" ` //
+	BlockTransactions int64 `json:"block_transactions" ` //
 }
 
 type maxBlock struct {
@@ -173,9 +176,8 @@ type maxTx struct {
 }
 
 var (
-	ScanPrefix      = "scan-"
 	ScanOutStPrefix = "scan-out-"
-	ScanOutLastest  = "lastest"
+	Latest          = "latest"
 	GetScanOut      chan bool
 )
 
@@ -209,81 +211,22 @@ func (s *ScanOut) Unmarshal(bt []byte) error {
 	return nil
 }
 
-func (s *ScanOut) Get(id int64) (bool, error) {
-	rp := &RedisParams{
-		Key: ScanPrefix + strconv.FormatInt(id, 10),
+func (m *ScanOut) InsertRedis() error {
+	MaxBlockId = m.BlockId
+	errCs := m.Changes()
+	if errCs != nil {
+		return fmt.Errorf("changes err:%s\n", errCs.Error())
 	}
-	for i := 0; i < 10; i++ {
-		err := rp.Get()
-		if err == nil {
-			err = s.Unmarshal([]byte(rp.Value))
-			return true, err
-		}
-		if err.Error() == "redis: nil" || err.Error() == "EOF" {
-			break
-		} else {
-			time.Sleep(200 * time.Millisecond)
-		}
-
-	}
-
-	return false, nil
-}
-
-func (m *ScanOut) Del(id int64) error {
-	rp := &RedisParams{
-		Key: ScanPrefix + strconv.FormatInt(id, 10),
-	}
-	var err error
-
-	for i := 0; i < 5; i++ {
-		err = rp.Del()
-		if err == nil {
-			break
-		}
-	}
-
-	return err
-}
-
-func (m *ScanOut) DelRange(id, count int64) error {
-
-	for i := int64(0); i < count; i++ {
-		rp := &RedisParams{
-			Key: ScanPrefix + strconv.FormatInt(id+i, 10),
-		}
-
-		err := rp.Del()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-func (m *ScanOut) Del_Redis(id int64) error {
-	rd := RedisParams{
-		Key:   ScanOutStPrefix + strconv.FormatInt(id, 10),
-		Value: "",
-	}
-	if err := rd.Del(); err != nil {
-		//log.WithFields(log.Fields{"err": err}).Warn("Del_Redis failed")
-		return err
-	}
-	return nil
-}
-
-func (m *ScanOut) Insert_Redis() error {
 	val, err := m.Marshal()
 	if err != nil {
 		return err
 	}
 
 	rd := RedisParams{
-		Key:   ScanOutStPrefix + ScanOutLastest,
+		Key:   ScanOutStPrefix + Latest,
 		Value: string(val),
 	}
-	err = rd.Set()
+	err = rd.SetExpire(time.Millisecond * time.Duration(getTomorrowGapMilliseconds()))
 	if err != nil {
 		return err
 	}
@@ -291,23 +234,27 @@ func (m *ScanOut) Insert_Redis() error {
 	return err
 }
 
-func (m *ScanOut) Get_Redis(id int64) (bool, error) {
+func GetRedisByName(name string) (any, error) {
+	var rets any
 	rd := RedisParams{
-		Key:   ScanOutStPrefix + strconv.FormatInt(id, 10),
+		Key:   name,
 		Value: "",
 	}
 	err := rd.Get()
 	if err != nil {
 		if err.Error() == "redis: nil" || err.Error() == "EOF" {
-			return false, nil
+			return rets, nil
 		}
-		return false, err
+		return rets, err
 	}
-	err = m.Unmarshal([]byte(rd.Value))
-	if err != nil {
-		return false, err
+	if err := msgpack.Unmarshal([]byte(rd.Value), &rets); err != nil {
+		if err = json.Unmarshal([]byte(rd.Value), &rets); err != nil {
+			return rets, err
+		} else {
+			return rets, nil
+		}
 	}
-	return true, err
+	return rets, nil
 }
 
 func GetScanOutDataToRedis() error {
@@ -381,7 +328,7 @@ func (ret *ScanOut) Changes() error {
 	if err != nil {
 		return fmt.Errorf("get Database Size failed:%s", err.Error())
 	}
-	ret.StorageCapacitys = capacity
+	ret.StorageCapacity = capacity
 
 	var sp StateParameter
 	sp.ecosystem = 1
@@ -460,7 +407,7 @@ func processScanOutBlocks() error {
 			return err
 		}
 	}
-	ret.Blockid = cbk.BlockID
+	ret.BlockId = cbk.BlockID
 	ret.KeyID = converter.AddressToString(cbk.KeyID)
 	ret.Time = cbk.Time
 	ret.CurrentVersion = cbk.CurrentVersion
@@ -488,7 +435,7 @@ FROM block_chain AS bk WHERE id = ?
 	ret.BlockSizes = bk.BlockSize
 	ret.RollbacksHash = bk.RollbacksHash
 
-	err = ret.InsertRedisDb()
+	err = ret.InsertRedis()
 	if err != nil {
 		return fmt.Errorf("Insert Redisdb scanout:%s\n", err.Error())
 	}
@@ -505,7 +452,7 @@ func processScanOutFirstBlocks() error {
 		return err
 	}
 	if fb {
-		so.Blockid = 1
+		so.BlockId = 1
 		so.KeyID = converter.AddressToString(bk.KeyID)
 		so.Time = bk.Time
 		so.Hash = hex.EncodeToString(bk.Hash)
@@ -522,43 +469,16 @@ func processScanOutFirstBlocks() error {
 		so.BlockTransactionSize = ts
 	}
 
-	err = so.InsertRedisDb()
+	err = so.InsertRedis()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *ScanOut) InsertRedisDb() error {
-	errCs := s.Changes()
-	if errCs != nil {
-		return fmt.Errorf("changes err:%s\n", errCs.Error())
-	}
-	val, err := s.Marshal()
-	if err != nil {
-		return err
-	}
-	rp := RedisParams{
-		Key:   ScanPrefix + strconv.FormatInt(s.Blockid, 10),
-		Value: string(val),
-	}
-
-	for i := 0; i < 10; i++ {
-		err = rp.SetExpire(time.Minute * 1)
-		if err == nil {
-			break
-		} else {
-			time.Sleep(5 * time.Millisecond)
-		}
-
-	}
-
-	return err
-}
-
 func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	var rets ScanOutRet
-	f, err := m.GetRedisLastest()
+	f, err := m.GetRedisLatest()
 	if err != nil {
 		return &rets, err
 	}
@@ -569,7 +489,7 @@ func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	rets.NodePosition = m.NodePosition
 	rets.ConsensusMode = m.ConsensusMode
 
-	rets.Blockid = m.Blockid
+	rets.BlockId = m.BlockId
 	rets.Hash = m.Hash
 	rets.RollbacksHash = m.RollbacksHash
 	rets.KeyID = m.KeyID
@@ -578,8 +498,8 @@ func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 
 	rets.TotalCounts = m.TotalCounts
 	rets.BlockSizes = m.BlockSizes
-	rets.BlockTranscations = m.BlockTransactions
-	rets.BlockTranscationSize = m.BlockTransactionSize
+	rets.BlockTransactions = m.BlockTransactions
+	rets.BlockTransactionSize = m.BlockTransactionSize
 	rets.GuardianNodes = m.HonorNode
 	rets.CastNodeInfo.CastNodes = m.CastNodes
 	rets.SubNodes = m.SubNodes
@@ -587,10 +507,10 @@ func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	rets.MintAmounts = m.MintAmounts
 
 	//dashboard date
-	rets.BlockInfo.Blockid = m.Blockid
+	rets.BlockInfo.BlockId = m.BlockId
 	rets.BlockInfo.MaxTps = m.MaxTps
 	rets.BlockInfo.MaxBlockSize = m.MaxBlockSize
-	rets.BlockInfo.StorageCapacitys = m.StorageCapacitys
+	rets.BlockInfo.StorageCapacitys = m.StorageCapacity
 
 	rets.TxInfo.TotalTx = m.TotalTx
 	rets.TxInfo.TwentyFourTx = m.TwentyFourTx
@@ -613,9 +533,9 @@ func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	return &rets, err
 }
 
-func (m *ScanOut) GetRedisLastest() (bool, error) {
+func (m *ScanOut) GetRedisLatest() (bool, error) {
 	rd := RedisParams{
-		Key:   ScanOutStPrefix + ScanOutLastest,
+		Key:   ScanOutStPrefix + Latest,
 		Value: "",
 	}
 	err := rd.Get()
@@ -826,7 +746,7 @@ func GetMaxBlockSizeToRedis() {
 	}
 
 	rd := RedisParams{
-		Key:   "max_block",
+		Key:   "max_block_size",
 		Value: string(res),
 	}
 	if err := rd.Set(); err != nil {
@@ -839,7 +759,7 @@ func getMaxBlockSizeFromRedis() (maxBlock, error) {
 	var rets maxBlock
 	var err error
 	rd := RedisParams{
-		Key:   "max_block",
+		Key:   "max_block_size",
 		Value: "",
 	}
 	if err := rd.Get(); err != nil {
@@ -1289,4 +1209,10 @@ func getDatabaseSize() (size string, err error) {
 		return "", err
 	}
 	return
+}
+
+func getTomorrowGapMilliseconds() int64 {
+	d1 := time.Now()
+	tomorrow := time.Date(d1.Year(), d1.Month(), d1.Day(), 0, 0, 0, 0, d1.Location()).AddDate(0, 0, 1)
+	return tomorrow.Sub(d1).Milliseconds()
 }

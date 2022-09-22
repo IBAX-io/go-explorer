@@ -359,20 +359,6 @@ func (si *spentInfoTxData) UnmarshalTransaction() (*utxoTxInfo, error) {
 	return &result, nil
 }
 
-func getSpentInfoHistoryType(utxoType string) int {
-	if utxoType == UtxoTransfer {
-		return 1
-	} else if utxoType == UtxoTx {
-		return 2
-	} else if utxoType == FeesType {
-		return 3
-	} else if utxoType == TaxesType {
-		return 4
-	} else {
-		return 5
-	}
-}
-
 func utxoTxCheck(lastBlockId int64) {
 	tx := &SpentInfoHistory{}
 	f, err := tx.GetLast()
@@ -398,5 +384,30 @@ func utxoTxCheck(lastBlockId int64) {
 		} else {
 			log.WithFields(log.Fields{"error": err, "hash": hex.EncodeToString(tx.Hash)}).Error("[utxo tx check] get log transaction failed")
 		}
+	}
+}
+
+func getUtxoTxBasisGasFee(hash []byte) decimal.Decimal {
+	var hi SpentInfoHistory
+	gasFee := decimal.Zero
+	_, err := isFound(GetDB(nil).Table(hi.TableName()).Select("COALESCE(sum(amount),0)").
+		Where("hash = ? AND ecosystem = 1 AND (type = ? OR type = ?)", hash, getSpentInfoHistoryType(FeesType), getSpentInfoHistoryType(TaxesType)).Take(&gasFee))
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "hash": hex.EncodeToString(hash)}).Error("get utxo transaction gas fee failed")
+	}
+	return gasFee
+}
+
+func getSpentInfoHistoryType(utxoType string) int {
+	if utxoType == UtxoTransfer {
+		return 1
+	} else if utxoType == UtxoTx {
+		return 2
+	} else if utxoType == FeesType {
+		return 3
+	} else if utxoType == TaxesType {
+		return 4
+	} else {
+		return 5
 	}
 }

@@ -29,12 +29,10 @@ func StartDaemons(ctx context.Context) {
 			ExitCh <- fmt.Errorf("Deal Nodeblock transaction ch sqlite err:%s\n", err.Error())
 		}
 	}()
-	go Sys_BlockWork(ctx)
-
-	go Sys_Work_ChainValidBlock(ctx)
+	go SyncBlockWork(ctx)
 
 	go func() {
-		err := EcosystemDealupdate(ctx)
+		err := EcosystemDealUpdate(ctx)
 		if err != nil {
 			ExitCh <- fmt.Errorf("Ecosystem Dealupdate err:%s\n", err.Error())
 		}
@@ -45,7 +43,7 @@ func StartDaemons(ctx context.Context) {
 	}()
 
 	//go func() {
-	//	err := NodeTranStatusSumupdate(ctx)
+	//	err := NodeTranStatusSumUpdate(ctx)
 	//	if err != nil {
 	//		ExitCh <- err
 	//	}

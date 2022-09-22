@@ -173,7 +173,7 @@ func GetBlockList(page, limit, reqType int, order string) (*BlockListHeaderRespo
 	ret.Limit = limit
 	if reqType == 0 {
 		var m ScanOut
-		f, err := m.GetRedisLastest()
+		f, err := m.GetRedisLatest()
 		if err != nil {
 			return &ret, err
 		}
@@ -196,10 +196,10 @@ func GetBlockList(page, limit, reqType int, order string) (*BlockListHeaderRespo
 			}
 
 			bkRet := &BlockRet{}
-			bkRet.Blockid = bk.ID
+			bkRet.BlockId = bk.ID
 			bkRet.MaxTps = maxTx.Tx
 			bkRet.MaxBlockSize = m.MaxBlockSize
-			bkRet.StorageCapacitys = m.StorageCapacitys
+			bkRet.StorageCapacitys = m.StorageCapacity
 			bkRet.MaxBlockSizeId = maxBlock.ID
 			bkRet.MaxTpsId = maxTx.ID
 			ret.BlockInfo = bkRet
@@ -285,9 +285,9 @@ func GetBlockListFromRedis() (*BlockListHeaderResponse, error) {
 	return GetBlocksListFromRedis()
 }
 
-func GetBlockTpslistsFromRedis() (*[]ScanOutBlockTransactionRet, error) {
+func GetBlockTpsListsFromRedis() (*[]ScanOutBlockTransactionRet, error) {
 
-	ret1, err := GetTraninfoFromRedis(30)
+	ret1, err := GetTxInfoFromRedis(30)
 	if err == nil {
 		return ret1, err
 	} else {

@@ -19,7 +19,7 @@ var (
 	GDashboardChain          map[string]any
 )
 
-func Deal_Redis_Dashboard() error {
+func DealRedisDashboard() error {
 	var (
 		err error
 	)
@@ -36,7 +36,7 @@ func Deal_Redis_Dashboard() error {
 	return err
 }
 
-func Get_history_map() (*[]models.DBTransactionsInfo, error) {
+func GetHistoryMap() (*[]models.DBTransactionsInfo, error) {
 	var (
 		err error
 	)
@@ -102,7 +102,7 @@ func Set_Redis_Dashboard_Get_chain(dat *map[string]any) error {
 }
 
 func DealDashboardTopNum() error {
-	blockList, err := Get_Group_Block_Lists()
+	blockList, err := GetGroupBlockLists()
 	if err != nil {
 		logrus.Info("Get Group Block Lists err:" + err.Error())
 		return err
@@ -119,7 +119,7 @@ func Get_Dashboard_history_map() (*[]models.DBTransactionsInfo, error) {
 	if GDashboardDBTransactions != nil {
 		return &GDashboardDBTransactions, nil
 	}
-	ret, err := Get_history_map()
+	ret, err := GetHistoryMap()
 	return ret, err
 }
 

@@ -32,7 +32,7 @@ func (d *LDatabaseModel) GormInit() (err error) {
 		DSN: dsn,
 	}), &gorm.Config{
 		AllowGlobalUpdate: true,                                  //allow global update
-		Logger:            logger.Default.LogMode(logger.Silent), // start Logger，show detail log
+		Logger:            logger.Default.LogMode(logger.Silent), // start Logger,show detail log
 	})
 	if err != nil {
 		return err

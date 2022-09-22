@@ -100,7 +100,7 @@ func Run(host string) (err error) {
 	api.POST("/block_list", controllers.GetBlockList)
 	api.POST(`/get_map_info`, controllers.GetMapInfo)
 
-	api.GET("/max_block_id", controllers.GetMaxblockId)
+	api.GET("/max_block_id", controllers.GetMaxBlockId)
 	api.GET(`/honor_node_list`, controllers.GetHonorNodeLists)
 	api.GET(`/honor_node_map`, controllers.GetHonorNodeMapHandler)
 
@@ -231,7 +231,7 @@ func Run(host string) (err error) {
 	api.GET("/get_node_statistical_change", controllers.GetNodeStatisticalChangeHandler)
 
 	//api.POST("/get_lat_lge",controllers.get)
-	api.GET(`/get_redis/:id`, controllers.GetRedisKey) //get redis keys scan-out-id
+	api.GET(`/get_redis/:name`, controllers.GetRedisKey) //get redis keys
 
 	api.StaticFS("/logo", http.Dir("./logodir"))
 

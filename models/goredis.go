@@ -30,6 +30,10 @@ func (rp *RedisParams) SetExpire(expire time.Duration) error {
 	return GetRdDb().Set(ctx, rp.Key, rp.Value, expire).Err()
 }
 
+func (rp *RedisParams) TTL() (time.Duration, error) {
+	return GetRdDb().TTL(ctx, rp.Key).Result()
+}
+
 func (rp *RedisParams) Get() error {
 	val, err := conf.GetRedisDbConn().Conn().Get(ctx, rp.Key).Result()
 	//if err != nil && err != redis.Nil {

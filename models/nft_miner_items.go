@@ -405,7 +405,7 @@ func (p *NftMinerItems) NftMinerMetaverseList(page, limit int, order string) (Ge
 func (p *NftMinerItems) GetNftMetaverse() (*NftMinerMetaverseInfoResponse, error) {
 	var rets NftMinerMetaverseInfoResponse
 	var m ScanOut
-	f, err := m.GetRedisLastest()
+	f, err := m.GetRedisLatest()
 	if err != nil {
 		return &rets, err
 	}

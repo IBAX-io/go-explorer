@@ -48,7 +48,7 @@ func GetDashboard(c *gin.Context) {
 
 func GetBlockTpsLists(c *gin.Context) {
 	ret := &Response{}
-	rets, err := services.Get_Group_Block_TpsLists()
+	rets, err := services.GetGroupBlockTpsLists()
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)
