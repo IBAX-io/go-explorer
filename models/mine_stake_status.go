@@ -72,11 +72,14 @@ func (m *MinePledgeStatus) GetCastNodeandGuardianNode() (int64, int64, int64, er
 			return honor, in, nftCount, err
 		}
 	}
-	for _, val := range HonorNodes {
-		if val.Display == true {
-			honor += 1
+	if NodeReady {
+		var ca CandidateNodeRequests
+		err := GetDB(nil).Table(ca.TableName()).Where("deleted = 0").Count(&honor).Error
+		if err != nil {
+			return honor, in, nftCount, err
 		}
 	}
+
 	return honor, in, nftCount, nil
 
 }

@@ -22,6 +22,48 @@ type RedisParams struct {
 	Value string `json:"value"`
 }
 
+type HashParams struct {
+	Hash   string
+	HArray []string       //[]string{"key1", "value1", "key2", "value2",...}
+	HMap   map[string]any //map[string]interface{}{"key1": "value1", "key2": value2,...}
+
+	Value    string
+	ValueMap map[string]string
+}
+
+func initRedisServer() error {
+	redisInfo := conf.GetEnvConf().RedisInfo
+	return redisInfo.Init()
+}
+
+func InitRedisDb() error {
+	if err := initRedisServer(); err != nil {
+		return err
+	}
+	res, err := GetRdDb().FlushDB(ctx).Result()
+	if err != nil {
+		return err
+	}
+	fmt.Println("res:", res)
+	return nil
+}
+
+func InitRedisDbAll() error {
+	if err := initRedisServer(); err != nil {
+		return err
+	}
+	res, err := GetRdDb().FlushAll(ctx).Result()
+	if err != nil {
+		return err
+	}
+	fmt.Println("res all:", res)
+	return nil
+}
+
+func GetRdDb() *redis.Client {
+	return conf.GetRedisDbConn().Conn()
+}
+
 func (rp *RedisParams) Set() error {
 	return GetRdDb().Set(ctx, rp.Key, rp.Value, 0).Err()
 }
@@ -97,35 +139,51 @@ func (rp *RedisParams) Size() (int64, error) {
 	return GetRdDb().DBSize(ctx).Result()
 }
 
-func initRedisServer() error {
-	redisInfo := conf.GetEnvConf().RedisInfo
-	return redisInfo.Init()
+func (rp *HashParams) HMapSet() error {
+	return GetRdDb().HSet(ctx, rp.Hash, rp.HMap).Err()
 }
 
-func InitRedisDb() error {
-	if err := initRedisServer(); err != nil {
-		return err
-	}
-	res, err := GetRdDb().FlushDB(ctx).Result()
+func (rp *HashParams) HArraySet() error {
+	return GetRdDb().HSet(ctx, rp.Hash, rp.HArray).Err()
+}
+
+// HSet example:
+// "key1", "value1", "key2", value2 ...
+func (rp *HashParams) HSet(values ...any) error {
+	return GetRdDb().HSet(ctx, rp.Hash, values...).Err()
+}
+
+func (rp *HashParams) HGet(key string) error {
+	val, err := GetRdDb().HGet(ctx, rp.Hash, key).Result()
 	if err != nil {
 		return err
 	}
-	fmt.Println("res:", res)
+	rp.Value = val
+
 	return nil
 }
 
-func InitRedisDbAll() error {
-	if err := initRedisServer(); err != nil {
-		return err
-	}
-	res, err := GetRdDb().FlushAll(ctx).Result()
+func (rp *HashParams) HGetAll() error {
+	val, err := GetRdDb().HGetAll(ctx, rp.Hash).Result()
 	if err != nil {
 		return err
 	}
-	fmt.Println("res all:", res)
+	rp.ValueMap = val
+
 	return nil
 }
 
-func GetRdDb() *redis.Client {
-	return conf.GetRedisDbConn().Conn()
+// HDel delete hash table keys
+func (rp *HashParams) HDel(keys ...string) error {
+	return GetRdDb().HDel(ctx, rp.Hash, keys...).Err()
+}
+
+// HExists hash table key exists
+func (rp *HashParams) HExists(key string) (bool, error) {
+	return GetRdDb().HExists(ctx, rp.Hash, key).Result()
+}
+
+// HLen return hash table keys len
+func (rp *HashParams) HLen() (int64, error) {
+	return GetRdDb().HLen(ctx, rp.Hash).Result()
 }

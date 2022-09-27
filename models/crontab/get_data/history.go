@@ -41,4 +41,7 @@ func historyDataServer() {
 	go models.GetActiveEcoLibsToRedis()
 	go models.GetMaxBlockSizeToRedis()
 	go models.GetMaxTxToRedis()
+
+	//Delayed chart data
+	go models.GetTopTenHasTokenAccountToRedis()
 }

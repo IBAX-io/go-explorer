@@ -1076,7 +1076,7 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 (SELECT count(1) AS month_active_key FROM(
 	SELECT sender_id as keyid FROM "1_history" WHERE created_at >= ? and ecosystem = ? GROUP BY sender_id
 	 UNION 
-	SELECT recipient_id as keyid FROM "1_history" WHERE AND created_at >= ? AND ecosystem = ? GROUP BY recipient_id
+	SELECT recipient_id as keyid FROM "1_history" WHERE created_at >= ? AND ecosystem = ? GROUP BY recipient_id
 	 UNION
 	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
 	 log_transactions AS l1 ON(l1.hash = s1.output_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
@@ -1144,6 +1144,9 @@ func getScanOutKeyInfoFromRedis() (KeysRet, error) {
 		Value: "",
 	}
 	if err := rd.Get(); err != nil {
+		if err.Error() == "redis: nil" || err.Error() == "EOF" {
+			return rets, nil
+		}
 		log.WithFields(log.Fields{"warn": err}).Warn("get Scan Out Key Info From Redis getDb err")
 		return rets, err
 	}
