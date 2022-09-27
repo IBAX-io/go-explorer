@@ -12,7 +12,6 @@ import (
 	"github.com/IBAX-io/go-explorer/models"
 	"github.com/IBAX-io/go-ibax/packages/converter"
 
-	"github.com/IBAX-io/go-explorer/services"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 )
@@ -21,11 +20,11 @@ type getMaxBlockIDResult struct {
 	MaxBlockID int64 `json:"max_block_id"`
 }
 
-func GetMaxblockId(c *gin.Context) {
+func GetMaxBlockId(c *gin.Context) {
 	ret := &Response{}
 	bid := getMaxBlockIDResult{}
-	if services.Sqlite_MaxBlockid > 0 {
-		bid.MaxBlockID = services.Sqlite_MaxBlockid
+	if models.MaxBlockId > 0 {
+		bid.MaxBlockID = models.MaxBlockId
 		ret.Return(bid, CodeSuccess)
 		JsonResponse(c, ret)
 	} else {

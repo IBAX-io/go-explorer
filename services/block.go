@@ -15,13 +15,13 @@ import (
 	//"github.com/gin-gonic/gin/binding"
 )
 
-func Get_Group_Block_Lists() (*models.BlockListHeaderResponse, error) {
+func GetGroupBlockLists() (*models.BlockListHeaderResponse, error) {
 	ret, err := models.GetBlockListFromRedis()
 	return ret, err
 
 }
 
-func Get_Group_Block_TpsLists() (*[]models.ScanOutBlockTransactionRet, error) {
-	ret, err := models.GetBlockTpslistsFromRedis()
+func GetGroupBlockTpsLists() (*[]models.ScanOutBlockTransactionRet, error) {
+	ret, err := models.GetBlockTpsListsFromRedis()
 	return ret, err
 }

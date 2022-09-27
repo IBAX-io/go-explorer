@@ -8,8 +8,6 @@ package controllers
 import (
 	"net/http"
 
-	"github.com/IBAX-io/go-ibax/packages/converter"
-
 	"github.com/IBAX-io/go-explorer/models"
 	"github.com/gin-gonic/gin"
 )
@@ -44,23 +42,20 @@ func GenResponse(c *gin.Context, head *RequestHead, body *ResponseBoby) {
 // @Router       /auth/admin/{id} [get]
 func GetRedisKey(c *gin.Context) {
 	ret := &Response{}
-	id := c.Param("id")
-	count := converter.StrToInt64(id)
-	var scanout models.ScanOut
-	f, err := scanout.Get_Redis(count)
+	name := c.Param("name")
+	if name == "" {
+		ret.ReturnFailureString("request params ivalid")
+		JsonResponse(c, ret)
+		return
+	}
+
+	rets, err := models.GetRedisByName(name)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)
 		return
 	}
-	if f {
-		ret.Return(scanout, CodeSuccess)
-		JsonResponse(c, ret)
-		return
-	} else {
-		ret.ReturnFailureString("not found key in redis:" + models.ScanOutStPrefix + id)
-		JsonResponse(c, ret)
-		return
-	}
-
+	ret.Return(rets, CodeSuccess)
+	JsonResponse(c, ret)
+	return
 }

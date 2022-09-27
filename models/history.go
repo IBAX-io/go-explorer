@@ -616,7 +616,6 @@ func (th *History) GetTxListExplorer(txHash []byte) (decimal.Decimal, decimal.De
 	gasFee := decimal.Zero
 	amount := decimal.Zero
 
-	//TODO:status need add struct log table
 	if err == nil && count > 0 {
 		//for
 		for _, ret := range ts {

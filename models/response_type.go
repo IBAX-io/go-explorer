@@ -820,6 +820,18 @@ type FeesInfo struct {
 	Taxes       FeeInfo          `json:"taxes"`
 }
 
+type UtxoExplorerInfo struct {
+	UtxoType    string `json:"utxo_type"`
+	Comment     string `json:"comment"`
+	Sender      string `json:"sender"`
+	Recipient   string `json:"recipient"`
+	Amount      string `json:"amount"`
+	Expedite    string `json:"expedite"`
+	Ecosystem   int64  `json:"ecosystem"`
+	TokenSymbol string `json:"token_symbol"`
+	Size        int64  `json:"size"`
+}
+
 type UtxoExplorer struct {
 	UtxoType    string       `json:"utxo_type"`
 	Comment     string       `json:"comment"`
@@ -834,7 +846,7 @@ type UtxoExplorer struct {
 	Outputs     []utxoDetail `json:"outputs"`
 	BasisGasFee FeesInfo     `json:"basis_gas_fee"`
 	EcoGasFee   FeesInfo     `json:"eco_gas_fee"`
-	Size        int64        `json:"size"`
+	Size        string       `json:"size"`
 }
 
 type AccountTxListResponse struct {

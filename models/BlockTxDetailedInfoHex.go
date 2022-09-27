@@ -154,7 +154,7 @@ func (bt *BlockTxDetailedInfoHex) GetCommonTransactionSearch(page, limit int, se
 				}
 				if reqType == 0 {
 					var m ScanOut
-					f, err := m.GetRedisLastest()
+					f, err := m.GetRedisLatest()
 					if err != nil {
 						return &ret, err
 					}

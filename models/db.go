@@ -146,21 +146,21 @@ func SendTopTransactiontps(topBlockTps *[]ScanOutBlockTransactionRet) error {
 	return nil
 }
 
-func GetTraninfoFromRedis(limit int) (*[]ScanOutBlockTransactionRet, error) {
+func GetTxInfoFromRedis(limit int) (*[]ScanOutBlockTransactionRet, error) {
 	var ret []ScanOutBlockTransactionRet
 	var err error
 	var transBlock []BlockTps
 
 	rd := RedisParams{
-		Key:   "block-tpslist",
+		Key:   "block-tps-list",
 		Value: "",
 	}
 	if err = rd.Get(); err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("GetTraninfoFromRedis getdb err")
+		log.WithFields(log.Fields{"warn": err}).Warn("Get tx info From Redis get db err")
 		return nil, err
 	}
 	if err = json.Unmarshal([]byte(rd.Value), &transBlock); err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("GetTraninfoFromRedis json err")
+		log.WithFields(log.Fields{"warn": err}).Warn("Get tx info From Redis json err")
 		return nil, err
 	}
 
@@ -168,7 +168,7 @@ func GetTraninfoFromRedis(limit int) (*[]ScanOutBlockTransactionRet, error) {
 		var info = ScanOutBlockTransactionRet{
 			BlockId:           transBlock[i].Id,
 			BlockSizes:        transBlock[i].Length,
-			BlockTranscations: int64(transBlock[i].Tx),
+			BlockTransactions: int64(transBlock[i].Tx),
 		}
 		ret = append(ret, info)
 	}
@@ -185,7 +185,7 @@ func GetBlockInfoToRedis(limit int) error {
 		return err
 	}
 	rd := RedisParams{
-		Key:   "block-tpslist",
+		Key:   "block-tps-list",
 		Value: string(value),
 	}
 	if err := rd.Set(); err != nil {

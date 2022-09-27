@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/shopspring/decimal"
+	"strconv"
 )
 
 // SpentInfo is model
@@ -73,7 +74,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	rets.Expedite = info.Expedite
 	rets.TokenSymbol = info.TokenSymbol
 	rets.Ecosystem = info.Ecosystem
-	rets.Size = info.Size
+	rets.Size = strconv.FormatInt(info.Size, 10) + " bit"
 
 	rets.Inputs, err = si.GetInputs(txHash, converter.StringToAddress(info.Sender))
 	if err != nil {
@@ -228,11 +229,11 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	return &rets, nil
 }
 
-func (si *SpentInfo) UnmarshalTransaction(txData []byte) (*UtxoExplorer, error) {
+func (si *SpentInfo) UnmarshalTransaction(txData []byte) (*UtxoExplorerInfo, error) {
 	if len(txData) == 0 {
 		return nil, errors.New("tx data length is empty")
 	}
-	var result UtxoExplorer
+	var result UtxoExplorerInfo
 	tx, err := UnmarshallTransaction(bytes.NewBuffer(txData))
 	if err != nil {
 		return nil, err

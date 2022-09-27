@@ -144,7 +144,7 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 								return nil, 0, err
 							}
 							bh.Amount, _ = decimal.NewFromString(params.Value)
-							//bh.GasFee todo: need add
+							bh.GasFee = getUtxoTxBasisGasFee(converter.HexToBin(rt.Transactions[j].Hash))
 						} else if bh.ContractName == UtxoTransfer {
 							var params types.TransferSelf
 							err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
