@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/IBAX-io/go-ibax/packages/consts"
+	"github.com/IBAX-io/go-ibax/packages/transaction"
+	"github.com/IBAX-io/go-ibax/packages/types"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -31,9 +33,9 @@ type SpentInfoHistory struct {
 
 type spentInfoTxData struct {
 	OutputTxHash []byte
-	TxData       []byte
-	TxTime       int64
 	BlockId      int64
+	Time         int64
+	Data         []byte
 }
 
 type utxoTxInfo struct {
@@ -114,7 +116,10 @@ func SendUtxoTxSyncSignal() {
 
 func utxoTxSync() error {
 	var insertData []SpentInfoHistory
-	var si SpentInfo
+	var (
+		si SpentInfo
+		st SpentInfo
+	)
 
 	tr := &SpentInfoHistory{}
 	_, err := tr.GetLast()
@@ -132,7 +137,15 @@ func utxoTxSync() error {
 		}
 	}
 
-	txList, err := getSpentInfoHashList(tr.Block, 100, "asc")
+	f, err = st.GetFirst(tr.Block)
+	if err != nil {
+		return fmt.Errorf("[utxo sync]get spent info block:%d first failed:%s", tr.Block, err.Error())
+	}
+	if !f {
+		return nil
+	}
+
+	txList, err := getSpentInfoHashList(st.BlockId, st.BlockId+100)
 	if err != nil {
 		return fmt.Errorf("[utxo sync]get spent info hash list failed:%s", err.Error())
 	}
@@ -149,7 +162,7 @@ func utxoTxSync() error {
 		if err != nil {
 			return fmt.Errorf("[utxo sync]unmarshal utxo transaction failed:%s", err.Error())
 		}
-		data.CreatedAt = val.TxTime
+		data.CreatedAt = val.Time
 		data.Hash = val.OutputTxHash
 		data.Block = val.BlockId
 
@@ -327,34 +340,45 @@ func createUtxoTxBatches(dbTx *gorm.DB, data *[]SpentInfoHistory) error {
 }
 
 func (si *spentInfoTxData) UnmarshalTransaction() (*utxoTxInfo, error) {
-	if len(si.TxData) == 0 {
-		return nil, errors.New("tx data length is empty")
-	}
-	var result utxoTxInfo
-	tx, err := UnmarshallTransaction(bytes.NewBuffer(si.TxData))
-	if err != nil {
+	var (
+		block = &types.BlockData{}
+	)
+	blockBuffer := bytes.NewBuffer(si.Data)
+	if err := block.UnmarshallBlock(blockBuffer.Bytes()); err != nil {
 		return nil, err
 	}
 
-	if tx.IsSmartContract() {
-		result.Ecosystem = tx.SmartContract().TxSmart.Header.EcosystemID
-		if tx.SmartContract().TxSmart.UTXO != nil {
-			result.SenderId = tx.KeyID()
-			result.UtxoType = UtxoTx
-		} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-			result.UtxoType = UtxoTransfer
-			result.SenderId = tx.KeyID()
-			result.RecipientId = tx.KeyID()
-			result.Amount = tx.SmartContract().TxSmart.TransferSelf.Value
-		} else {
-			return &result, errors.New("doesn't not UTXO transaction")
+	var result utxoTxInfo
+
+	for i := 0; i < len(block.TxFullData); i++ {
+		tx, err := transaction.UnmarshallTransaction(bytes.NewBuffer(block.TxFullData[i]))
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		if si.BlockId == 1 {
-			result.UtxoType = StartUpType
-			return &result, nil
+
+		if hex.EncodeToString(tx.Hash()) == hex.EncodeToString(si.OutputTxHash) {
+
+			if tx.IsSmartContract() {
+				result.Ecosystem = tx.SmartContract().TxSmart.Header.EcosystemID
+				if tx.SmartContract().TxSmart.UTXO != nil {
+					result.SenderId = tx.KeyID()
+					result.UtxoType = UtxoTx
+				} else if tx.SmartContract().TxSmart.TransferSelf != nil {
+					result.UtxoType = UtxoTransfer
+					result.SenderId = tx.KeyID()
+					result.RecipientId = tx.KeyID()
+					result.Amount = tx.SmartContract().TxSmart.TransferSelf.Value
+				} else {
+					return &result, errors.New("doesn't not UTXO transaction")
+				}
+			} else {
+				if si.BlockId == 1 {
+					result.UtxoType = StartUpType
+					return &result, nil
+				}
+				return nil, errors.New("doesn't not Smart Contract")
+			}
 		}
-		return nil, errors.New("doesn't not Smart Contract")
 	}
 	return &result, nil
 }

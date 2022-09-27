@@ -313,7 +313,7 @@ type TxDetailedInfoHeadResponse struct {
 	Size          string `json:"size"`
 }
 
-type AccountRatio struct {
+type accountRatio struct {
 	Account      string          `json:"account"`
 	Amount       string          `json:"amount"`
 	AccountedFor decimal.Decimal `json:"accounted_for"`
@@ -324,7 +324,7 @@ type AccountRatio struct {
 type EcoTopTenHasTokenResponse struct {
 	TokenSymbol string         `json:"token_symbol"`
 	Name        string         `json:"name"` //ecosystem name
-	List        []AccountRatio `json:"list"`
+	List        []accountRatio `json:"list"`
 }
 
 type EcoTopTenTxAmountResponse struct {

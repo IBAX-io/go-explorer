@@ -73,9 +73,9 @@ func GetEcoTopTenHasTokenChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEcoTopTenHasTokenAccountChart(ecosystem)
+	rets, err := models.GetTopTenHasTokenAccountFromRedis(ecosystem)
 	if err != nil {
-		ret.ReturnFailureString("get ecosystem has token chart failed")
+		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)
 		return
 	}
@@ -194,11 +194,6 @@ func GetEcoNewKeyChartHandler(c *gin.Context) {
 		return
 	}
 	rets := models.GetEcosystemNewKeyChart(ecosystem, 15)
-	//if err != nil {
-	//	ret.ReturnFailureString("get ecosystem new key chart failed")
-	//	JsonResponse(c, ret)
-	//	return
-	//}
 
 	ret.Return(rets, CodeSuccess)
 	JsonResponse(c, ret)

@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/shopspring/decimal"
 	"strconv"
@@ -295,24 +294,24 @@ func (si *SpentInfo) GetLast() (bool, error) {
 	return isFound(GetDB(nil).Order("block_id desc").Take(si))
 }
 
-func getSpentInfoHashList(startId int64, limit int, order string) (*[]spentInfoTxData, error) {
+func (si *SpentInfo) GetFirst(blockId int64) (bool, error) {
+	return isFound(GetDB(nil).Order("block_id asc").Where("block_id > ?", blockId).Take(si))
+}
+
+func getSpentInfoHashList(startId, endId int64) (*[]spentInfoTxData, error) {
 	var (
 		err error
 	)
 	var rlt []spentInfoTxData
 
-	orderStr := "block_id " + string(order)
-
-	err = GetDB(nil).Raw(fmt.Sprintf(`
-SELECT v1.output_tx_hash,v2.tx_data,v1.block_id,v2.tx_time FROM(
-	SELECT output_tx_hash,block_id FROM spent_info WHERE block_id > ? 
-	GROUP BY output_tx_hash,block_id ORDER BY %s Limit ?
+	err = GetDB(nil).Raw(`
+SELECT v1.block_id,v1.output_tx_hash,v2.time,v2.data FROM(
+	SELECT output_tx_hash,block_id FROM spent_info WHERE block_id >= ? AND block_id < ? GROUP BY output_tx_hash,block_id ORDER BY block_id asc
 )AS v1
 LEFT JOIN(
-	SELECT tx_data,tx_time,hash,block FROM transaction_data
-)AS v2 ON(v2.hash = v1.output_tx_hash)
-WHERE v2.block > 0
-`, orderStr), startId, limit).Find(&rlt).Error
+	SELECT id,time,data FROM block_chain
+)AS v2 ON(v2.id = v1.block_id)
+`, startId, endId).Find(&rlt).Error
 	if err != nil {
 		return nil, err
 	}
