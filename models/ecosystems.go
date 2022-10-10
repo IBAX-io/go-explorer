@@ -92,7 +92,7 @@ type EcosystemTotalResponse struct {
 	Contract    int64  `json:"contract"`
 }
 
-//EcosystemTotalResult example
+// EcosystemTotalResult example
 type EcosystemTotalResult struct {
 	Total    int64                     `json:"total"`
 	Page     int                       `json:"page"`
@@ -837,8 +837,8 @@ id = ?) and name like ?`, wid, like).Limit(10).Find(&list).Error; err != nil {
 	return &rets, nil
 }
 
-//GetEcosystemDatabase
-//reqType params: 1:tableName 2:tableColumns 3:tableRows
+// GetEcosystemDatabase
+// reqType params: 1:tableName 2:tableColumns 3:tableRows
 func GetEcosystemDatabase(page, limit, reqType int, ecosystemId int64, search, order string) (*GeneralResponse, error) {
 	var str sqldb.Table
 	var total int64
@@ -1114,13 +1114,24 @@ func GetEcosystemTokenSymbol(ecosystem int64) (tokenSymbol, name string) {
 }
 
 func getEcosystemCombustion(ecosystem int64) string {
-	var his History
-	var sum SumAmount
-	err := GetDB(nil).Table(his.TableName()).Select("sum(amount)").Where("type = 16 AND ecosystem = ?", ecosystem).Take(&sum).Error
+	var (
+		si   SpentInfo
+		his  History
+		sum1 SumAmount
+		sum2 SumAmount
+	)
+	err := GetDB(nil).Table(his.TableName()).Select("sum(amount)").Where("type = 16 AND ecosystem = ?", ecosystem).Take(&sum1).Error
 	if err != nil {
+		log.WithFields(log.Fields{"INFO": err, "ecosystem": ecosystem}).Info("get ecosystem contract combustion failed")
 		return "0"
 	}
-	return sum.Sum.String()
+	err = GetDB(nil).Table(si.TableName()).Select("sum(output_value)").Where("type = 23 AND ecosystem = ?", ecosystem).Take(&sum2).Error
+	if err != nil {
+		log.WithFields(log.Fields{"INFO": err, "ecosystem": ecosystem}).Info("get ecosystem utxo combustion failed")
+		return "0"
+	}
+
+	return sum1.Sum.Add(sum2.Sum).String()
 }
 
 func (p *countryInfo) getCountry(country int) string {

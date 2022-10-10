@@ -50,8 +50,8 @@ func GetDaysAmountEqual(findTime int64, list []DaysAmount, layout string, areEqu
 	return decimal.New(0, 0)
 }
 
-//GetAccountTokenChangeChart
-//findTime: 0:Get All  order:Find Start TIME
+// GetAccountTokenChangeChart
+// findTime: 0:Get All  order:Find Start TIME
 func GetAccountTokenChangeChart(ecosystem, keyId int64, findTime int64) (AccountAmountChangeBarChart, error) {
 	var (
 		rets        AccountAmountChangeBarChart
@@ -59,47 +59,45 @@ func GetAccountTokenChangeChart(ecosystem, keyId int64, findTime int64) (Account
 	)
 	//account getTime balance + utxo(input time < getTime <= output time) balance
 	err := GetDB(nil).Raw(`
-SELECT v3.days,v3.amount+COALESCE((
-			SELECT COALESCE(sum(v1.output_value),0) FROM(
-				SELECT output_value,output_tx_hash,input_tx_hash FROM spent_info WHERE output_key_id = ? AND ecosystem = ?
-			)AS v1
-			LEFT JOIN(
-				SELECT hash,timestamp FROM log_transactions
-			)AS v2 ON(v1.output_tx_hash = v2.hash)
-			LEFT JOIN(
-				SELECT hash,timestamp FROM log_transactions
-			)AS v3 ON(v1.input_tx_hash = v3.hash)
-			WHERE (COALESCE(v3.timestamp/1000,0) = 0 AND to_char(to_timestamp(v2.timestamp/1000),'yyyy-MM-dd') <= days) OR 
-				(to_char(to_timestamp(v2.timestamp/1000),'yyyy-MM-dd') <= days AND to_char(to_timestamp(COALESCE(v3.timestamp/1000,0)),'yyyy-MM-dd')  > days)
-		),0) AS amount 
-FROM(
-	SELECT CASE WHEN COALESCE(v1.days,'') = '' THEN
-		v2.days
-	ELSE
-		v1.days
-	END,COALESCE(v1.amount,0)AS amount
-	FROM(
-		SELECT h1.days,h2.amount FROM(
-			SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,max(id) mid
-			FROM "1_history"
-			WHERE (recipient_id = ? OR sender_id = ?) AND ecosystem = ? AND created_at >= ? GROUP BY days 
-		)AS h1
-		LEFT JOIN(
-			SELECT id, CASE WHEN (sender_id = ?) THEN
+SELECT v2.days,(
+	SELECT COALESCE(sum(v1.amount),0)+COALESCE((
+				SELECT CASE WHEN (sender_id = ?) THEN
 				sender_balance
 			ELSE
 				recipient_balance
-			END as amount FROM "1_history"
-		)AS h2 ON(h2.id = h1.mid)
+			END
+				FROM "1_history"
+				WHERE (recipient_id = ? OR sender_id = ?) AND ecosystem = ? 
+				AND to_char(to_timestamp(COALESCE(created_at/1000,0)),'yyyy-MM-dd') <= days ORDER BY id DESC LIMIT 1
+	),0) AS amount
+	FROM(
+		SELECT CASE WHEN (sender_id = ?) THEN
+				sender_balance
+			ELSE
+				recipient_balance
+			END AS amount
+				FROM spent_info_history
+				WHERE (recipient_id = ? OR sender_id = ?) AND ecosystem = ?
+				AND to_char(to_timestamp(COALESCE(created_at,0)),'yyyy-MM-dd') <= days ORDER BY id DESC LIMIT 1
 	)AS v1
-	FULL JOIN(
-			SELECT to_char(to_timestamp(created_at),'yyyy-MM-dd') AS days
-			FROM spent_info_history AS h2
-			WHERE (h2.recipient_id = ? OR h2.sender_id = ?) AND h2.ecosystem = ? AND created_at >=? GROUP BY days
-	)AS v2 ON(v2.days = v1.days)
-	ORDER BY days asc
-)AS v3`,
-		keyId, ecosystem, keyId, keyId, ecosystem, findTime, keyId, keyId, keyId, ecosystem, time.UnixMilli(findTime).Unix()).Find(&balanceList).Error
+				
+)AS amount 
+FROM(
+	SELECT v1.days
+	FROM(
+		SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd')AS days FROM "1_history" 
+		WHERE (recipient_id = ? OR sender_id = ?) AND ecosystem = ? AND created_at >= ? GROUP BY days
+			UNION
+		SELECT to_char(to_timestamp(created_at), 'yyyy-mm-dd')AS days FROM spent_info_history 
+		WHERE (recipient_id = ? OR sender_id = ?) AND ecosystem = ? AND created_at >= ? GROUP BY days
+	)AS v1
+)AS v2
+ORDER BY days ASC
+`,
+		keyId, keyId, keyId, ecosystem,
+		keyId, keyId, keyId, ecosystem,
+		keyId, keyId, ecosystem, findTime,
+		keyId, keyId, ecosystem, time.UnixMilli(findTime).Unix()).Find(&balanceList).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Account Token Change Chart Failed")
 		return rets, nil
@@ -118,7 +116,7 @@ FROM(
 	return rets, nil
 }
 
-//todo: Need add freeze amount
+// todo: Need add freeze amount
 func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, error) {
 	var (
 		cycleDay     int64
@@ -220,21 +218,27 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 
 	if ecosystem == 1 {
 		if NodeReady && NftMinerReady {
-			err = GetDB(nil).Raw(`SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" WHERE input_tx_hash is null AND ecosystem = 1),0) AS circulations,
-		(SELECT coalesce(sum(stake_amount),0)+(SELECT coalesce(sum(earnest),0) FROM "1_candidate_node_decisions" WHERE decision <> 3) AS stake_amount
-		FROM "1_nft_miner_staking" WHERE staking_status = 1),
-		(SELECT value AS nft_miner_balance_supply FROM "1_app_params" WHERE "name" = 'nft_miner_balance_supply' AND ecosystem = 1),
- coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)),'IBXC') as token_symbol,
-(SELECT name FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem))
-		FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <> 0`).Take(&nowChart).Error
+			err = GetDB(nil).Raw(`
+SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" 
+WHERE input_tx_hash is null AND ecosystem = 1 AND output_key_id <> 0),0) AS circulations,
+	(SELECT coalesce(sum(stake_amount),0)+
+	(SELECT coalesce(sum(earnest),0) FROM "1_candidate_node_decisions" WHERE decision <> 3) AS stake_amount FROM "1_nft_miner_staking" WHERE staking_status = 1),
+	(SELECT value AS nft_miner_balance_supply FROM "1_app_params" WHERE "name" = 'nft_miner_balance_supply' AND ecosystem = 1),
+ 	coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)),'IBXC') as token_symbol,
+	(SELECT name FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem))
+FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <> 0`).Take(&nowChart).Error
 		} else if !NodeReady && !NftMinerReady {
-			err = GetDB(nil).Raw(`SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" WHERE input_tx_hash is null AND ecosystem = 1),0) AS circulations,
-		COALESCE((SELECT value FROM "1_app_params" WHERE "name" = 'nft_miner_balance_supply' AND ecosystem = 1),'0') AS nft_miner_balance_supply,
- coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)),'IBXC') as token_symbol,
+			err = GetDB(nil).Raw(`
+SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" WHERE 
+input_tx_hash is null AND ecosystem = 1 AND output_key_id <> 0),0) AS circulations,
+	COALESCE((SELECT value FROM "1_app_params" WHERE "name" = 'nft_miner_balance_supply' AND ecosystem = 1),'0') AS nft_miner_balance_supply,
+	coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)),'IBXC') as token_symbol,
 (SELECT name FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem))
 		FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <> 0`).Take(&nowChart).Error
 		} else if NodeReady {
-			err = GetDB(nil).Raw(`SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" WHERE input_tx_hash is null AND ecosystem = 1),0) AS circulations,
+			err = GetDB(nil).Raw(`
+SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info"
+WHERE input_tx_hash is null AND ecosystem = 1 AND output_key_id <> 0),0) AS circulations,
 		(SELECT coalesce(sum(earnest),0) FROM "1_candidate_node_decisions" WHERE decision <> 3) AS stake_amount,
 		COALESCE((SELECT value FROM "1_app_params" WHERE "name" = 'nft_miner_balance_supply' AND ecosystem = 1),'0') AS nft_miner_balance_supply,
  coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)),'IBXC') as token_symbol,
@@ -242,22 +246,24 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 		FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <> 0`).Take(&nowChart).Error
 		} else {
 			//Nft Miner Ready
-			err = GetDB(nil).Raw(`SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" WHERE input_tx_hash is null AND ecosystem = 1),0) AS circulations,
-		(SELECT coalesce(sum(stake_amount),0) AS stake_amount
-		FROM "1_nft_miner_staking" WHERE staking_status = 1),
-		COALESCE((SELECT value FROM "1_app_params" WHERE "name" = 'nft_miner_balance_supply' AND ecosystem = 1),'0') AS nft_miner_balance_supply,
- coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)),'IBXC') as token_symbol,
-(SELECT name FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem))
-		FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <> 0`).Take(&nowChart).Error
+			err = GetDB(nil).Raw(`
+SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" 
+WHERE input_tx_hash is null AND ecosystem = 1 AND output_key_id <> 0),0) AS circulations,
+	(SELECT coalesce(sum(stake_amount),0) AS stake_amount FROM "1_nft_miner_staking" WHERE staking_status = 1),
+	COALESCE((SELECT value FROM "1_app_params" WHERE "name" = 'nft_miner_balance_supply' AND ecosystem = 1),'0') AS nft_miner_balance_supply,
+	coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)),'IBXC') as token_symbol,
+	(SELECT name FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem))
+FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <> 0`).Take(&nowChart).Error
 		}
 		nowChart.SupplyToken = TotalSupplyToken
 		nowChart.Emission = "0"
 	} else {
 		err = GetDB(nil).Raw(`SELECT v1.circulations,v1.burning_tokens,v1.combustion,v1.token_symbol,v1.name,
 COALESCE(v2.supply_token,0)supply_token,COALESCE(v2.emission,0)emission FROM(
-	SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" WHERE input_tx_hash is null AND ecosystem = ?),0) AS circulations,max(ecosystem) eco_id,
+	SELECT sum(amount)+COALESCE((SELECT sum(output_value) FROM "spent_info" WHERE input_tx_hash is null AND ecosystem = ? AND output_key_id <> 0),0) AS circulations,max(ecosystem) eco_id,
 		coalesce((SELECT sum(amount) FROM "1_history" WHERE type = 7 AND ecosystem = max(k1.ecosystem)),0) AS burning_tokens,
-		coalesce((SELECT sum(amount) FROM "1_history" WHERE type = 16 AND ecosystem = max(k1.ecosystem)),0) AS combustion,
+		coalesce((SELECT sum(amount) FROM "1_history" WHERE type = 16 AND ecosystem = max(k1.ecosystem)),0) +
+		COALESCE((SELECT sum(amount) FROM spent_info_history WHERE type = 6 AND ecosystem = max(k1.ecosystem)),0) AS combustion,
 		 (SELECT COALESCE(token_symbol,'') FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem)) as token_symbol,
 	(SELECT name FROM "1_ecosystems" as ec WHERE ec.id = max(k1.ecosystem))
 	FROM "1_keys" AS k1 WHERE ecosystem = ? and deleted = 0 and blocked = 0 AND id <> 0
@@ -332,20 +338,44 @@ FROM "1_history" AS s1
 		return ret, err
 	}
 
-	q := GetDB(nil).Table(his.TableName()).Select("to_char(to_timestamp(created_at/1000),?) AS days,sum(amount) as amount", timeDbFormat).
-		Where("ecosystem = ?", ecosystem).Group("days").Order("days desc")
-
 	if ecosystem != 1 {
 		//get Burning Tokens by days
-		err = q.Where("type = 7").Find(&burning).Error
+		err = GetDB(nil).Raw(fmt.Sprintf(`
+SELECT CASE WHEN s1.days > '' THEN
+	 s1.days
+	ELSE
+	 s2.days
+END days,COALESCE(s1.amount,0)+COALESCE(s2.amount) AS amount
+FROM(
+	SELECT to_char(to_timestamp(created_at/1000),'%s') AS days,sum(amount)AS amount FROM "1_history" WHERE type = 7 AND 
+	ecosystem = ? GROUP BY days 
+)AS s1
+FULL JOIN(
+	SELECT to_char(to_timestamp(created_at),'%s') AS days,sum(amount)AS amount FROM 
+		spent_info_history WHERE type = 2 AND recipient_id = 0 AND ecosystem = ? GROUP BY days 
+)AS s2 ON(s2.days = s1.days)
+ORDER BY days desc
+`, timeDbFormat, timeDbFormat), ecosystem, ecosystem).Find(&burning).Error
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart burning Failed")
 			return ret, err
 		}
 
-		//get combustion by days
-		err = GetDB(nil).Table(his.TableName()).Select("to_char(to_timestamp(created_at/1000),?) AS days,sum(amount) as amount", timeDbFormat).
-			Where("type = 16 AND ecosystem = ?", ecosystem).Group("days").Order("days desc").Find(&combustion).Error
+		err = GetDB(nil).Raw(fmt.Sprintf(`
+SELECT CASE WHEN s1.days > '' THEN
+	 s1.days
+	ELSE
+	 s2.days
+END days,COALESCE(s1.amount,0)+COALESCE(s2.amount) AS amount
+FROM(
+	SELECT to_char(to_timestamp(created_at/1000),'%s') AS days,sum(amount)AS amount FROM "1_history" WHERE type = 16 AND 
+	ecosystem = ? GROUP BY days 
+)AS s1
+FULL JOIN(
+	SELECT to_char(to_timestamp(created_at),'%s') AS days,sum(amount)AS amount FROM 
+		spent_info_history WHERE type = 6 AND ecosystem = ? GROUP BY days 
+)AS s2 ON(s2.days = s1.days)
+`, timeDbFormat, timeDbFormat), ecosystem, ecosystem).Find(&combustion).Error
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart combustion Failed")
 			return ret, err
@@ -370,6 +400,8 @@ FROM "1_history" AS s1
 		}
 	} else {
 		//get Create staked by days
+		q := GetDB(nil).Table(his.TableName()).Select("to_char(to_timestamp(created_at/1000),?) AS days,sum(amount) as amount", timeDbFormat).
+			Where("ecosystem = ?", ecosystem).Group("days").Order("days desc")
 		err = q.Where("type IN(13,18,19,20)").Find(&newStaked).Error
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart cirStaked Failed")
@@ -824,9 +856,10 @@ func GetGasCombustionPieChart(ecosystem int64) (EcoGasFeeResponse, error) {
 	err := GetDB(nil).Raw(`
 SELECT COALESCE(sum(amount),0) + 
 		COALESCE((SELECT sum(amount) FROM spent_info_history WHERE ecosystem = ? AND "type" IN(3,4)),0) AS gas_fee,
-	coalesce((SELECT sum(amount) FROM "1_history" WHERE type = 16 AND ecosystem = ?),'0') AS combustion 
+	coalesce((SELECT sum(amount) FROM "1_history" WHERE type = 16 AND ecosystem = ?),'0')+
+	COALESCE((SELECT sum(amount) FROM spent_info_history WHERE type = 6 AND ecosystem = ?),'0') AS combustion 
 FROM "1_history" WHERE type IN(1,2) AND ecosystem = ?
-`, ecosystem, ecosystem, ecosystem).Take(&rets).Error
+`, ecosystem, ecosystem, ecosystem, ecosystem).Take(&rets).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("Get Gas Combustion Pie Chart Failed")
 		return rets, err
@@ -896,12 +929,23 @@ SELECT time,sum(gas_fee)gas_fee,sum(combustion)combustion FROM(
 	) as h2 ON(h1.days = h2.days)
 
 		UNION
-	SELECT to_char(to_timestamp("created_at"),'%s') days,COALESCE(sum(amount),0)AS gas_fee,0 AS combustion FROM spent_info_history 
-	WHERE ecosystem = ? AND "type" IN(3,4) GROUP BY days
+	SELECT CASE WHEN s1.days > '' THEN
+	 s1.days
+	ELSE
+	 s2.days
+	END AS time,COALESCE(s1.gas_fee,0) AS gas_fee,COALESCE(s2.combustion,0) AS combustion
+	FROM(
+		SELECT to_char(to_timestamp("created_at"),'%s') days,COALESCE(sum(amount),0)AS gas_fee FROM spent_info_history 
+		WHERE ecosystem = ? AND "type" IN(3,4) GROUP BY days
+	)AS s1
+	FULL JOIN(
+		SELECT to_char(to_timestamp(created_at),'%s') AS days,sum(amount)AS combustion FROM 
+		spent_info_history WHERE type = 6 AND ecosystem = ? GROUP BY days 
+	)AS s2 ON(s2.days = s1.days)
 )AS v1
 GROUP BY time
 ORDER BY time ASC
-`, dbFormat, dbFormat, dbFormat), ecosystem, ecosystem, ecosystem).Find(&list).Error
+`, dbFormat, dbFormat, dbFormat, dbFormat), ecosystem, ecosystem, ecosystem, ecosystem).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Gas Combustion Line Chart Failed")
 		return rets, err

@@ -92,7 +92,8 @@ func loadStartRun() error {
 		log.WithFields(log.Fields{"err:": err}).Error("Start Daemons Failed")
 		exitErr()
 		return err
-	case <-sigChan:
+	case sig := <-sigChan:
+		log.WithFields(log.Fields{"info:": sig}).Info("receive exit signal")
 		exitErr()
 		return nil
 	}
@@ -103,7 +104,6 @@ func loadInitDatabase() error {
 	return models.InitDatabase()
 }
 
-//
 func loadConfigWKey(cmd *cobra.Command, args []string) {
 	conf.LoadConfig(conf.GetEnvConf().ConfigPath)
 }

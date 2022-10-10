@@ -270,7 +270,7 @@ func GetBlocksTransactionInfoByBlockInfo(mc *Block) (*BlockDetailedInfoHex, erro
 	for _, value := range HonorNodes {
 		if value.NodePosition == header.NodePosition && value.ConsensusMode == header.ConsensusMode {
 			header.IconUrl = value.IconUrl
-			header.Address = value.Icon + "-" + value.City
+			header.Address = value.Country + "-" + value.City
 			break
 		}
 	}

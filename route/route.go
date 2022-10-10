@@ -194,7 +194,8 @@ func Run(host string) (err error) {
 	//Data Chart(Basis EcoLibs)
 	//Assets Chart
 	api.GET("/get_gas_fee_chart", controllers.Get15DayGasFeeChartHandler)
-	api.POST("/get_honor_node_chart", controllers.GetHonorNodeChartHandler)
+	api.GET("/node_contribution_chart", controllers.GetNodeContributionChartHandler)
+	api.POST("/node_contribution_list", controllers.GetNodeContributionListHandler)
 	api.GET("/get_new_circulations_chart", controllers.GetNewCirculationsChartHandler)
 	//Address Related
 	api.GET("/get_staking_account", controllers.GetStakingAccountHandler)

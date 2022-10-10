@@ -320,7 +320,7 @@ type accountRatio struct {
 	StakeAmount  string          `json:"stake_amount,omitempty"`
 }
 
-//EcoSystem Chart response
+// EcoSystem Chart response
 type EcoTopTenHasTokenResponse struct {
 	TokenSymbol string         `json:"token_symbol"`
 	Name        string         `json:"name"` //ecosystem name
@@ -419,7 +419,7 @@ type AccountTxChart struct {
 	Tx   []int64 `json:"tx"`
 }
 
-//data chart
+// data chart
 type GasFeeChangeResponse struct {
 	Time   []int64  `json:"time"`
 	GasFee []string `json:"gas_fee"`
@@ -428,7 +428,7 @@ type GasFeeChangeResponse struct {
 type HonorNodeListResponse struct {
 	NodeName        string          `json:"node_name"`
 	KeyID           string          `json:"key_id"`
-	City            string          `json:"city"`
+	Country         string          `json:"country"`
 	IconUrl         string          `json:"icon_url"`
 	GasFee          string          `json:"gas_fee"`
 	NodeBlocks      int64           `json:"node_blocks"`
@@ -436,13 +436,16 @@ type HonorNodeListResponse struct {
 	NodePosition    int64           `json:"node_position"`
 }
 
-type HonorNodeChartResponse struct {
-	Total     int64                   `json:"total"`
-	Page      int                     `json:"page"`
-	Limit     int                     `json:"limit"`
-	List      []HonorNodeListResponse `json:"list"`
-	Name      []string                `json:"name"`
-	NodeBlock []int64                 `json:"node_block"`
+type NodeContributionListResponse struct {
+	Total int64                   `json:"total"`
+	Page  int                     `json:"page"`
+	Limit int                     `json:"limit"`
+	List  []HonorNodeListResponse `json:"list"`
+}
+
+type NodeContributionChartResponse struct {
+	Country   []string `json:"country"`
+	NodeBlock []int64  `json:"node_block"`
 }
 
 type CirculationsChangeResponse struct {
@@ -611,7 +614,7 @@ type Positioning struct {
 	Val string `json:"val"` //value
 }
 
-//Node Related
+// Node Related
 type NodeMapResponse struct {
 	CandidateTotal int64         `json:"candidate_total"`
 	HonorTotal     int64         `json:"honor_total"`
@@ -818,6 +821,7 @@ type FeesInfo struct {
 	FuelRate    FuelRateResponse `json:"fuelRate"`
 	Fees        FeeInfo          `json:"fees"`
 	Taxes       FeeInfo          `json:"taxes"`
+	Combustion  FeeInfo          `json:"combustion,omitempty"`
 }
 
 type UtxoExplorerInfo struct {
