@@ -86,10 +86,11 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 	if rets.UtxoType == UtxoTx {
 		var (
-			changeList  []utxoDetail
-			ecoGasFee   FeesInfo
-			basisGasFee FeesInfo
-			unit        = "/bit"
+			changeList     []utxoDetail
+			ecoGasFee      FeesInfo
+			basisGasFee    FeesInfo
+			unit           = "/bit"
+			combusionExist bool
 		)
 
 		for _, v := range outputList {
@@ -180,12 +181,13 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 						changeList = append(changeList, change)
 					case 23:
-						var fee FeeInfo
+						var fee combusionInfo
 						fee.Sender = rets.Sender
 						fee.Recipient = recipient
-						fee.Amount = amount.String()
+						fee.Amount = amount
 						fee.TokenSymbol = rets.TokenSymbol
 						ecoGasFee.Combustion = fee
+						combusionExist = true
 					}
 				}
 			}
@@ -193,7 +195,13 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 		rets.Change = changeList
 		txSize := decimal.NewFromInt(info.Size)
 		if ecoGasFee.Amount.GreaterThan(decimal.Zero) {
-			ecoGasFee.FuelRate = FuelRateResponse{ecoGasFee.Amount.DivRound(txSize, 0).String(), ecoGasFee.TokenSymbol + unit}
+			if combusionExist {
+				totalGasFee := ecoGasFee.Amount.Add(ecoGasFee.Combustion.Amount)
+				ecoGasFee.FuelRate = FuelRateResponse{totalGasFee.DivRound(txSize, 0).String(), ecoGasFee.TokenSymbol + unit}
+				ecoGasFee.Combustion.Rate = ecoGasFee.Combustion.Amount.Mul(decimal.NewFromInt(100)).DivRound(totalGasFee, 2).String()
+			} else {
+				ecoGasFee.FuelRate = FuelRateResponse{ecoGasFee.Amount.DivRound(txSize, 0).String(), ecoGasFee.TokenSymbol + unit}
+			}
 		}
 		if basisGasFee.Amount.GreaterThan(decimal.Zero) {
 			basisGasFee.FuelRate = FuelRateResponse{basisGasFee.Amount.DivRound(txSize, 0).String(), basisGasFee.TokenSymbol + unit}

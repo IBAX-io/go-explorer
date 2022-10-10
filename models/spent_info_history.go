@@ -592,6 +592,8 @@ func parseSpentInfoHistoryType(utxoType int) string {
 		return TaxesType
 	case 5:
 		return StartUpType
+	case 6:
+		return CombustionType
 	}
 	return ""
 }

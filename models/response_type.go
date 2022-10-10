@@ -815,13 +815,21 @@ type FeeInfo struct {
 	TokenSymbol string `json:"tokenSymbol"`
 }
 
+type combusionInfo struct {
+	Sender      string          `json:"sender"`
+	Recipient   string          `json:"recipient"`
+	Amount      decimal.Decimal `json:"amount"`
+	TokenSymbol string          `json:"tokenSymbol"`
+	Rate        string          `json:"rate"`
+}
+
 type FeesInfo struct {
 	Amount      decimal.Decimal  `json:"amount"`
 	TokenSymbol string           `json:"tokenSymbol"`
 	FuelRate    FuelRateResponse `json:"fuelRate"`
 	Fees        FeeInfo          `json:"fees"`
 	Taxes       FeeInfo          `json:"taxes"`
-	Combustion  FeeInfo          `json:"combustion,omitempty"`
+	Combustion  combusionInfo    `json:"combustion"`
 }
 
 type UtxoExplorerInfo struct {

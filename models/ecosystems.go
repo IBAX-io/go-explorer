@@ -164,8 +164,7 @@ var countryMap = map[int]string{
 }
 
 type EcosystemInfoMap struct {
-	sync.RWMutex
-	Map map[int64]string
+	sync.Map
 }
 
 func (sys *Ecosystem) TableName() string {
@@ -1167,28 +1166,19 @@ func GetAllEcosystemName() ([]Ecosystem, error) {
 }
 
 func (p *EcosystemInfoMap) Get(ecosystem int64) string {
-	p.RLock()
-	defer p.RUnlock()
-	value, ok := p.Map[ecosystem]
+	if p == nil {
+		return ""
+	}
+	value, ok := p.Load(ecosystem)
 	if ok {
-		return value
+		return value.(string)
 	}
 	return ""
 }
 
-func (p *EcosystemInfoMap) Set(ecosystem int64, value string) {
-	p.Lock()
-	defer p.Unlock()
-	p.Map[ecosystem] = value
-}
-
 func InitEcosystemInfo() {
-	Tokens = &EcosystemInfoMap{
-		Map: make(map[int64]string),
-	}
-	EcoNames = &EcosystemInfoMap{
-		Map: make(map[int64]string),
-	}
+	Tokens = &EcosystemInfoMap{}
+	EcoNames = &EcosystemInfoMap{}
 }
 
 func SyncEcosystemInfo() {
@@ -1199,13 +1189,13 @@ func SyncEcosystemInfo() {
 	list, err := GetAllTokenSymbol()
 	if err == nil {
 		for _, val := range list {
-			Tokens.Set(val.ID, val.TokenSymbol)
+			Tokens.Store(val.ID, val.TokenSymbol)
 		}
 	}
 	list, err = GetAllEcosystemName()
 	if err == nil {
 		for _, val := range list {
-			EcoNames.Set(val.ID, val.Name)
+			EcoNames.Store(val.ID, val.Name)
 		}
 	}
 }
