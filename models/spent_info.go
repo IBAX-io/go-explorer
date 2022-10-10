@@ -24,6 +24,7 @@ type SpentInfo struct {
 	OutputValue  string `gorm:"not null"`
 	Ecosystem    int64
 	BlockId      int64
+	Type         int64
 }
 
 // TableName returns name of table
@@ -47,10 +48,9 @@ func (si *SpentInfo) GetAmountByKeyId(keyId int64, ecosystem int64) (decimal.Dec
 
 func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	var (
-		txData      TransactionData
-		rets        UtxoExplorer
-		ecoGasExist bool
-		outputList  []SpentInfo
+		txData     TransactionData
+		rets       UtxoExplorer
+		outputList []SpentInfo
 	)
 
 	f, err := txData.GetTxDataByHash(txHash)
@@ -86,23 +86,11 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 	if rets.UtxoType == UtxoTx {
 		var (
-			index       int
-			indexSet    bool
 			changeList  []utxoDetail
 			ecoGasFee   FeesInfo
 			basisGasFee FeesInfo
 			unit        = "/bit"
-			ecoCount    int
 		)
-
-		for _, v := range outputList {
-			if v.Ecosystem != 1 {
-				ecoCount += 1
-			}
-		}
-		if ecoCount >= 3 {
-			ecoGasExist = true
-		}
 
 		for _, v := range outputList {
 			amount, _ := decimal.NewFromString(v.OutputValue)
@@ -110,8 +98,8 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 			outputTxHash := hex.EncodeToString(v.OutputTxHash)
 			if rets.Ecosystem == 1 {
 				if v.Ecosystem == 1 {
-					switch index {
-					case 0:
+					switch v.Type {
+					case 20:
 						basisGasFee.Fees.Amount = amount.String()
 						basisGasFee.Fees.Recipient = recipient
 						basisGasFee.Fees.Sender = rets.Sender
@@ -119,8 +107,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 						basisGasFee.TokenSymbol = rets.TokenSymbol
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
-						index += 1
-					case 1:
+					case 21:
 						basisGasFee.Taxes.Amount = amount.String()
 						basisGasFee.Taxes.Recipient = recipient
 						basisGasFee.Taxes.Sender = rets.Sender
@@ -128,10 +115,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 						basisGasFee.TokenSymbol = rets.TokenSymbol
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
-						index += 1
-					case 2:
-						index += 1
-					case 3:
+					case 22:
 						var change utxoDetail
 						change.Address = recipient
 						change.TokenSymbol = rets.TokenSymbol
@@ -143,8 +127,8 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 				}
 			} else {
 				if v.Ecosystem == 1 {
-					switch index {
-					case 0:
+					switch v.Type {
+					case 20:
 						basisGasFee.Fees.Amount = amount.String()
 						basisGasFee.Fees.Recipient = recipient
 						basisGasFee.Fees.Sender = rets.Sender
@@ -152,8 +136,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 						basisGasFee.TokenSymbol = basisGasFee.Fees.TokenSymbol
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
-						index += 1
-					case 1:
+					case 21:
 						basisGasFee.Taxes.Amount = amount.String()
 						basisGasFee.Taxes.Recipient = recipient
 						basisGasFee.Taxes.Sender = rets.Sender
@@ -161,8 +144,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 						basisGasFee.TokenSymbol = basisGasFee.Taxes.TokenSymbol
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
-						index += 1
-					case 2:
+					case 22:
 						var change utxoDetail
 						change.Address = recipient
 						change.TokenSymbol = Tokens.Get(v.Ecosystem)
@@ -172,16 +154,8 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						changeList = append(changeList, change)
 					}
 				} else {
-					if !indexSet {
-						if ecoGasExist {
-							index = 0
-						} else {
-							index = 2
-						}
-						indexSet = true
-					}
-					switch index {
-					case 0:
+					switch v.Type {
+					case 20:
 						ecoGasFee.Fees.Amount = amount.String()
 						ecoGasFee.Fees.Recipient = recipient
 						ecoGasFee.Fees.Sender = rets.Sender
@@ -189,8 +163,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 						ecoGasFee.TokenSymbol = rets.TokenSymbol
 						ecoGasFee.Amount = ecoGasFee.Amount.Add(amount)
-						index += 1
-					case 1:
+					case 21:
 						ecoGasFee.Taxes.Amount = amount.String()
 						ecoGasFee.Taxes.Recipient = recipient
 						ecoGasFee.Taxes.Sender = rets.Sender
@@ -198,10 +171,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 
 						ecoGasFee.TokenSymbol = rets.TokenSymbol
 						ecoGasFee.Amount = ecoGasFee.Amount.Add(amount)
-						index += 1
-					case 2:
-						index += 1
-					case 3:
+					case 22:
 						var change utxoDetail
 						change.Address = recipient
 						change.TokenSymbol = rets.TokenSymbol
@@ -209,6 +179,13 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						change.Hash = outputTxHash
 
 						changeList = append(changeList, change)
+					case 23:
+						var fee FeeInfo
+						fee.Sender = rets.Sender
+						fee.Recipient = recipient
+						fee.Amount = amount.String()
+						fee.TokenSymbol = rets.TokenSymbol
+						ecoGasFee.Combustion = fee
 					}
 				}
 			}
@@ -305,11 +282,11 @@ func getSpentInfoHashList(startId, endId int64) (*[]spentInfoTxData, error) {
 	var rlt []spentInfoTxData
 
 	err = GetDB(nil).Raw(`
-SELECT v1.block_id,v1.output_tx_hash,v2.time,v2.data FROM(
+SELECT v1.block_id,v1.output_tx_hash,v2.time FROM(
 	SELECT output_tx_hash,block_id FROM spent_info WHERE block_id >= ? AND block_id < ? GROUP BY output_tx_hash,block_id ORDER BY block_id asc
 )AS v1
 LEFT JOIN(
-	SELECT id,time,data FROM block_chain
+	SELECT id,time FROM block_chain
 )AS v2 ON(v2.id = v1.block_id)
 `, startId, endId).Find(&rlt).Error
 	if err != nil {
@@ -317,4 +294,10 @@ LEFT JOIN(
 	}
 
 	return &rlt, nil
+}
+
+func (p *SpentInfo) GetOutputKeysByBlockId(blockId int64) (outputKeys []SpentInfo, err error) {
+	err = GetDB(nil).Select("output_key_id,ecosystem").Table(p.TableName()).
+		Where("block_id = ?", blockId).Group("output_key_id,ecosystem").Find(&outputKeys).Error
+	return
 }

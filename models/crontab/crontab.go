@@ -104,11 +104,11 @@ func CreateCrontabFromRealtime(timeSet string) {
 	c.Start()
 }
 
-//CreateCrontabFromChartData It can't be real-time data
+// CreateCrontabFromChartData It can't be real-time data
 func CreateCrontabFromChartData(timeSet string) {
 	c := NewWithSecond()
 	_, err := c.AddFunc(timeSet, func() {
-		history.SendSignal()
+		chart.SendSignal()
 	})
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "timeSet": timeSet}).Error("Create Crontab From Chart Data Add Function failed")

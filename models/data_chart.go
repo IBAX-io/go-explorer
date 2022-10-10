@@ -143,9 +143,17 @@ func Get15DayGasFeeChart() (GasFeeChangeResponse, error) {
 
 	var list []DaysAmount
 	err := GetDB(nil).Raw(`
-SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,sum(amount) AS amount
-FROM "1_history" WHERE (type = 1 OR type = 2) AND ecosystem = 1 AND created_at >= ? GROUP BY days ORDER BY days DESC LIMIT ?
-`, t1.UnixMilli(), getDays).Find(&list).Error
+SELECT COALESCE(v1.days,v2.days)AS days,COALESCE(v1.amount,0)+COALESCE(v2.amount,0)AS amount FROM(
+	SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,sum(amount) AS amount
+	FROM "1_history" WHERE type IN(1,2) AND ecosystem = 1 AND created_at >= ? GROUP BY days ORDER BY days DESC LIMIT ?
+)AS v1
+FULL JOIN(
+	SELECT to_char(to_timestamp(created_at),'yyyy-MM-dd') AS days,sum(amount) AS amount
+	FROM spent_info_history WHERE type IN(3,4) AND ecosystem = 1 AND created_at >= ? GROUP BY days ORDER BY days DESC LIMIT ?
+)AS v2 ON(v2.days = v1.days)
+
+ORDER BY days DESC LIMIT ?
+`, t1.UnixMilli(), getDays, t1.Unix(), getDays, getDays).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get 15Day Gas Fee Chart Failed")
 		return rets, err
@@ -159,18 +167,18 @@ FROM "1_history" WHERE (type = 1 OR type = 2) AND ecosystem = 1 AND created_at >
 	return rets, nil
 }
 
-func GetHonorNodeChart(page, limit int) (HonorNodeChartResponse, error) {
-	var rets HonorNodeChartResponse
+func GetNodeContributionList(page, limit int) (NodeContributionListResponse, error) {
+	var rets NodeContributionListResponse
 	type nodeGasFee struct {
 		NodePosition int64           `json:"node_position" gorm:"column:node_position"`
 		GasFee       decimal.Decimal `json:"gas_fee" gorm:"column:gas_fee"`
 	}
 	var list []nodeGasFee
 	err := GetDB(nil).Raw(`SELECT node_position,
-(SELECT sum(amount) AS gas_fee FROM "1_history" WHERE (type = 1 OR type = 2) AND  ecosystem = 1 AND recipient_id = bk.key_id)
-FROM block_chain AS bk GROUP BY node_position,key_id`).Find(&list).Error
+(SELECT sum(amount) AS gas_fee FROM "1_history" WHERE type = 1  AND  ecosystem = 1 AND recipient_id = bk.key_id AND block_id >= min(bk.id) AND block_id <= max(bk.id))  
+FROM block_chain AS bk GROUP BY node_position,key_id,consensus_mode`).Find(&list).Error
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get 15Day Gas Fee Chart Failed")
+		log.WithFields(log.Fields{"error": err}).Error("Get Node Contribution List Failed")
 		return rets, err
 	}
 	rets.Total = int64(len(HonorNodes))
@@ -189,35 +197,39 @@ FROM block_chain AS bk GROUP BY node_position,key_id`).Find(&list).Error
 			rets.List[i].NodePosition = data[i].NodePosition
 			rets.List[i].KeyID = data[i].KeyID
 			rets.List[i].NodeName = data[i].NodeName
-			rets.List[i].City = data[i].City
+			rets.List[i].Country = data[i].Country
 			rets.List[i].IconUrl = data[i].IconUrl
 			rets.List[i].NodeBlocks = data[i].NodeBlock
 			rets.List[i].PkgAccountedFor = data[i].PkgAccountedFor
 		}
-		//rets.Data = data
-		//ret.Return(rets, CodeSuccess)
 	}
 
 	for i := 0; i < len(list); i++ {
 		for key, value := range rets.List {
-			if value.NodePosition == list[i].NodePosition+1 {
+			if value.NodePosition == list[i].NodePosition {
 				rets.List[key].GasFee = list[i].GasFee.String()
 			}
 		}
 	}
-	if len(HonorNodes) >= 10 {
-		rets.NodeBlock = make([]int64, 10)
-		rets.Name = make([]string, 10)
-	} else {
-		rets.NodeBlock = make([]int64, len(HonorNodes))
-		rets.Name = make([]string, len(HonorNodes))
-	}
-	for i, value := range HonorNodes {
-		if i >= len(rets.Name) {
-			break
+
+	return rets, nil
+}
+
+func GetNodeContributionChart() (NodeContributionChartResponse, error) {
+	var rets NodeContributionChartResponse
+
+	sort.Sort(LeaderboardSlice(HonorNodes))
+	countryMap := make(map[string]int64)
+	for _, v := range HonorNodes {
+		if _, ok := countryMap[v.Country]; ok {
+			countryMap[v.Country] += v.NodeBlock
+		} else {
+			countryMap[v.Country] = v.NodeBlock
 		}
-		rets.Name[i] = value.City
-		rets.NodeBlock[i] = value.NodeBlock
+	}
+	for k, v := range countryMap {
+		rets.Country = append(rets.Country, k)
+		rets.NodeBlock = append(rets.NodeBlock, v)
 	}
 
 	return rets, nil
@@ -282,7 +294,7 @@ WITH rollback_tx AS(
 	)AS log ON (log.hash = rb.tx_hash) GROUP BY days ORDER BY days ASC
 )
 SELECT rk1.days,
-(SELECT SUM(num)+3 FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
+(SELECT SUM(num)+5 FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
 FROM rollback_tx AS rk1
 `).Find(&acList).Error
 	if err != nil {
@@ -609,7 +621,7 @@ func GetNewKeysChart() (NewKeyHistoryChart, error) {
 	return keyChart, nil
 }
 
-//Get15DayBlockNumberChart response time:200-1500ms TODO:NEED TO Redis
+// Get15DayBlockNumberChart response time:200-1500ms TODO:NEED TO Redis
 func Get15DayBlockNumberChart() (DaysNumberResponse, error) {
 	var rets DaysNumberResponse
 	tz := time.Unix(GetNowTimeUnix(), 0)
@@ -998,7 +1010,7 @@ func GetTokenEcosystemRatioChart() (TokenEcosystemResponse, error) {
 	return rets, nil
 }
 
-//GetTopTenEcosystemTxChart return Fifteen days transactions TODO:200-800ms NEED TO Redis
+// GetTopTenEcosystemTxChart return Fifteen days transactions TODO:200-800ms NEED TO Redis
 func GetTopTenEcosystemTxChart() ([]EcosystemTxRatioResponse, error) {
 	var (
 		list []EcosystemTxCount

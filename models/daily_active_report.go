@@ -148,8 +148,17 @@ func InsertDailyActiveReport() {
 				rt.Time = t1.Unix()
 				rt.TxAmount = report.TxAmount.String()
 				rt.TxNumber = report.TxNumber
-				rt.Ratio = report.Ratio.String()
 				rt.TotalKey = report.TotalKey
+				rt.Ratio = "0"
+				active := decimal.NewFromInt(report.Active)
+				if active.GreaterThan(decimal.Zero) {
+					totalKey := decimal.NewFromInt(report.TotalKey)
+					if totalKey.GreaterThan(decimal.Zero) {
+						rt.Ratio = active.Mul(decimal.NewFromInt(100)).DivRound(totalKey, 2).String()
+					} else {
+						rt.Ratio = "100"
+					}
+				}
 				rt.ActiveAccount = report.Active
 				//fmt.Printf("rt time:%d,now time:%s\n", rt.Time, time.Now().String())
 				preSt := t1.AddDate(0, 0, -1)
@@ -223,12 +232,7 @@ func GetTimeLineDaysActiveReport(st, ed int64) (DaysActiveReport, bool, error) {
 	}
 
 	f, err = isFound(GetDB(nil).Raw(fmt.Sprintf(`
-SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+3,0) AS total_key,CASE WHEN (h2.num > 0 AND h3.num > 0) THEN 
-	round(
-		h3.num * 100 / h2.num , 2) 
-	ELSE 
-		0
-	END AS ratio,h2.tx_number,h2.tx_amount
+SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+5,0) AS total_key,h2.tx_number,h2.tx_amount
 
 	FROM (
 			(
@@ -306,13 +310,7 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 	var list []DaysActiveReport
 	//now := time.Now()
 	err := GetDB(nil).Raw(
-		`SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+3,0) AS total_key,CASE WHEN (h2.num > 0 AND h3.num > 0) THEN 
-	round(
-		h3.num * 100 / h2.num , 2) 
-	ELSE 
-		0
-	END AS ratio,h2.tx_number,h2.tx_amount
-
+		`SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+5,0) AS total_key,h2.tx_number,h2.tx_amount
 	FROM (
 			(
 				SELECT CASE WHEN v1.ds <> '' THEN
@@ -387,9 +385,18 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 				}
 				dt.TotalKey = lastTotalKey
 				dt.ActiveAccount = list[i].Active
+				dt.Ratio = "0"
+				active := decimal.NewFromInt(list[i].Active)
+				if active.GreaterThan(decimal.Zero) {
+					totalKey := decimal.NewFromInt(lastTotalKey)
+					if totalKey.GreaterThan(decimal.Zero) {
+						dt.Ratio = active.Mul(decimal.NewFromInt(100)).DivRound(totalKey, 2).String()
+					} else {
+						dt.Ratio = "100"
+					}
+				}
 				dt.TxAmount = list[i].TxAmount.String()
 				dt.TxNumber = list[i].TxNumber
-				dt.Ratio = list[i].Ratio.String()
 
 				preSt := dayTime.AddDate(0, 0, -1)
 				endTime := preSt.AddDate(0, 0, 1).UnixMilli()

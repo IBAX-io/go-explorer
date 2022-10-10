@@ -278,7 +278,7 @@ func (th *History) GetByHashExist(txHash []byte) (bool, error) {
 	return isFound(GetDB(nil).Where("txhash = ?", txHash))
 }
 
-//GetExplorer Not all transactions will exist in the history table
+// GetExplorer Not all transactions will exist in the history table
 func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 	var (
 		ts              []History
@@ -293,17 +293,7 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 	}
 	var ecoIdList []txInfo
 	err := GetDB(nil).Raw(`
-SELECT h1.ecosystem,CASE WHEN h1.ecosystem = 1 THEN
-		coalesce(es.token_symbol,'IBXC')
-	ELSE
-		es.token_symbol
-	END token_symbol
-FROM (
 	SELECT ecosystem FROM "1_history" WHERE txhash = ? GROUP BY ecosystem
-)AS h1
-LEFT JOIN(
-	SELECT id,name,token_symbol FROM "1_ecosystems"
-)AS es on(es.id = h1.ecosystem)
 `, txHash).Find(&ecoIdList).Error
 	if err != nil {
 		return nil, err
@@ -319,7 +309,7 @@ LEFT JOIN(
 
 	ecoTokenSymbol := make(map[int64]string)
 	for _, value := range ecoIdList {
-		ecoTokenSymbol[value.Ecosystem] = value.TokenSymbol
+		ecoTokenSymbol[value.Ecosystem] = Tokens.Get(value.Ecosystem)
 	}
 	getFeeRate := func(fe FeeDetail) (float64, int) {
 		if fe.Flag == 0 {
@@ -652,7 +642,7 @@ func (th *History) GetHistoryIdList(id int64) (*[]History, error) {
 	return &tss, err
 }
 
-//GetHistory Get is retrieving model from database
+// GetHistory Get is retrieving model from database
 func (th *History) GetHistory(page int, size int, order string) (*[]HistoryHex, int64, error) {
 	var (
 		tss []History
@@ -688,7 +678,7 @@ func (th *History) GetHistory(page int, size int, order string) (*[]HistoryHex, 
 	return &ret, num, err
 }
 
-//GetWallets Get is retrieving model from database
+// GetWallets Get is retrieving model from database
 func (th *History) GetWallets(page int, size int, wallet string, searchType string) (*[]HistoryHex, int64, decimal.Decimal, error) {
 	var (
 		tss []History
@@ -776,7 +766,7 @@ func (th *History) GetWallets(page int, size int, wallet string, searchType stri
 	return &ret, num, total, err
 }
 
-//GetEcosytemWallets Get is retrieving model from database
+// GetEcosytemWallets Get is retrieving model from database
 func (th *History) GetEcosytemWallets(id int64, page int, size int, wallet string, searchType string) (*[]HistoryHex, int64, decimal.Decimal, error) {
 	var (
 		tss []History
@@ -1215,7 +1205,7 @@ func (th *History) Get_Sqlite(txHash []byte) (*HistoryMergeHex, error) {
 	return &tss, err
 }
 
-//Get is retrieving model from database
+// Get is retrieving model from database
 func (th *History) GetHistorys_Sqlite(page int, size int, order string) (*[]HistoryHex, int64, error) {
 	var (
 		tss []History
@@ -1252,7 +1242,7 @@ func (th *History) GetHistorys_Sqlite(page int, size int, order string) (*[]Hist
 	return &ret, num, err
 }
 
-//Get is retrieving model from database
+// Get is retrieving model from database
 func (th *History) GetWallets_Sqlite(page int, size int, wallet string, searchType string) (*[]HistoryHex, int64, decimal.Decimal, error) {
 	var (
 		tss []History
@@ -1340,7 +1330,7 @@ func (th *History) GetWallets_Sqlite(page int, size int, wallet string, searchTy
 	return &ret, num, total, err
 }
 
-//Get is retrieving model from database
+// Get is retrieving model from database
 func (th *History) GetWallets_EcosytemSqlite(id int64, page int, size int, wallet string, searchType string) (*[]HistoryHex, int64, decimal.Decimal, error) {
 	var (
 		tss []History

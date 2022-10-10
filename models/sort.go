@@ -19,7 +19,6 @@ func (a LeaderboardSlice) Swap(i, j int) { // Override the Swap() method
 }
 
 func (a LeaderboardSlice) Less(i, j int) bool { // Rewrite the Less() method, sort from largest to smallest
-	//return a[j].PkgAccountedFor.LessThan(a[i].PkgAccountedFor)
 
 	return a[j].NodeBlock < a[i].NodeBlock
 }

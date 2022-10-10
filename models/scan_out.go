@@ -123,7 +123,7 @@ type CirculationsRet struct {
 	TwentyFourAmount        string  `json:"twenty_four_amount"`
 }
 
-//Nft Miner
+// Nft Miner
 type NftMinerRet struct {
 	Count        int64   `json:"count"`
 	BlockReward  float64 `json:"block_reward"`
@@ -1053,12 +1053,14 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 	t1 := nowDay.AddDate(0, 0, -1*30)
 	if NftMinerReady || NodeReady {
 		err = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
-(SELECT count(1) AS has_token_key FROM "1_keys" as k2 WHERE (k2.amount > 0 OR 
-	to_number(coalesce(NULLIF(k2.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') > 0 OR
-	to_number(coalesce(NULLIF(k2.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') > 0 OR 
-	to_number(coalesce(NULLIF(k2.lock->>'candidate_substitute',''),'0'),'999999999999999999999999') > 0 OR
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k2.ecosystem AND output_key_id = k2.id),0) > 0
-) AND ecosystem = ?),
+(SELECT count(1) AS has_token_key FROM(
+	SELECT id FROM "1_keys" WHERE (amount > 0 OR 
+		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') > 0 OR
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') > 0 OR 
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') > 0) AND ecosystem = ?
+	UNION
+	SELECT output_key_id FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?
+)AS v1),
 (SELECT count(1) AS month_active_key FROM(
 	SELECT sender_id as keyid FROM "1_history" WHERE created_at >= ? and ecosystem = ? GROUP BY sender_id
  		UNION 
@@ -1069,10 +1071,15 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 		UNION
 	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
 	 log_transactions AS l1 ON(l1.hash = s1.input_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
-) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ?", ecosystem).Take(&ret).Error
+) AS tt)`, ecosystem, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).
+			Where("ecosystem = ?", ecosystem).Take(&ret).Error
 	} else {
 		err = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
-(SELECT count(1) AS has_token_key FROM "1_keys" as k2 WHERE k2.amount > 0 AND ecosystem = ?),
+(SELECT count(1) AS has_token_key FROM(
+	SELECT id FROM "1_keys" WHERE amount > 0 AND ecosystem = ?
+	UNION
+	SELECT output_key_id FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?
+)AS v1),
 (SELECT count(1) AS month_active_key FROM(
 	SELECT sender_id as keyid FROM "1_history" WHERE created_at >= ? and ecosystem = ? GROUP BY sender_id
 	 UNION 
@@ -1083,7 +1090,8 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 	 UNION
 	SELECT output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN 
 	 log_transactions AS l1 ON(l1.hash = s1.input_tx_hash)	WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
-) AS tt)`, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Where("ecosystem = ?", ecosystem).Take(&ret).Error
+) AS tt)`, ecosystem, ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).
+			Where("ecosystem = ?", ecosystem).Take(&ret).Error
 	}
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("getScanOutKeyInfo ecosystem keysRet failed")

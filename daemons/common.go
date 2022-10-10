@@ -76,5 +76,6 @@ func StartDaemons(ctx context.Context) {
 	}
 
 	models.InitEcosystemInfo()
+	models.InitGlobalSwitch()
 
 }

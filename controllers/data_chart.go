@@ -24,7 +24,7 @@ func Get15DayGasFeeChartHandler(c *gin.Context) {
 	JsonResponse(c, ret)
 }
 
-func GetHonorNodeChartHandler(c *gin.Context) {
+func GetNodeContributionListHandler(c *gin.Context) {
 	ret := &Response{}
 	var req GeneralRequest
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
@@ -37,9 +37,22 @@ func GetHonorNodeChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetHonorNodeChart(req.Page, req.Limit)
+	rets, err := models.GetNodeContributionList(req.Page, req.Limit)
 	if err != nil {
-		ret.ReturnFailureString("Get Honor Node Chart Failed")
+		ret.ReturnFailureString("Get Node Contribution List Failed")
+		JsonResponse(c, ret)
+		return
+	}
+
+	ret.Return(&rets, CodeSuccess)
+	JsonResponse(c, ret)
+}
+
+func GetNodeContributionChartHandler(c *gin.Context) {
+	ret := &Response{}
+	rets, err := models.GetNodeContributionChart()
+	if err != nil {
+		ret.ReturnFailureString("Get Honor Node Contribution Chart Failed")
 		JsonResponse(c, ret)
 		return
 	}

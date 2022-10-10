@@ -14,8 +14,8 @@ type HonorNodeModel struct {
 	NodeName     string `json:"node_name"`
 	TCPAddress   string `json:"tcp_address,omitempty"`
 	APIAddress   string `json:"api_address"`
-	City         string `json:"city"`
-	Icon         string `json:"icon"`
+	City         string `json:"city"` //city or continent
+	Country      string `json:"country"`
 	IconUrl      string `json:"icon_url"`
 	NodePosition int64  `json:"node_position"`
 	KeyID        string `json:"key_id"`

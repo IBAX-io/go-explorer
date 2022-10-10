@@ -310,14 +310,14 @@ FROM block_chain AS bk GROUP BY node_position,key_id,consensus_mode
 		//node[i].TCPAddress = nodeValue.TcpAddress
 		node[i].APIAddress = nodeValue.ApiAddress
 		node[i].City = getCity(info[i].Address)
-		node[i].Icon = getCountry(info[i].Address)
+		node[i].Country = getCountry(info[i].Address)
 		node[i].NodePosition = nodeValue.Id
 		//node[i].NodeStatusTime = time.Now()
 		//node[i].KeyID = converter.AddressToString(crypto2.Address([]byte(nodeValue.PublicKey)))
 		//node[i].PublicKey = nodeValue.PublicKey
 		node[i].Latitude = strconv.FormatFloat(info[i].Latitude, 'f', 5, 64)
 		node[i].Longitude = strconv.FormatFloat(info[i].Longitude, 'f', 5, 64)
-		node[i].IconUrl = getIconNationalFlag(node[i].Icon)
+		node[i].IconUrl = getIconNationalFlag(node[i].Country)
 		node[i].Display = info[i].Display
 
 		v1, v2, v3 := getNodePkgInfo(node[i].NodePosition, nodeValue.ConsensusMode, nodePkgList)
