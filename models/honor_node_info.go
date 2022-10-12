@@ -65,6 +65,7 @@ type nodePkg struct {
 var (
 	HonorNodes []storage.HonorNodeModel
 	geoIpDb    *geoip2.Reader
+	flagIcon   map[string]string
 )
 
 func GeoIpDatabaseInit() error {
@@ -464,16 +465,8 @@ func FindNodeLocatedSave(list []NodeValue) (err error) {
 	return nil
 }
 
-func getIconNationalFlag(icon string) string {
-	IconFileName := strings.ToLower(icon) + ".png"
-	var pictureName = conf.GetEnvConf().Url.Base + "default.png"
-	road, _ := os.Getwd()
-	road = path.Join(road, "logodir", IconFileName)
-	_, err := os.Stat(road)
-	if !os.IsNotExist(err) {
-		pictureName = conf.GetEnvConf().Url.Base + IconFileName
-	}
-	return pictureName
+func getIconNationalFlag(nationalName string) string {
+	return conf.GetEnvConf().Url.Base + getFlagIcon(nationalName)
 }
 
 func getCity(city string) string {
@@ -733,4 +726,47 @@ LEFT JOIN
 	rets.List = mdList
 
 	return &rets, nil
+}
+
+func SyncNationalFlagIcon() {
+	HistoryWG.Add(1)
+	defer func() {
+		HistoryWG.Done()
+	}()
+	flagIcon = make(map[string]string)
+
+	road, _ := os.Getwd()
+	logodir := path.Join(road, "logodir")
+	dir, err := os.ReadDir(logodir)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "dir": logodir}).Error("Sync National Flag Icon Failed")
+		return
+	}
+
+	for _, v := range dir {
+		fileName := v.Name()
+		if strings.HasSuffix(fileName, ".png") {
+			flagIcon[fileName] = fileName
+		}
+	}
+}
+
+func getFlagIcon(name string) string {
+	name += ".png"
+	if _, ok := flagIcon[name]; ok {
+		return flagIcon[name]
+	} else {
+		for _, fileName := range flagIcon {
+			f1 := strings.Replace(fileName, " ", "", -1)
+			f1 = strings.Replace(f1, "_", "", -1)
+
+			f2 := strings.Replace(name, " ", "", -1)
+			f2 = strings.Replace(f2, "_", "", -1)
+			if strings.EqualFold(f1, f2) {
+				return fileName
+			}
+		}
+	}
+
+	return "default.png"
 }

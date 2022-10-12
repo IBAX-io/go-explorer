@@ -44,4 +44,5 @@ func historyDataServer() {
 
 	//Delayed chart data
 	go models.GetTopTenHasTokenAccountToRedis()
+	go models.SyncNationalFlagIcon()
 }

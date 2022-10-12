@@ -152,7 +152,7 @@ func InitCrontabTask() {
 	go chart.ReceiveSignal()
 
 	//wait receive channel start up finish
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	loadContracts.SendSignal()
 	honorNode.SendSignal()
