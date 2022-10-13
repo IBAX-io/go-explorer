@@ -19,14 +19,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
-)
-
-var (
-	Tokens   *EcosystemInfoMap
-	EcoNames *EcosystemInfoMap
 )
 
 type Ecosystem struct {
@@ -101,71 +95,11 @@ type EcosystemTotalResult struct {
 	Rets     *[]EcosystemTotalResponse `json:"rets,omitempty"`
 }
 
-// EcosystemKeyTotalRet is model
-type EcosystemKeyTotalRet struct {
-	ID              int64  `json:"id" example:"1"`               //ID
-	Name            string `json:"name" example:""`              //
-	Info            string `json:"info" example:""`              //
-	IsValued        int64  `json:"is_valued" example:""`         //
-	Emission_amount string `json:"emission_amount" example:""`   //
-	TokenSymbol     string `json:"token_symbol" example:""`      //
-	Token_name      string `json:"token_name" example:""`        //
-	Type_emission   int64  `json:"type_emission" example:""`     //
-	Type_withdraw   int64  `json:"type_withdraw" example:""`     //
-	Amount          string `json:"amount" example:""`            //
-	NickName        string `json:"nick_name" example:""`         //
-	MemberImageID   int64  `json:"member_image_id" example:""`   //ID
-	MemberImageHash string `json:"member_image_hash" example:""` //url
-	MemberInfo      string `json:"member_info" example:""`       //
-	Account         string `json:"account" example:""`           //
-}
-
 type EcosystemTxCount struct {
 	Ecosystem int64  `gorm:"column:ecosystem"`
 	Tx        int64  `gorm:"column:tx"`
 	Name      string `gorm:"column:name"`
 	Total     int64  `gorm:"column:total"`
-}
-
-var countryMap = map[int]string{
-	1: "Afghanistan", 2: "Albania", 3: "Algeria", 4: "American Samoa", 5: "Andorra", 6: "Angola", 7: "Anguilla",
-	8: "Antigua and Barbuda", 9: "Argentina", 10: "Armenia", 11: "Aruba", 12: "Australia", 13: "Austria", 14: "Azerbaijan",
-	15: "Bahamas", 16: "Bahrain", 17: "Bangladesh", 18: "Barbados", 19: "Belarus", 20: "Belgium", 21: "Belize",
-	22: "Benin", 23: "Bermuda", 24: "Bhutan", 25: "Bolivia", 26: "Bosnia and Herzegovina", 27: "Botswana", 28: "Brazil",
-	29: "British Virgin Islands", 30: "Brunei", 31: "Bulgaria", 32: "Burkina Faso", 33: "Burundi", 34: "Cambodia", 35: "Cameroon",
-	36: "Canada", 37: "Cape Verde", 38: "Cayman Islands", 39: "Central African Republic", 40: "Chad", 41: "Chile", 42: "China",
-	43: "Colombia", 44: "Comoros", 45: "Cook Islands", 46: "Costa Rica", 47: "Croatia", 48: "Cuba", 49: "Curacao",
-	50: "Cyprus", 51: "Czech Republic", 52: "Denmark", 53: "Djibouti", 54: "Dominica", 55: "Dominican Republic", 56: "DR Congo",
-	57: "Ecuador", 58: "Egypt", 59: "El Salvador", 60: "Equatorial Guinea", 61: "Eritrea", 62: "Estonia", 63: "Eswatini",
-	64: "Ethiopia", 65: "Falkland Islands", 66: "Faroe Islands", 67: "Fiji", 68: "Finland", 69: "France", 70: "French Guiana",
-	71: "French Polynesia", 72: "Gabon", 73: "Gambia", 74: "Georgia", 75: "Germany", 76: "Ghana", 77: "Gibraltar",
-	78: "Greece", 79: "Greenland", 80: "Grenada", 81: "Guadeloupe", 82: "Guam", 83: "Guatemala", 84: "Guinea",
-	85: "Guinea-Bissau", 86: "Guyana", 87: "Haiti", 88: "Honduras", 89: "Hong Kong", 90: "Hungary", 91: "Iceland",
-	92: "India", 93: "Indonesia", 94: "Iran", 95: "Iraq", 96: "Ireland", 97: "Isle of Man", 98: "Israel",
-	99: "Italy", 100: "Ivory Coast", 101: "Jamaica", 102: "Japan", 103: "Jordan", 104: "Kazakhstan", 105: "Kenya",
-	106: "Kiribati", 107: "Kuwait", 108: "Kyrgyzstan", 109: "Laos", 110: "Latvia", 111: "Lebanon", 112: "Lesotho",
-	113: "Liberia", 114: "Libya", 115: "Liechtenstein", 116: "Lithuania", 117: "Luxembourg", 118: "Macau", 119: "Madagascar",
-	120: "Malawi", 121: "Malaysia", 122: "Maldives", 123: "Mali", 124: "Malta", 125: "Marshall Islands", 126: "Martinique",
-	127: "Mauritania", 128: "Mauritius", 129: "Mayotte", 130: "Mexico", 131: "Micronesia", 132: "Moldova", 133: "Monaco",
-	134: "Mongolia", 135: "Montenegro", 136: "Montserrat", 137: "Morocco", 138: "Mozambique", 139: "Myanmar", 140: "Namibia",
-	141: "Nauru", 142: "Nepal", 143: "Netherlands", 144: "New Caledonia", 145: "New Zealand", 146: "Nicaragua", 147: "Niger",
-	148: "Nigeria", 149: "Niue", 150: "North Korea", 151: "North Macedonia", 152: "Northern Mariana Islands", 153: "Norway", 154: "Oman",
-	155: "Pakistan", 156: "Palau", 157: "Palestine", 158: "Panama", 159: "Papua New Guinea", 160: "Paraguay", 161: "Peru",
-	162: "Philippines", 163: "Poland", 164: "Portugal", 165: "Puerto Rico", 166: "Qatar", 167: "Republic of the Congo", 168: "Reunion",
-	169: "Romania", 170: "Russia", 171: "Rwanda", 172: "Saint Kitts and Nevis", 173: "Saint Lucia", 174: "Saint Martin", 175: "Saint Pierre and Miquelon",
-	176: "Saint Vincent and the Grenadines", 177: "Samoa", 178: "San Marino", 179: "Sao Tome and Principe", 180: "Saudi Arabia", 181: "Senegal",
-	182: "Serbia", 183: "Seychelles", 184: "Sierra Leone", 185: "Singapore", 186: "Sint Maarten", 187: "Slovakia", 188: "Slovenia", 189: "Solomon Islands",
-	190: "Somalia", 191: "South Africa", 192: "South Korea", 193: "South Sudan", 194: "Spain", 195: "Sri Lanka", 196: "Sudan",
-	197: "Suriname", 198: "Sweden", 199: "Switzerland", 200: "Syria", 201: "Taiwan", 202: "Tajikistan", 203: "Tanzania", 204: "Thailand",
-	205: "Timor-Leste", 206: "Togo", 207: "Tokelau", 208: "Tonga", 209: "Trinidad and Tobago", 210: "Tunisia", 211: "Turkey", 212: "Turkmenistan",
-	213: "Turks and Caicos Islands", 214: "Tuvalu", 215: "Uganda", 216: "Ukraine", 217: "United Arab Emirates", 218: "United Kingdom", 219: "United States",
-	220: "United States Virgin Islands", 221: "Uruguay", 222: "Uzbekistan", 223: "Vanuatu", 224: "Vatican City", 225: "Venezuela", 226: "Vietnam",
-	227: "Wallis and Futuna", 228: "Western Sahara", 229: "Yemen", 230: "Zambia", 231: "Zimbabwe",
-}
-
-type EcosystemInfoMap struct {
-	sync.RWMutex
-	Map map[int64]string
 }
 
 func (sys *Ecosystem) TableName() string {
@@ -650,17 +584,17 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 				if value > 0 {
 					switch k {
 					case "type":
-						rets.EcoType = value
+						rets.EcoType = ecoTypes.GetId(value, "-")
 					case "tag":
-						rets.EcoTag = value
+						rets.EcoTag = ecoTags.GetId(value, "-")
 					case "cascade":
-						rets.EcoCascade = value
+						rets.EcoCascade = ecoCascades.GetId(value, "")
 					case "registered":
-						rets.Registered = value
+						rets.Registered = registrations.GetId(value, "")
 					case "country":
-						rets.Country = rets.getCountry(value)
+						rets.Country = countrys.GetId(value, "")
 					case "registration_type":
-						rets.RegistrationType = value
+						rets.RegistrationType = registrationTypes.GetId(value, "")
 					}
 				}
 			case "registration_no":
@@ -677,6 +611,11 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 				}
 			}
 
+		}
+	} else {
+		if rets.EcosystemId != 1 {
+			rets.EcoType = "-"
+			rets.EcoTag = "-"
 		}
 	}
 	//defalut
@@ -785,8 +724,9 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 		rets.Time = FirstBlockTime
 		rets.TotalAmount = TotalSupplyToken
 		rets.TokenSymbol = SysTokenSymbol
-		rets.EcoType = 1
-		rets.Country = rets.getCountry(185)
+		rets.EcoType = "-"
+		rets.EcoTag = "-"
+		rets.Country = countrys.GetId(185, "")
 		if rets.Social == nil {
 			rets.Social = make(map[string]string)
 		}
@@ -1098,21 +1038,6 @@ func getFeeModeAccount(ecosystem int64) string {
 	return ""
 }
 
-func GetEcosystemTokenSymbol(ecosystem int64) (tokenSymbol, name string) {
-	if ecosystem == 1 {
-		name = SysEcosystemName
-		tokenSymbol = SysTokenSymbol
-		return
-	}
-	var es Ecosystem
-	f, err := es.GetTokenSymbol(ecosystem)
-	if f && err == nil {
-		name = es.Name
-		tokenSymbol = es.TokenSymbol
-	}
-	return
-}
-
 func getEcosystemCombustion(ecosystem int64) string {
 	var (
 		si   SpentInfo
@@ -1132,80 +1057,4 @@ func getEcosystemCombustion(ecosystem int64) string {
 	}
 
 	return sum1.Sum.Add(sum2.Sum).String()
-}
-
-func (p *countryInfo) getCountry(country int) string {
-	if val, ok := countryMap[country]; ok {
-		return val
-	}
-
-	return ""
-}
-
-func GetAllTokenSymbol() ([]Ecosystem, error) {
-	var (
-		list []Ecosystem
-	)
-	err := GetDB(nil).Select("token_symbol,id").Find(&list).Error
-	if err != nil {
-		log.WithFields(log.Fields{"INFO": err}).Info("get all token symbol failed")
-		return nil, err
-	}
-	return list, nil
-}
-
-func GetAllEcosystemName() ([]Ecosystem, error) {
-	var (
-		list []Ecosystem
-	)
-	err := GetDB(nil).Select("name,id").Find(&list).Error
-	if err != nil {
-		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem name failed")
-		return nil, err
-	}
-	return list, nil
-}
-
-func (p *EcosystemInfoMap) Get(ecosystem int64) string {
-	p.RLock()
-	defer p.RUnlock()
-	value, ok := p.Map[ecosystem]
-	if ok {
-		return value
-	}
-	return ""
-}
-
-func (p *EcosystemInfoMap) Set(ecosystem int64, value string) {
-	p.Lock()
-	defer p.Unlock()
-	p.Map[ecosystem] = value
-}
-
-func InitEcosystemInfo() {
-	Tokens = &EcosystemInfoMap{
-		Map: make(map[int64]string),
-	}
-	EcoNames = &EcosystemInfoMap{
-		Map: make(map[int64]string),
-	}
-}
-
-func SyncEcosystemInfo() {
-	RealtimeWG.Add(1)
-	defer func() {
-		RealtimeWG.Done()
-	}()
-	list, err := GetAllTokenSymbol()
-	if err == nil {
-		for _, val := range list {
-			Tokens.Set(val.ID, val.TokenSymbol)
-		}
-	}
-	list, err = GetAllEcosystemName()
-	if err == nil {
-		for _, val := range list {
-			EcoNames.Set(val.ID, val.Name)
-		}
-	}
 }

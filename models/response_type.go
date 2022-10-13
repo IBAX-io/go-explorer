@@ -165,16 +165,15 @@ type NftMinerStakeInfoResponse struct {
 }
 
 type EcosystemDetailInfoResponse struct {
-	EcosystemId int64  `json:"ecosystem_id"`
-	Ecosystem   string `json:"ecosystem"`
-	//Logo            string `json:"logo"`
+	EcosystemId     int64  `json:"ecosystem_id"`
+	Ecosystem       string `json:"ecosystem"`
 	LogoHash        string `json:"logo_hash"`
 	BlockId         int64  `json:"block_id"`
 	Hash            string `json:"hash"`
 	Creator         string `json:"creator"`
-	EcoType         int    `json:"eco_type"`
-	EcoTag          int    `json:"eco_tag"`
-	EcoCascade      int    `json:"eco_cascade"`
+	EcoType         string `json:"eco_type"`
+	EcoTag          string `json:"eco_tag"`
+	EcoCascade      string `json:"eco_cascade"`
 	MultiFee        bool   `json:"multi_fee"`
 	EcoIntroduction string `json:"eco_introduction"`
 	Time            int64  `json:"time"`
@@ -201,17 +200,12 @@ type EcosystemDetailInfoResponse struct {
 	Circulations      string  `json:"circulations"`
 	FollowFuel        float64 `json:"follow_fuel"`
 
-	Registered int `json:"registered"`
-	//Country          int               `json:"country"`
-	countryInfo
+	Registered       string            `json:"registered"`
+	Country          string            `json:"country"`
 	RegistrationNo   string            `json:"registration_no"`
-	RegistrationType int               `json:"registration_type"`
+	RegistrationType string            `json:"registration_type"`
 	WebPage          string            `json:"web_page"`
 	Social           map[string]string `json:"social"`
-}
-
-type countryInfo struct {
-	Country string `json:"country"`
 }
 
 type EcosystemTxList struct {
@@ -815,13 +809,21 @@ type FeeInfo struct {
 	TokenSymbol string `json:"tokenSymbol"`
 }
 
+type combusionInfo struct {
+	Sender      string          `json:"sender"`
+	Recipient   string          `json:"recipient"`
+	Amount      decimal.Decimal `json:"amount"`
+	TokenSymbol string          `json:"tokenSymbol"`
+	Rate        string          `json:"rate"`
+}
+
 type FeesInfo struct {
 	Amount      decimal.Decimal  `json:"amount"`
 	TokenSymbol string           `json:"tokenSymbol"`
 	FuelRate    FuelRateResponse `json:"fuelRate"`
 	Fees        FeeInfo          `json:"fees"`
 	Taxes       FeeInfo          `json:"taxes"`
-	Combustion  FeeInfo          `json:"combustion,omitempty"`
+	Combustion  combusionInfo    `json:"combustion"`
 }
 
 type UtxoExplorerInfo struct {
