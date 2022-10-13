@@ -73,7 +73,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	rets.Expedite = info.Expedite
 	rets.TokenSymbol = info.TokenSymbol
 	rets.Ecosystem = info.Ecosystem
-	rets.Size = strconv.FormatInt(info.Size, 10) + " bit"
+	rets.Size = strconv.FormatInt(info.Size, 10) + " Byte"
 
 	rets.Inputs, err = si.GetInputs(txHash, converter.StringToAddress(info.Sender))
 	if err != nil {
@@ -89,7 +89,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 			changeList     []utxoDetail
 			ecoGasFee      FeesInfo
 			basisGasFee    FeesInfo
-			unit           = "/bit"
+			unit           = "/Byte"
 			combusionExist bool
 		)
 
@@ -199,6 +199,9 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 				totalGasFee := ecoGasFee.Amount.Add(ecoGasFee.Combustion.Amount)
 				ecoGasFee.FuelRate = FuelRateResponse{totalGasFee.DivRound(txSize, 0).String(), ecoGasFee.TokenSymbol + unit}
 				ecoGasFee.Combustion.Rate = ecoGasFee.Combustion.Amount.Mul(decimal.NewFromInt(100)).DivRound(totalGasFee, 2).String()
+				if ecoGasFee.TokenSymbol == "" {
+					ecoGasFee.TokenSymbol = ecoGasFee.Combustion.TokenSymbol
+				}
 			} else {
 				ecoGasFee.FuelRate = FuelRateResponse{ecoGasFee.Amount.DivRound(txSize, 0).String(), ecoGasFee.TokenSymbol + unit}
 			}
