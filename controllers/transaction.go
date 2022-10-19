@@ -587,3 +587,42 @@ func GetAccountTxCountHandler(c *gin.Context) {
 	JsonResponse(c, ret)
 
 }
+
+func GetUtxoInputsHandler(c *gin.Context) {
+	ret := &Response{}
+	hash := c.Param("hash")
+	pageStr := c.Query("page")
+	limitStr := c.Query("limit")
+	if hash == "" || utf8.RuneCountInString(hash) > 100 || pageStr == "" || limitStr == "" {
+		ret.ReturnFailureString("request params invalid")
+		JsonResponse(c, ret)
+		return
+	}
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		ret.ReturnFailureString("request params invalid:" + err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		ret.ReturnFailureString("request params invalid:" + err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+	if page <= 0 || limit <= 0 {
+		ret.ReturnFailureString("request params page or limit invalid")
+		JsonResponse(c, ret)
+		return
+	}
+	rets, err := models.GetUtxoInputs(hash, page, limit)
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+
+	ret.Return(rets, CodeSuccess)
+	JsonResponse(c, ret)
+
+}
