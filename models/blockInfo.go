@@ -145,7 +145,7 @@ func GetBlocksDetailedInfoHexByScanOut(mc *Block) (*BlockDetailedInfoHex, error)
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
 				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				txDetailedInfo.ContractName = UtxoTransfer
+				txDetailedInfo.ContractName = UtxoTransferSelf
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
 				txDetailedInfo.Params = string(dataBytes)
 			} else {
@@ -335,7 +335,7 @@ func GetBlocksTransactionListByBlockInfo(mc *Block) (*[]TxDetailedInfoResponse, 
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
 				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				txDetailedInfo.ContractName = UtxoTransfer
+				txDetailedInfo.ContractName = UtxoTransferSelf
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
 				txDetailedInfo.Params = string(dataBytes)
 			} else {

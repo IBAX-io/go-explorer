@@ -244,7 +244,7 @@ func (si *SpentInfo) UnmarshalTransaction(txData []byte) (*UtxoExplorerInfo, err
 				result.Comment = "UTXO-Account"
 			}
 			result.Amount = tx.SmartContract().TxSmart.TransferSelf.Value
-			result.UtxoType = UtxoTransfer
+			result.UtxoType = UtxoTransferSelf
 		} else {
 			return &result, errors.New("doesn't not UTXO transaction")
 		}

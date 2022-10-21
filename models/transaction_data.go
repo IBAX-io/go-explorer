@@ -222,7 +222,7 @@ func GetUtxoTxContractNameByHash(hash []byte) string {
 		if tx.SmartContract().TxSmart.UTXO != nil {
 			return UtxoTx
 		} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-			return UtxoTransfer
+			return UtxoTransferSelf
 		}
 	}
 	return ""

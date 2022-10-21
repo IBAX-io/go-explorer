@@ -145,7 +145,7 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 							}
 							bh.Amount, _ = decimal.NewFromString(params.Value)
 							bh.GasFee = getUtxoTxBasisGasFee(converter.HexToBin(rt.Transactions[j].Hash))
-						} else if bh.ContractName == UtxoTransfer {
+						} else if bh.ContractName == UtxoTransferSelf {
 							var params types.TransferSelf
 							err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
 							if err != nil {
@@ -336,7 +336,7 @@ func (lt *LogTransaction) UnmarshalTransaction(txData []byte) (*TxDetailedInfoHe
 			dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
 			txDetailedInfo.Params = string(dataBytes)
 		} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-			txDetailedInfo.ContractName = UtxoTransfer
+			txDetailedInfo.ContractName = UtxoTransferSelf
 			dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
 			txDetailedInfo.Params = string(dataBytes)
 		} else {

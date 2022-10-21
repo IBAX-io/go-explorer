@@ -10,7 +10,7 @@ import (
 	//"lib.venas.io/IBAX/go-ibax/packages/converter"
 )
 
-//MinePledgeStatus example
+// MinePledgeStatus example
 type MinePledgeStatus struct {
 	Id           int64
 	Number       int64           `gorm:"null" example:"1"`                                        //
@@ -67,7 +67,7 @@ func (m *MinePledgeStatus) GetCastNodeandGuardianNode() (int64, int64, int64, er
 		//}
 	}
 	if NftMinerReady {
-		err := GetDB(nil).Table("1_nft_miner_items").Where("merge_status = ? ", 1).Count(&nftCount).Error
+		err := GetDB(nil).Table("1_nft_miner_items").Count(&nftCount).Error
 		if err != nil {
 			return honor, in, nftCount, err
 		}
