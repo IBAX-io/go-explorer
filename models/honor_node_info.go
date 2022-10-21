@@ -303,10 +303,10 @@ FROM block_chain AS bk GROUP BY node_position,key_id,consensus_mode
 			log.WithFields(log.Fields{"error": err}).Error("GetNodeList Failed")
 			continue
 		}
-		if nodeValue.NodeName != "" {
+		if nodeValue.ConsensusMode == 2 {
 			node[i].NodeName = nodeValue.NodeName
 		} else {
-			node[i].NodeName = "HONOR_NODE" + strconv.FormatInt(info[i].ID, 10)
+			node[i].NodeName = "HONOR_NODE" + strconv.FormatInt(nodeValue.Id, 10)
 		}
 		//node[i].TCPAddress = nodeValue.TcpAddress
 		node[i].APIAddress = nodeValue.ApiAddress

@@ -110,6 +110,7 @@ func Run(host string) (err error) {
 	api.GET(`/search_hash/:hash`, controllers.SearchHash)
 	api.GET(`/transaction_detail/:hash`, controllers.GetTransactionDetails)
 	api.GET(`/transaction_utxo_detail/:hash`, controllers.GetUtxoTransactionDetails)
+	api.GET(`/utxo_inputs/:hash`, controllers.GetUtxoInputsHandler)
 	api.GET(`/transaction_head/:hash`, controllers.GetTransactionHead)
 	api.GET(`/block_detail/:block_id`, controllers.GetBlockDetails)
 	api.POST(`/account_detail`, controllers.GetAccountDetailEcosystem)

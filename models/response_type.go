@@ -848,7 +848,6 @@ type UtxoExplorer struct {
 	Ecosystem   int64        `json:"ecosystem"`
 	TokenSymbol string       `json:"token_symbol"`
 	Change      []utxoDetail `json:"change"`
-	Inputs      []utxoDetail `json:"inputs"`
 	Outputs     []utxoDetail `json:"outputs"`
 	BasisGasFee FeesInfo     `json:"basis_gas_fee"`
 	EcoGasFee   FeesInfo     `json:"eco_gas_fee"`

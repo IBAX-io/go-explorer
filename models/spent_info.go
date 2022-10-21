@@ -75,10 +75,6 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	rets.Ecosystem = info.Ecosystem
 	rets.Size = strconv.FormatInt(info.Size, 10) + " Byte"
 
-	rets.Inputs, err = si.GetInputs(txHash, converter.StringToAddress(info.Sender))
-	if err != nil {
-		return nil, err
-	}
 	rets.Outputs, outputList, err = si.GetOutputs(txHash)
 	if err != nil {
 		return nil, err
@@ -207,7 +203,8 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 			}
 		}
 		if basisGasFee.Amount.GreaterThan(decimal.Zero) {
-			basisGasFee.FuelRate = FuelRateResponse{basisGasFee.Amount.DivRound(txSize, 0).String(), basisGasFee.TokenSymbol + unit}
+			expedite, _ := decimal.NewFromString(rets.Expedite)
+			basisGasFee.FuelRate = FuelRateResponse{basisGasFee.Amount.Sub(expedite).DivRound(txSize, 0).String(), basisGasFee.TokenSymbol + unit}
 		}
 		rets.EcoGasFee = ecoGasFee
 		rets.BasisGasFee = basisGasFee
@@ -257,11 +254,17 @@ func (si *SpentInfo) UnmarshalTransaction(txData []byte) (*UtxoExplorerInfo, err
 	return &result, nil
 }
 
-func (si *SpentInfo) GetInputs(txHash []byte, kid int64) (rlts []utxoDetail, err error) {
+func (si *SpentInfo) GetInputs(txHash []byte, page, limit int) (rlts []utxoDetail, total int64, err error) {
 	var (
 		list []SpentInfo
 	)
-	err = GetDB(nil).Table(si.TableName()).Select("output_key_id,output_value,output_tx_hash,ecosystem").Where("input_tx_hash = ? AND output_key_id = ?", txHash, kid).Find(&list).Error
+	err = GetDB(nil).Table(si.TableName()).
+		Where("input_tx_hash = ?", txHash).Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	err = GetDB(nil).Table(si.TableName()).Select("output_key_id,output_value,output_tx_hash,ecosystem").
+		Where("input_tx_hash = ?", txHash).Order("ecosystem ASC").Offset((page - 1) * limit).Limit(limit).Find(&list).Error
 	for _, val := range list {
 		rlts = append(rlts, utxoDetail{Address: converter.AddressToString(val.OutputKeyId), Amount: val.OutputValue, Hash: hex.EncodeToString(val.OutputTxHash),
 			TokenSymbol: Tokens.Get(val.Ecosystem)})
@@ -271,7 +274,7 @@ func (si *SpentInfo) GetInputs(txHash []byte, kid int64) (rlts []utxoDetail, err
 
 func (si *SpentInfo) GetOutputs(txHash []byte) (rlts []utxoDetail, list []SpentInfo, err error) {
 	err = GetDB(nil).Table(si.TableName()).
-		Where("output_tx_hash = ?", txHash).Order("output_index ASC").Find(&list).Error
+		Where("output_tx_hash = ?", txHash).Order("ecosystem ASC").Find(&list).Error
 	for _, val := range list {
 		rlts = append(rlts, utxoDetail{Address: converter.AddressToString(val.OutputKeyId), Amount: val.OutputValue, Hash: hex.EncodeToString(val.OutputTxHash), TokenSymbol: Tokens.Get(val.Ecosystem)})
 	}
@@ -311,4 +314,23 @@ func (p *SpentInfo) GetOutputKeysByBlockId(blockId int64) (outputKeys []SpentInf
 	err = GetDB(nil).Select("output_key_id,ecosystem").Table(p.TableName()).
 		Where("block_id = ?", blockId).Group("output_key_id,ecosystem").Find(&outputKeys).Error
 	return
+}
+
+func GetUtxoInputs(hashStr string, page, limit int) (*GeneralResponse, error) {
+	var (
+		rets GeneralResponse
+	)
+
+	rets.Page = page
+	rets.Limit = limit
+
+	hash := converter.HexToBin(hashStr)
+	si := &SpentInfo{}
+	ret2, total, err := si.GetInputs(hash, page, limit)
+	if err != nil {
+		return nil, err
+	}
+	rets.List = ret2
+	rets.Total = total
+	return &rets, nil
 }
