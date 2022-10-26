@@ -1091,7 +1091,7 @@ ELSE
 END,COALESCE(v1.amount,0)+COALESCE(v2.amount,0) AS amount
 FROM(
 	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM "1_history" 
-	WHERE recipient_id = ? AND ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days ASC
+	WHERE recipient_id = ? AND ecosystem = ? AND created_at >= ? AND type <> 24 GROUP BY days ORDER BY days ASC
 )AS v1
 FULL JOIN(
 	SELECT to_char(to_timestamp(created_at), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM spent_info_history 
@@ -1110,7 +1110,7 @@ ELSE
 END,COALESCE(v1.amount,0)+COALESCE(v2.amount,0) AS amount
 FROM(
 	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM "1_history" 
-	WHERE sender_id = ? AND ecosystem = ? AND created_at >= ? GROUP BY days ORDER BY days ASC
+	WHERE sender_id = ? AND ecosystem = ? AND created_at >= ? AND type <> 24 GROUP BY days ORDER BY days ASC
 )AS v1
 FULL JOIN(
 	SELECT to_char(to_timestamp(created_at), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM spent_info_history 
@@ -1513,12 +1513,13 @@ func GetAmountChangePieChart(ecosystem int64, account string, stTime, edTime int
 	f, err = isFound(GetDB(nil).Raw(`
 SELECT COALESCE(sum(amount),0)+
 	(SELECT COALESCE(sum(amount),0) FROM spent_info_history 
-		WHERE recipient_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? AND created_at < ?)AS income,
-(SELECT COALESCE(sum(amount),0)+
-	(SELECT COALESCE(sum(amount),0) FROM spent_info_history 
-		WHERE sender_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? AND created_at < ?) 
-	FROM "1_history" WHERE sender_id = ? AND ecosystem = ? AND created_at >= ? AND created_at < ?)AS outcome
-FROM "1_history" WHERE recipient_id = ? AND ecosystem = ? AND created_at >= ? AND created_at < ?
+	WHERE recipient_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? AND created_at < ?)AS income,
+
+	(SELECT COALESCE(sum(amount),0)+
+		(SELECT COALESCE(sum(amount),0) FROM spent_info_history 
+			WHERE sender_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? AND created_at < ?)
+	FROM "1_history" WHERE sender_id = ? AND ecosystem = ? AND created_at >= ? AND created_at < ? AND type <> 24)AS outcome
+FROM "1_history" WHERE recipient_id = ? AND ecosystem = ? AND created_at >= ? AND created_at < ? AND type <> 24
 `, keyId, ecosystem, st.Unix(), ed.Unix(),
 		keyId, ecosystem, st.Unix(), ed.Unix(),
 		keyId, ecosystem, st.UnixMilli(), ed.UnixMilli(),
@@ -1658,7 +1659,7 @@ SELECT to_char(to_timestamp(timestamp/1000),'yyyy-MM-dd') AS days,count(1)num FR
 	)AS v1
 	LEFT JOIN(
 		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
-			SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
+			SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" WHERE type <> 24 GROUP BY txhash,ecosystem,recipient_id,sender_id
 		)AS v1 GROUP BY hash,ecosystem
 			UNION
 		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(

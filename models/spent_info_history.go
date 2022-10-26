@@ -32,7 +32,7 @@ type SpentInfoHistory struct {
 	Hash             []byte `gorm:"column:hash;not null"`
 	CreatedAt        int64  `gorm:"column:created_at;not null"`
 	Ecosystem        int64  `gorm:"not null"`
-	Type             int    `gorm:"not null"` //1:UTXO_Transfer 2:UTXO_Tx
+	Type             int    `gorm:"not null"` //1:UTXO_TransferSelf 2:UTXO_Tx
 	SubType          int    `gorm:"not null"` //type is 1 then 1:AccountUTXO 2:UTXO-Account
 }
 
@@ -488,7 +488,7 @@ func (si *spentInfoTxData) UnmarshalTransaction(bd *types.BlockData) (*utxoTxInf
 					result.SenderId = tx.KeyID()
 					result.UtxoType = UtxoTx
 				} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-					result.UtxoType = UtxoTransfer
+					result.UtxoType = UtxoTransferSelf
 					result.SenderId = tx.KeyID()
 					result.RecipientId = tx.KeyID()
 					result.Amount, _ = decimal.NewFromString(tx.SmartContract().TxSmart.TransferSelf.Value)
@@ -565,7 +565,7 @@ func getUtxoTxBasisGasFee(hash []byte) decimal.Decimal {
 
 func formatSpentInfoHistoryType(utxoType string) int {
 	switch utxoType {
-	case UtxoTransfer:
+	case UtxoTransferSelf:
 		return 1
 	case UtxoTx:
 		return 2
@@ -583,7 +583,7 @@ func formatSpentInfoHistoryType(utxoType string) int {
 func parseSpentInfoHistoryType(utxoType int) string {
 	switch utxoType {
 	case 1:
-		return UtxoTransfer
+		return UtxoTransferSelf
 	case 2:
 		return UtxoTx
 	case 3:

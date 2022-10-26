@@ -79,7 +79,6 @@ func (b *Block) GetBlocksHash(hash []byte) (bool, error) {
 	return f, err
 }
 
-//
 func (b *Block) GetBlocksKey(key int64, order string) ([]Block, error) {
 	var err error
 	var blockchain []Block
@@ -317,7 +316,7 @@ func GetBlocksDetailedInfoHex(bk *Block) (*BlockDetailedInfoHex, error) {
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
 				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				txDetailedInfo.ContractName = UtxoTransfer
+				txDetailedInfo.ContractName = UtxoTransferSelf
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
 				txDetailedInfo.Params = string(dataBytes)
 			} else {
@@ -548,7 +547,7 @@ func InitFristBlockTime() error {
 	return nil
 }
 
-//GetSystemTime is retrieving model from database
+// GetSystemTime is retrieving model from database
 func (b *Block) GetSystemTime() (int64, error) {
 	f, err := isFound(GetDB(nil).Select("time").Where("id = 1").First(b))
 	if err == nil && f {
@@ -584,7 +583,7 @@ func GetBlocksContractNameList(bk *Block) (map[string]string, error) {
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
 				txDetailedInfo.Params = string(dataBytes)
 			} else if tx.SmartContract().TxSmart.TransferSelf != nil {
-				txDetailedInfo.ContractName = UtxoTransfer
+				txDetailedInfo.ContractName = UtxoTransferSelf
 				dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
 				txDetailedInfo.Params = string(dataBytes)
 			} else {
