@@ -80,7 +80,7 @@ func (p *SpentInfoHistory) GetLast() (bool, error) {
 }
 
 func (p *SpentInfoHistory) RollbackTransaction() error {
-	return GetDB(nil).Where("block > ?", p.Block).Delete(&SpentInfoHistory{}).Error
+	return GetDB(nil).Where("block >= ?", p.Block).Delete(&SpentInfoHistory{}).Error
 }
 
 func (p *SpentInfoHistory) GetKeyBalance(keyId int64, ecosystem int64) (balance decimal.Decimal, err error) {
@@ -159,18 +159,17 @@ func utxoTxSync() error {
 		return fmt.Errorf("[utxo sync]get spent info last failed:%s", err.Error())
 	}
 	if f {
+		if initStart {
+			err = tr.RollbackOne()
+			if err != nil {
+				return err
+			} else {
+				initStart = false
+			}
+		}
 		if tr.Block >= si.BlockId {
 			utxoTxCheck(si.BlockId)
 			return nil
-		} else {
-			if initStart {
-				err = tr.RollbackOne()
-				if err != nil {
-					return err
-				} else {
-					initStart = false
-				}
-			}
 		}
 	}
 
@@ -244,6 +243,14 @@ func utxoTxSync() error {
 
 		if bkDiff != val.BlockId { //block diff update keys balance
 			bkDiff = val.BlockId
+
+			if insertData != nil {
+				err = createUtxoTxBatches(GetDB(nil), &insertData)
+				if err != nil {
+					return err
+				}
+				insertData = nil
+			}
 			keys, err := s1.GetOutputKeysByBlockId(val.BlockId)
 			if err != nil {
 				return fmt.Errorf("[utxo sync]get block:%d output keys failed:%s", val.BlockId, err.Error())
@@ -449,7 +456,8 @@ func utxoTxSync() error {
 				return err
 			}
 		}
-
+	}
+	if insertData != nil {
 		err = createUtxoTxBatches(GetDB(nil), &insertData)
 		if err != nil {
 			return err
@@ -464,7 +472,7 @@ func createUtxoTxBatches(dbTx *gorm.DB, data *[]SpentInfoHistory) error {
 	if data == nil {
 		return nil
 	}
-	return dbTx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(data, 1000).Error
+	return dbTx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(data, 5000).Error
 }
 
 func (si *spentInfoTxData) UnmarshalTransaction(bd *types.BlockData) (*utxoTxInfo, error) {
@@ -526,7 +534,6 @@ func utxoTxCheck(lastBlockId int64) {
 				}
 				if tx.Block > 0 {
 					log.WithFields(log.Fields{"log hash doesn't exist": hex.EncodeToString(tx.Hash), "block": tx.Block}).Info("[utxo tx check] rollback data")
-					tx.Block -= 1
 					err = tx.RollbackTransaction()
 					if err == nil {
 						utxoTxCheck(tx.Block)
