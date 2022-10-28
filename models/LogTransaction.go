@@ -74,7 +74,7 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 		return &ret, num, err
 	}
 
-	err = GetDB(nil).Select("hash,block,status").Offset((page - 1) * limit).Limit(limit).Order("block desc").Find(&tss).Error
+	err = GetDB(nil).Select("hash,block,status").Offset((page - 1) * limit).Limit(limit).Order("block desc,timestamp desc").Find(&tss).Error
 	if err != nil {
 		return &ret, num, err
 	}
@@ -432,7 +432,9 @@ func (lt *LogTransaction) GetEcosystemTransactionFind(ecosystem int64, page, lim
 		endTime   time.Time
 	)
 	if order == "" {
-		order = "block desc"
+		order = "block desc,timestamp desc"
+	} else {
+		order += ",timestamp desc"
 	}
 	if search == "chart" {
 		tz := time.Unix(GetNowTimeUnix(), 0)
@@ -495,11 +497,12 @@ func (lt *LogTransaction) GetEcosystemAccountTransaction(ecosystem int64, page i
 	rets.Limit = size
 	rets.Page = page
 	if order == "" {
-		order = "timestamp desc"
+		order = "block desc,timestamp desc"
 	} else {
 		if !CheckSql(order) {
 			return nil, errors.New("request params invalid")
 		}
+		order += ",timestamp desc"
 	}
 
 	keyId = converter.StringToAddress(wallet)

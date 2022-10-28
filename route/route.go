@@ -232,7 +232,6 @@ func Run(host string) (err error) {
 	api.GET("/get_node_region", controllers.GetNodeRegionChartHandler)
 	api.GET("/get_node_statistical_change", controllers.GetNodeStatisticalChangeHandler)
 
-	//api.POST("/get_lat_lge",controllers.get)
 	api.GET(`/get_redis/:name`, controllers.GetRedisKey) //get redis keys
 
 	api.StaticFS("/logo", http.Dir("./logodir"))
