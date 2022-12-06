@@ -80,7 +80,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 		return nil, err
 	}
 
-	if rets.UtxoType == UtxoTx {
+	if rets.UtxoType == UtxoTx || rets.UtxoType == UtxoBurning {
 		var (
 			changeList     []utxoDetail
 			ecoGasFee      FeesInfo
@@ -235,6 +235,9 @@ func (si *SpentInfo) UnmarshalTransaction(txData []byte) (*UtxoExplorerInfo, err
 			result.Recipient = converter.AddressToString(tx.SmartContract().TxSmart.UTXO.ToID)
 			result.Amount = tx.SmartContract().TxSmart.UTXO.Value
 			result.UtxoType = UtxoTx
+			if result.Recipient == BlackHoleAddr {
+				result.UtxoType = UtxoBurning
+			}
 		} else if tx.SmartContract().TxSmart.TransferSelf != nil {
 			result.Sender = converter.AddressToString(tx.KeyID())
 			result.Recipient = converter.AddressToString(tx.KeyID())
@@ -296,13 +299,17 @@ func getSpentInfoHashList(startId, endId int64) (*[]spentInfoTxData, error) {
 	var rlt []spentInfoTxData
 
 	err = GetDB(nil).Raw(`
-SELECT v1.block_id,v1.output_tx_hash,v2.time FROM(
-	SELECT output_tx_hash,block_id FROM spent_info WHERE block_id >= ? AND block_id < ? GROUP BY output_tx_hash,block_id ORDER BY block_id asc
+SELECT v1.block_id,v1.hash,v2.tx_data FROM(
+	SELECT output_tx_hash AS hash,block_id FROM spent_info WHERE block_id >= ? AND block_id < ? GROUP BY output_tx_hash,block_id
+		UNION
+	SELECT input_tx_hash AS hash,lg.block AS block_id FROM spent_info AS s1 LEFT JOIN log_transactions AS lg ON(lg.hash = s1.input_tx_hash) 
+	WHERE block >= ? AND block < ? AND input_tx_hash IS NOT NULL GROUP BY input_tx_hash,block
 )AS v1
 LEFT JOIN(
-	SELECT id,time FROM block_chain
-)AS v2 ON(v2.id = v1.block_id)
-`, startId, endId).Find(&rlt).Error
+	SELECT hash,tx_data FROM transaction_data WHERE block >= ? AND block < ?
+)AS v2 ON(v2.hash = v1.hash)
+ORDER BY block_id asc
+`, startId, endId, startId, endId, startId, endId).Find(&rlt).Error
 	if err != nil {
 		return nil, err
 	}
@@ -311,8 +318,14 @@ LEFT JOIN(
 }
 
 func (p *SpentInfo) GetOutputKeysByBlockId(blockId int64) (outputKeys []SpentInfo, err error) {
-	err = GetDB(nil).Select("output_key_id,ecosystem").Table(p.TableName()).
-		Where("block_id = ?", blockId).Group("output_key_id,ecosystem").Find(&outputKeys).Error
+	err = GetDB(nil).Raw(`
+SELECT output_key_id,ecosystem FROM "spent_info" WHERE block_id = ? GROUP BY output_key_id,ecosystem
+UNION
+SELECT v2.address AS output_key_id,v2.ecosystem_id AS ecosystem 
+FROM transaction_data AS v1 LEFT JOIN log_transactions AS v2 ON(v2.hash = v1.hash) 
+WHERE v1.block = ? AND v1.type = 1 GROUP BY output_key_id,ecosystem
+`, blockId, blockId).Find(&outputKeys).Error
+
 	return
 }
 

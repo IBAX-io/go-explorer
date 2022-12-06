@@ -104,7 +104,7 @@ func RdExist(key string) (bool, error) {
 	}
 }
 
-//RdExists all key exists return true else return false
+// RdExists all key exists return true else return false
 func RdExists(keys ...string) (bool, error) {
 	keyLen := int64(len(keys))
 	if keyLen <= 0 {
@@ -125,8 +125,8 @@ func RdExists(keys ...string) (bool, error) {
 	}
 }
 
-//RdRange intercept string[start:end]
-//if key not exist return ""
+// RdRange intercept string[start:end]
+// if key not exist return ""
 func RdRange(key string, start, end int64) (string, error) {
 	return GetRdDb().GetRange(ctx, key, start, end).Result()
 }
@@ -137,6 +137,13 @@ func (rp *RedisParams) Del() error {
 
 func (rp *RedisParams) Size() (int64, error) {
 	return GetRdDb().DBSize(ctx).Result()
+}
+
+func (rp *HashParams) HSetMapValue(key string, value any) {
+	if rp.HMap == nil {
+		rp.HMap = make(map[string]any)
+	}
+	rp.HMap[key] = value
 }
 
 func (rp *HashParams) HMapSet() error {

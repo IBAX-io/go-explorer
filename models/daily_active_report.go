@@ -242,10 +242,10 @@ SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+5,0) AS total
 					v2.ds
 				END,COALESCE(v1.tx_amount,0)+COALESCE(v2.tx_amount,0)AS tx_amount
 				FROM(
-					SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM "1_history" WHERE ecosystem = 1 AND created_at >= %d AND created_at < %d GROUP BY ds
+					SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM "1_history" WHERE ecosystem = 1 AND type <> 24 AND created_at >= %d AND created_at < %d GROUP BY ds
 				)AS v1
 				FULL JOIN(
-					SELECT to_char(to_timestamp(created_at),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM spent_info_history WHERE ecosystem = 1 AND type <> 1 AND created_at >= %d AND created_at < %d GROUP BY ds 
+					SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM spent_info_history WHERE ecosystem = 1 AND type <> 1 AND created_at >= %d AND created_at < %d GROUP BY ds 
 				)AS v2 ON(v2.ds = v1.ds)
 				ORDER BY ds DESC
 			)AS h1
@@ -319,10 +319,10 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 					v2.ds
 				END,COALESCE(v1.tx_amount,0)+COALESCE(v2.tx_amount,0)AS tx_amount
 				FROM(
-					SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM "1_history" WHERE ecosystem = 1 GROUP BY ds
+					SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM "1_history" WHERE ecosystem = 1 AND type <> 24 GROUP BY ds
 				)AS v1
 				FULL JOIN(
-					SELECT to_char(to_timestamp(created_at),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM spent_info_history WHERE ecosystem = 1 AND type <> 1 GROUP BY ds 
+					SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS ds,sum(amount)tx_amount FROM spent_info_history WHERE ecosystem = 1 AND type <> 1 GROUP BY ds 
 				)AS v2 ON(v2.ds = v1.ds)
 				ORDER BY ds asc
 			)AS h1

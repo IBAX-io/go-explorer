@@ -368,7 +368,7 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 			}
 			amount := decimal.New(0, 0)
 			for k, v := range emissionAmount {
-				if v.Type == "emission" && k == 0 {
+				if v.Type == "issue" && k == 0 {
 					amount = amount.Add(v.Val)
 				}
 			}
@@ -523,10 +523,10 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 	rets.EcosystemId = eco.ID
 	rets.TokenSymbol = eco.TokenSymbol
 	rets.Ecosystem = eco.Name
-	if eco.TypeWithdraw == 2 {
+	if eco.TypeWithdraw == 1 {
 		rets.IsWithdraw = true
 	}
-	if eco.TypeEmission == 2 {
+	if eco.TypeEmission == 1 {
 		rets.IsEmission = true
 	}
 	if eco.EmissionAmount != "" {
@@ -539,12 +539,10 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 		emission := decimal.New(0, 0)
 		for _, v := range emissionAmount {
 			switch v.Type {
+			case "issue":
+				total = total.Add(v.Val)
 			case "emission":
-				if total.GreaterThan(decimal.Zero) {
-					emission = emission.Add(v.Val)
-				} else {
-					total = total.Add(v.Val)
-				}
+				emission = emission.Add(v.Val)
 			case "burn":
 				withdraw = withdraw.Add(v.Val)
 			}

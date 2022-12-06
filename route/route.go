@@ -109,6 +109,7 @@ func Run(host string) (err error) {
 	//Global Search
 	api.GET(`/search_hash/:hash`, controllers.SearchHash)
 	api.GET(`/transaction_detail/:hash`, controllers.GetTransactionDetails)
+	api.GET(`/contract_tx_detail_list/:hash`, controllers.GetContractTxDetailListHandler)
 	api.GET(`/transaction_utxo_detail/:hash`, controllers.GetUtxoTransactionDetails)
 	api.GET(`/utxo_inputs/:hash`, controllers.GetUtxoInputsHandler)
 	api.GET(`/transaction_head/:hash`, controllers.GetTransactionHead)
