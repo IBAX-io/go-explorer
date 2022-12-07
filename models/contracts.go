@@ -33,7 +33,7 @@ func (c *Contract) GetById(id int64) (bool, error) {
 }
 
 func GetContractCodeByName(contractName string) string {
-	if contractName == UtxoTx || contractName == UtxoTransferSelf {
+	if contractName == UtxoTx || contractName == UtxoTransferSelf || contractName == UtxoBurning {
 		return ""
 	}
 	ecosystem, name := converter.ParseName(contractName)

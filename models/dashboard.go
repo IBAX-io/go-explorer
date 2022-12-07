@@ -34,7 +34,7 @@ type Circulations struct {
 	TotalAmount        string `json:"total_amount"`
 	CirculationsAmount string `json:"circulations_amount"`
 	StakeAmounts       string `json:"stake_amounts"`
-	FreezeAmount       string `json:"freeze_amount"`
+	LockAmount         string `json:"lock_amount"`
 }
 
 type NftMinerInfoChart struct {
@@ -180,8 +180,8 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 		return rets, err
 	}
 
-	var agi AssignGetInfo
-	agm, err := agi.GetAllBalance(nil)
+	var agi AssignInfo
+	agm, err := agi.GetBalance(nil, "")
 	if err != nil {
 		return rets, err
 	}
@@ -203,7 +203,7 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 	rets.CirculationsChart.TotalAmount = TotalSupplyToken
 	rets.CirculationsChart.CirculationsAmount = cir
 	rets.CirculationsChart.StakeAmounts = nftStaking.Add(nodeStaking.Sum).String()
-	rets.CirculationsChart.FreezeAmount = agm.String()
+	rets.CirculationsChart.LockAmount = agm.String()
 
 	rets.NftMinerChart.UnStakingCount = rets.NftMinerChart.Count - stakingNum
 	rets.NftMinerChart.NowStakingCount = stakingNum

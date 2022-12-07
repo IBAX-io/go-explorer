@@ -148,7 +148,7 @@ SELECT COALESCE(v1.days,v2.days)AS days,COALESCE(v1.amount,0)+COALESCE(v2.amount
 	FROM "1_history" WHERE type IN(1,2) AND ecosystem = 1 AND created_at >= ? GROUP BY days ORDER BY days DESC LIMIT ?
 )AS v1
 FULL JOIN(
-	SELECT to_char(to_timestamp(created_at),'yyyy-MM-dd') AS days,sum(amount) AS amount
+	SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,sum(amount) AS amount
 	FROM spent_info_history WHERE type IN(3,4) AND ecosystem = 1 AND created_at >= ? GROUP BY days ORDER BY days DESC LIMIT ?
 )AS v2 ON(v2.days = v1.days)
 
@@ -238,8 +238,13 @@ func GetNodeContributionChart() (NodeContributionChartResponse, error) {
 func Get15DayNewCirculationsChart() (CirculationsChartResponse, error) {
 	var (
 		rets CirculationsChartResponse
-		list []DaysAmount
 	)
+	type daysNewCirculation struct {
+		Days       string          `gorm:"column:days"`
+		NftMining  decimal.Decimal `gorm:"column:nft_mining"`
+		LockAmount decimal.Decimal `gorm:"column:lock_amount"`
+	}
+	var list []daysNewCirculation
 
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
@@ -247,31 +252,47 @@ func Get15DayNewCirculationsChart() (CirculationsChartResponse, error) {
 	t1 := yesterday.AddDate(0, 0, -1*getDays)
 
 	rets.Change.Time = make([]int64, getDays)
-	rets.Change.FreezeAmount = make([]string, getDays)
+	rets.Change.LockAmount = make([]string, getDays)
 	rets.Change.Circulations = make([]string, getDays)
 	totalCir := decimal.New(0, 0)
-	totalFreeze := decimal.New(0, 0)
+	totalLock := decimal.New(0, 0)
 
 	err := GetDB(nil).Raw(`
-SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount 
-FROM "1_history" WHERE ecosystem = 1 AND type = 12 GROUP BY days ORDER BY days DESC limit ?
-`, getDays).Find(&list).Error
+SELECT COALESCE(v1.days,v2.days)AS days,COALESCE(v1.amount,0)AS nft_mining,COALESCE(v2.amount,0)AS lock_amount FROM(
+	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount 
+	FROM "1_history" WHERE ecosystem = 1 AND type = 12 GROUP BY days ORDER BY days DESC limit ?
+)AS v1
+FULL JOIN(
+	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount 
+	FROM "1_history" WHERE ecosystem = 1 AND type IN(8,9,10,11,25,26,27,30,31) GROUP BY days ORDER BY days DESC limit ?
+)AS v2 ON(v2.days = v1.days)
+`, getDays, getDays).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get 15 Day New Circulations Chart Failed")
 		return rets, err
 	}
 
+	getDaysCirAmount := func(dayTime int64, list []daysNewCirculation) (decimal.Decimal, decimal.Decimal) {
+		for i := 0; i < len(list); i++ {
+			times, _ := time.ParseInLocation("2006-01-02", list[i].Days, time.Local)
+			if dayTime == times.Unix() {
+				return list[i].LockAmount, list[i].NftMining
+			}
+		}
+		return decimal.Zero, decimal.Zero
+	}
+
 	for i := 0; i < len(rets.Change.Time); i++ {
 		rets.Change.Time[i] = t1.AddDate(0, 0, i+1).Unix()
-		cir, _ := decimal.NewFromString(GetDaysAmount(rets.Change.Time[i], list))
-		freeze, _ := decimal.NewFromString(rets.Change.FreezeAmount[i])
-		rets.Change.Circulations[i] = cir.Add(freeze).String()
+		lock, cir := getDaysCirAmount(rets.Change.Time[i], list)
+		rets.Change.Circulations[i] = cir.Add(lock).String()
+		rets.Change.LockAmount[i] = lock.String()
 		totalCir = totalCir.Add(cir)
-		totalFreeze = totalFreeze.Add(freeze)
+		totalLock = totalLock.Add(lock)
 	}
 	rets.Circulations = totalCir.String()
-	rets.FreezeAmount = totalFreeze.String()
-	rets.TotalCirculations = totalCir.Add(totalFreeze).String()
+	rets.LockAmount = totalLock.String()
+	rets.TotalCirculations = totalCir.Add(totalLock).String()
 
 	return rets, nil
 
@@ -995,7 +1016,7 @@ func GetTokenEcosystemRatioChart() (TokenEcosystemResponse, error) {
 		log.WithFields(log.Fields{"error": err}).Error("Get Token Ecosystem Ratio Chart Total Failed")
 		return rets, err
 	}
-	err = q.Where(`emission_amount @> '[{"type":"emission"}]'::jsonb or id = 1`).Count(&rets.Emission).Error
+	err = q.Where(`emission_amount @> '[{"type":"issue"}]'::jsonb or id = 1`).Count(&rets.Emission).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Token Ecosystem Ratio Chart Emission Failed")
 		return rets, err

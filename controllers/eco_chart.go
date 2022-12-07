@@ -27,7 +27,7 @@ func GetAccountTokenChangeHandler(c *gin.Context) {
 		return
 	}
 	wid := converter.StringToAddress(req.Wallet)
-	if wid == 0 && req.Wallet != "0000-0000-0000-0000-0000" {
+	if wid == 0 && req.Wallet != models.BlackHoleAddr {
 		ret.ReturnFailureString("invalid account")
 		JsonResponse(c, ret)
 		return
@@ -53,7 +53,7 @@ func GetEcosystemCirculationsChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEcosystemCirculationsChart(ecosystem)
+	rets, err := models.GetEcosystemCirculationsFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("get ecosystem circulations chart failed")
 		JsonResponse(c, ret)

@@ -23,6 +23,9 @@ const (
 	TotalSupplyToken = "2100000000000000000000"
 	UtxoTx           = "UTXO_Tx"
 	UtxoTransferSelf = "UTXO_Transfer_Self"
+	UtxoBurning      = "UTXO_Burning"
+
+	BlackHoleAddr = "0000-0000-0000-0000-0000"
 
 	AccountUTXO = "Account-UTXO"
 	UTXOAccount = "UTXO-Account"
@@ -42,7 +45,7 @@ func Version() string {
 	return strings.TrimSpace(strings.Join([]string{status, VERSION, BuildInfo}, " "))
 }
 
-// go build -ldflags "-X 'github.com/IBAX-io/go-explorer/cmd.buildBranch=main' -X 'github.com/IBAX-io/go-explorer/cmd.buildDate=2022-06-17' -X 'github.com/IBAX-io/go-explorer/cmd.commitHash=2141saf'"
+// go build -ldflags "-X 'github.com/IBAX-io/go-explorer/models.buildBranch=main' -X 'github.com/IBAX-io/go-explorer/models.buildDate=2022-06-17' -X 'github.com/IBAX-io/go-explorer/models.commitHash=2141saf'"
 func InitBuildInfo() {
 	BuildInfo = func() string {
 		if buildBranch == "" {

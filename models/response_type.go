@@ -328,7 +328,7 @@ type EcoTopTenTxAmountResponse struct {
 type EcoCirculationsResponse struct {
 	Circulations     string `json:"circulations"`
 	StakeAmount      string `json:"stake_amount"`
-	FreezeAmount     string `json:"freeze_amount"` //todo:need add
+	LockAmount       string `json:"lock_amount"`
 	NftBalanceSupply string `json:"nft_balance_supply"`
 	BurningTokens    string `json:"burning_tokens"`
 	Combustion       string `json:"combustion"`
@@ -344,7 +344,7 @@ type EcoCirculationsChangeResponse struct {
 	Time             []string `json:"time"`
 	Circulations     []string `json:"circulations"`
 	StakeAmount      []string `json:"stake_amount"`
-	FreezeAmount     []string `json:"freeze_amount"` //todo:need add
+	LockAmount       []string `json:"lock_amount"`
 	NftBalanceSupply []string `json:"nft_balance_supply"`
 	BurningTokens    []string `json:"burning_tokens"`
 	Combustion       []string `json:"combustion"`
@@ -383,14 +383,14 @@ type EcoTxGasFeeDiffResponse struct {
 }
 
 type AccountTotalAmountChart struct {
-	TotalAmount       decimal.Decimal `json:"total_amount"`
-	Amount            decimal.Decimal `json:"amount" gorm:"column:amount"`
-	AmountRatio       float64         `json:"amount_ratio"`
-	StakeAmount       decimal.Decimal `json:"stake_amount" gorm:"column:stake_amount"`
-	StakeAmountRatio  float64         `json:"stake_amount_ratio"`
-	FreezeAmount      decimal.Decimal `json:"freeze_amount" gorm:"column:freeze_amount"` //TODO: need add
-	FreezeAmountRatio float64         `json:"freeze_amount_ratio"`
-	TokenSymbol       string          `json:"token_symbol"`
+	TotalAmount      decimal.Decimal `json:"total_amount"`
+	Amount           decimal.Decimal `json:"amount" gorm:"column:amount"`
+	AmountRatio      float64         `json:"amount_ratio"`
+	StakeAmount      decimal.Decimal `json:"stake_amount" gorm:"column:stake_amount"`
+	StakeAmountRatio float64         `json:"stake_amount_ratio"`
+	LockAmount       decimal.Decimal `json:"lock_amount"`
+	LockRatio        float64         `json:"lock_ratio"`
+	TokenSymbol      string          `json:"token_symbol"`
 }
 
 type AccountAmountChangePieChart struct {
@@ -445,13 +445,13 @@ type NodeContributionChartResponse struct {
 type CirculationsChangeResponse struct {
 	Time         []int64  `json:"time"`
 	Circulations []string `json:"circulations"`
-	FreezeAmount []string `json:"freeze_amount"` //todo:need add
+	LockAmount   []string `json:"lock_amount"`
 }
 
 type CirculationsChartResponse struct {
 	TotalCirculations string                     `json:"total_circulations"`
 	Circulations      string                     `json:"circulations"`
-	FreezeAmount      string                     `json:"freeze_amount"` //todo:need add
+	LockAmount        string                     `json:"lock_amount"`
 	Change            CirculationsChangeResponse `json:"change"`
 }
 

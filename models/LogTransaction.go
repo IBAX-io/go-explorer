@@ -57,6 +57,18 @@ func (lt *LogTransaction) GetStatus(hash []byte) (bool, error) {
 	return isFound(GetDB(nil).Select("status").Where("hash = ?", hash).First(lt))
 }
 
+func (lt *LogTransaction) GetTxTime(hash []byte) (bool, error) {
+	return isFound(GetDB(nil).Select("timestamp").Where("hash = ?", hash).First(lt))
+}
+
+func (lt *LogTransaction) GetLast() (bool, error) {
+	return isFound(GetDB(nil).Order("block desc,timestamp desc").Take(lt))
+}
+
+func (lt *LogTransaction) GetBlockFirst(block int64) (bool, error) {
+	return isFound(GetDB(nil).Where("block > ?", block).Order("block asc,timestamp asc").Take(lt))
+}
+
 func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string, reqType int) (*[]BlockTxDetailedInfoHex, int64, error) {
 	var (
 		tss []LogTransaction
@@ -137,7 +149,7 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 				if Thash[rt.Transactions[j].Hash] {
 					bh.Status = hashStatus[rt.Transactions[j].Hash]
 					if reqType == 0 {
-						if bh.ContractName == UtxoTx {
+						if bh.ContractName == UtxoTx || bh.ContractName == UtxoBurning {
 							var params types.UTXO
 							err := json.Unmarshal([]byte(rt.Transactions[j].Params), &params)
 							if err != nil {
@@ -335,6 +347,9 @@ func (lt *LogTransaction) UnmarshalTransaction(txData []byte) (*TxDetailedInfoHe
 			txDetailedInfo.ContractName = UtxoTx
 			dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.UTXO)
 			txDetailedInfo.Params = string(dataBytes)
+			if converter.AddressToString(tx.SmartContract().TxSmart.UTXO.ToID) == BlackHoleAddr {
+				txDetailedInfo.ContractName = UtxoBurning
+			}
 		} else if tx.SmartContract().TxSmart.TransferSelf != nil {
 			txDetailedInfo.ContractName = UtxoTransferSelf
 			dataBytes, _ := json.Marshal(tx.SmartContract().TxSmart.TransferSelf)
@@ -409,7 +424,7 @@ func SearchHash(hash string) (SearchHashResponse, error) {
 		if !f {
 			return rets, errors.New("transaction data synchronization")
 		}
-		f, err = IsUtxoTransaction(tx.TxData)
+		f, err = IsUtxoTransaction(tx.TxData, tx.Block)
 		if err != nil {
 			return rets, err
 		}
@@ -506,7 +521,7 @@ func (lt *LogTransaction) GetEcosystemAccountTransaction(ecosystem int64, page i
 	}
 
 	keyId = converter.StringToAddress(wallet)
-	if wallet == "0000-0000-0000-0000-0000" {
+	if wallet == BlackHoleAddr {
 	} else if keyId == 0 {
 		return &rets, errors.New("wallet does not meet specifications")
 	}
@@ -635,7 +650,7 @@ SELECT count(1) FROM(
 	)AS v1
 	LEFT JOIN(
 		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
-			SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
+			SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" WHERE type <> 24 GROUP BY txhash,recipient_id,sender_id
 		)AS v1 GROUP BY hash
 			UNION
 		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
@@ -658,7 +673,7 @@ SELECT * FROM(
 	)AS v1
 	LEFT JOIN(
 		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
-			SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
+			SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" WHERE type <> 24 GROUP BY txhash,recipient_id,sender_id
 		)AS v1 GROUP BY hash
 			UNION
 		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(

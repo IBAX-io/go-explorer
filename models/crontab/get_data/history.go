@@ -43,6 +43,6 @@ func historyDataServer() {
 	go models.GetMaxTxToRedis()
 
 	//Delayed chart data
-	go models.GetTopTenHasTokenAccountToRedis()
+	go models.GetAllEcosystemChartInfo()
 	go models.SyncNationalFlagIcon()
 }

@@ -8,6 +8,7 @@ package models
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"github.com/IBAX-io/go-ibax/packages/transaction"
 	"github.com/IBAX-io/go-ibax/packages/types"
 	log "github.com/sirupsen/logrus"
@@ -16,13 +17,17 @@ import (
 )
 
 type TransactionData struct {
-	Hash   []byte `gorm:"primary_key;not null"`
-	Block  int64  `gorm:"not null"`
+	Hash   []byte `gorm:"primary_key;not null;index"`
+	Block  int64  `gorm:"not null;index"`
 	TxData []byte `gorm:"not null"`
 	TxTime int64  `gorm:"not null"`
+	Type   int    `gorm:"not null"` //type 1:utxo transaction 0:contract transaction
 }
 
-var getTransactionData chan bool
+var (
+	getTransactionData chan bool
+	txDataStart        bool = true
+)
 
 func (p *TransactionData) TableName() string {
 	return "transaction_data"
@@ -54,7 +59,7 @@ func (p *TransactionData) GetByHash(hash []byte) (bool, error) {
 }
 
 func (p *TransactionData) GetTxDataByHash(hash []byte) (bool, error) {
-	return isFound(GetDB(nil).Select("tx_data").Where("hash = ?", hash).First(p))
+	return isFound(GetDB(nil).Select("tx_data,block").Where("hash = ?", hash).First(p))
 }
 
 func (p *TransactionData) GetLast() (bool, error) {
@@ -62,7 +67,18 @@ func (p *TransactionData) GetLast() (bool, error) {
 }
 
 func (p *TransactionData) RollbackTransaction() error {
-	return GetDB(nil).Where("block > ?", p.Block).Delete(&TransactionData{}).Error
+	return GetDB(nil).Where("block >= ?", p.Block).Delete(&TransactionData{}).Error
+}
+
+func (p *TransactionData) RollbackOne() error {
+	if p.Block > 0 {
+		err := p.RollbackTransaction()
+		if err != nil {
+			log.WithFields(log.Fields{"error": err, "block": p.Block}).Error("[transaction data] rollback one Failed")
+			return err
+		}
+	}
+	return nil
 }
 
 func TxDataSyncSignalReceive() {
@@ -94,7 +110,7 @@ func SendTxDataSyncSignal() {
 func transactionDataSync() error {
 	var insertData []TransactionData
 	var b1 Block
-
+begin:
 	tr := &TransactionData{}
 	_, err := tr.GetLast()
 	if err != nil {
@@ -105,6 +121,15 @@ func transactionDataSync() error {
 		return err
 	}
 	if f {
+		if txDataStart {
+			err = tr.RollbackOne()
+			if err != nil {
+				return err
+			} else {
+				txDataStart = false
+				goto begin
+			}
+		}
 		if tr.Block >= b1.ID {
 			transactionDataCheck(b1.ID)
 			return nil
@@ -119,14 +144,19 @@ func transactionDataSync() error {
 		return nil
 	}
 	for _, val := range *bkList {
-		txList, err := UnmarshallBlockTxData(bytes.NewBuffer(val.Data))
+		txList, err := UnmarshallBlockTxData(bytes.NewBuffer(val.Data), val.ID)
 		if err != nil {
 			return err
 		}
 		for _, data := range txList {
-			data.Block = val.ID
 			if data.TxTime == 0 {
-				data.TxTime = val.Time
+				var lg LogTransaction
+				f, err = lg.GetTxTime(data.Hash)
+				if err == nil && f {
+					data.TxTime = lg.Timestamp
+				} else {
+					data.TxTime = val.Time * 1000
+				}
 			}
 			insertData = append(insertData, data)
 		}
@@ -152,7 +182,6 @@ func transactionDataCheck(lastBlockId int64) {
 				}
 				if tran.Block > 0 {
 					log.WithFields(log.Fields{"log hash doesn't exist": hex.EncodeToString(tran.Hash), "block": tran.Block}).Info("rollback transaction data")
-					tran.Block -= 1
 					err = tran.RollbackTransaction()
 					if err == nil {
 						transactionDataCheck(tran.Block)
@@ -174,7 +203,7 @@ func createTransactionDataBatches(dbTx *gorm.DB, data *[]TransactionData) error 
 	return dbTx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(data, 1000).Error
 }
 
-func UnmarshallBlockTxData(blockBuffer *bytes.Buffer) (map[string]TransactionData, error) {
+func UnmarshallBlockTxData(blockBuffer *bytes.Buffer, blockId int64) (map[string]TransactionData, error) {
 	var (
 		block = &types.BlockData{}
 	)
@@ -192,9 +221,17 @@ func UnmarshallBlockTxData(blockBuffer *bytes.Buffer) (map[string]TransactionDat
 		}
 		info.TxData = block.TxFullData[i]
 		info.Hash = tx.Hash()
+		info.Block = blockId
 
 		if tx.IsSmartContract() {
-			info.TxTime = MsToSeconds(tx.Timestamp())
+			if tx.SmartContract().TxSmart.UTXO != nil || tx.SmartContract().TxSmart.TransferSelf != nil {
+				info.Type = 1
+			}
+			info.TxTime = tx.Timestamp()
+		} else {
+			if blockId == 1 {
+				info.Type = 1
+			}
 		}
 		txList[hex.EncodeToString(tx.Hash())] = info
 	}
@@ -232,7 +269,10 @@ func UnmarshallTransaction(blockBuffer *bytes.Buffer) (*transaction.Transaction,
 	return transaction.UnmarshallTransaction(blockBuffer)
 }
 
-func IsUtxoTransaction(txData []byte) (bool, error) {
+func IsUtxoTransaction(txData []byte, block int64) (bool, error) {
+	if txData == nil {
+		return false, errors.New("[is utxo tx] tx data is null")
+	}
 	tx, err := UnmarshallTransaction(bytes.NewBuffer(txData))
 	if err != nil {
 		return false, err
@@ -241,6 +281,25 @@ func IsUtxoTransaction(txData []byte) (bool, error) {
 		if tx.SmartContract().TxSmart.UTXO != nil || tx.SmartContract().TxSmart.TransferSelf != nil {
 			return true, nil
 		}
+	} else {
+		if block == 1 {
+			return true, nil
+		}
 	}
 	return false, nil
+}
+
+func formatTxDataType(isUtxo bool) int {
+	if isUtxo {
+		return 1
+	}
+	return 0
+}
+
+func (p *TransactionData) GetFirstByType(blockId int64, txType int) (bool, error) {
+	return isFound(GetDB(nil).Order("block asc").Where("type = ? AND block > ?", txType, blockId).Take(p))
+}
+
+func (p *TransactionData) GetLastByType(txType int) (bool, error) {
+	return isFound(GetDB(nil).Where("type = ?", txType).Order("block desc,tx_time desc").Take(p))
 }

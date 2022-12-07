@@ -270,6 +270,7 @@ func InitGlobalSwitch() {
 	NodeReady = CandidateTableExist()
 	NftMinerReady = NftMinerTableIsExist()
 	VotingReady = VotingTableExist()
+	AssignReady = AssignTableExist()
 }
 
 func (ret *ScanOut) Changes() error {
