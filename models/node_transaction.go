@@ -59,7 +59,7 @@ func GetALLNodeTransactionList() error {
 				//if err != nil {
 				//	return err
 				//}
-				t, err := transaction.UnmarshallTransaction(bytes.NewBuffer(value.Data))
+				t, err := transaction.UnmarshallTransaction(bytes.NewBuffer(value.Data), false)
 				if err != nil {
 					//if t != nil {
 					//	transaction.MarkTransactionBad(t.DbTransaction, t.TxHash(), err.Error())

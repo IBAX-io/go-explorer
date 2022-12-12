@@ -473,7 +473,7 @@ func (si *spentInfoTxData) UnmarshalTransaction() (*utxoTxInfo, error) {
 	)
 	lt := &LogTransaction{}
 
-	tx, err := transaction.UnmarshallTransaction(bytes.NewBuffer(si.TxData))
+	tx, err := transaction.UnmarshallTransaction(bytes.NewBuffer(si.TxData), false)
 	if err != nil {
 		return nil, err
 	}
