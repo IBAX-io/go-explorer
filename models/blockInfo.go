@@ -128,7 +128,7 @@ func GetBlocksDetailedInfoHexByScanOut(mc *Block) (*BlockDetailedInfoHex, error)
 		transize int64
 	)
 	result := BlockDetailedInfoHex{}
-	blck, err := block.UnmarshallBlock(bytes.NewBuffer(mc.Data))
+	blck, err := block.UnmarshallBlock(bytes.NewBuffer(mc.Data), false)
 	if err != nil {
 		return &result, err
 	}
@@ -248,7 +248,7 @@ func GetBlocksTransactionInfoByBlockInfo(mc *Block) (*BlockDetailedInfoHex, erro
 		transize int64
 	)
 	result := BlockDetailedInfoHex{}
-	blck, err := block.UnmarshallBlock(bytes.NewBuffer(mc.Data))
+	blck, err := block.UnmarshallBlock(bytes.NewBuffer(mc.Data), false)
 	if err != nil {
 		return &result, err
 	}
@@ -322,7 +322,7 @@ func GetBlocksTransactionInfoByBlockInfo(mc *Block) (*BlockDetailedInfoHex, erro
 }
 
 func GetBlocksTransactionListByBlockInfo(mc *Block) (*[]TxDetailedInfoResponse, error) {
-	blck, err := block.UnmarshallBlock(bytes.NewBuffer(mc.Data))
+	blck, err := block.UnmarshallBlock(bytes.NewBuffer(mc.Data), false)
 	if err != nil {
 		return nil, err
 	}

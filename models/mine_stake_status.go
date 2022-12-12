@@ -67,7 +67,7 @@ func (m *MinePledgeStatus) GetCastNodeandGuardianNode() (int64, int64, int64, er
 		//}
 	}
 	if NftMinerReady {
-		err := GetDB(nil).Table("1_nft_miner_items").Count(&nftCount).Error
+		err := GetDB(nil).Table("1_nft_miner_items").Where("deleted = 0").Count(&nftCount).Error
 		if err != nil {
 			return honor, in, nftCount, err
 		}

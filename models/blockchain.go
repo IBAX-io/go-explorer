@@ -300,7 +300,7 @@ func GetBlocksDetailedInfoHex(bk *Block) (*BlockDetailedInfoHex, error) {
 	)
 	result := BlockDetailedInfoHex{}
 
-	blck, err := block.UnmarshallBlock(bytes.NewBuffer(bk.Data))
+	blck, err := block.UnmarshallBlock(bytes.NewBuffer(bk.Data), false)
 	if err != nil {
 		return &result, err
 	}
@@ -570,7 +570,7 @@ func getNodePkgInfo(nodePosition int64, consensusMode int32, ret []nodePkg) (dec
 }
 
 func GetBlocksContractNameList(bk *Block) (map[string]string, error) {
-	blck, err := block.UnmarshallBlock(bytes.NewBuffer(bk.Data))
+	blck, err := block.UnmarshallBlock(bytes.NewBuffer(bk.Data), false)
 	if err != nil {
 		return nil, err
 	}
@@ -614,7 +614,7 @@ func GetNodeBlockReplyRate(bk *Block) (string, error) {
 	if bk.ConsensusMode == 1 {
 		return "100", nil
 	}
-	blck, err := block.UnmarshallBlock(bytes.NewBuffer(bk.Data))
+	blck, err := block.UnmarshallBlock(bytes.NewBuffer(bk.Data), false)
 	if err != nil {
 		return "0", err
 	}

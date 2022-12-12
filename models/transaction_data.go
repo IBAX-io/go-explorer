@@ -215,7 +215,7 @@ func UnmarshallBlockTxData(blockBuffer *bytes.Buffer, blockId int64) (map[string
 	for i := 0; i < len(block.TxFullData); i++ {
 		var info TransactionData
 
-		tx, err := transaction.UnmarshallTransaction(bytes.NewBuffer(block.TxFullData[i]))
+		tx, err := transaction.UnmarshallTransaction(bytes.NewBuffer(block.TxFullData[i]), false)
 		if err != nil {
 			return nil, err
 		}
@@ -266,7 +266,7 @@ func GetUtxoTxContractNameByHash(hash []byte) string {
 }
 
 func UnmarshallTransaction(blockBuffer *bytes.Buffer) (*transaction.Transaction, error) {
-	return transaction.UnmarshallTransaction(blockBuffer)
+	return transaction.UnmarshallTransaction(blockBuffer, false)
 }
 
 func IsUtxoTransaction(txData []byte, block int64) (bool, error) {
