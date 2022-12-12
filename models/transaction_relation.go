@@ -279,9 +279,6 @@ func (p *txRelationInfo) getTransactionRelation(isUtxo bool) (*[]TransactionRela
 		if length == 0 {
 			return nil, fmt.Errorf("waiting utxo tx sync,hash:%s", hex.EncodeToString(p.Hash))
 		}
-		if length >= 3 {
-			fmt.Println("stop")
-		}
 		lastIndex := length - 1
 		for k, val := range h1 {
 			if k == 0 {

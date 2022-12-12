@@ -235,7 +235,7 @@ SELECT v1.id,v1.time,v1.tx,v1.node_position,v1.consensus_mode,coalesce((SELECT s
 	coalesce((SELECT count(1) FROM (SELECT ecosystem_id FROM log_transactions WHERE block = v1.id GROUP BY ecosystem_id)AS lg),0)eco_lib,
 	coalesce(CAST((SELECT min(recipient_id) FROM "1_history" WHERE block_id = v1.id AND type IN(12)) AS TEXT),'')recipient_id,
 	coalesce((SELECT sum(amount) FROM "1_history" WHERE block_id = v1.id AND type IN(12)),0)reward,coalesce(t2.address,'')address,coalesce(t2.api_address,'')api_address,
-	COALESCE(t2.id,0)hid,coalesce(node_name,'')node_name
+	COALESCE(t2.node_id,0)hid,coalesce(node_name,'')node_name
 FROM(
 		SELECT id,time,tx,node_position,consensus_mode FROM block_chain ORDER BY %s OFFSET ? LIMIT ?
 )AS v1

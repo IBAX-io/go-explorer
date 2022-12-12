@@ -292,6 +292,7 @@ ELSE
 	round(cast (count(1)*100 as numeric)/ cast( (SELECT max(id) FROM block_chain)  as numeric),2) 
 end as pkg_for,node_position AS node_position,count(*),key_id,consensus_mode
 FROM block_chain AS bk GROUP BY node_position,key_id,consensus_mode
+ORDER BY pkg_for DESC
 `).Find(&nodePkgList).Error; err != nil {
 		return nil, err
 	}
@@ -686,7 +687,7 @@ func GetHonorNodeMap() (*HonorNodeMapResponse, error) {
 	)
 	err := GetDB(nil).Raw(`
 SELECT t1.id,CASE WHEN t1.node_name='' THEN
-		'HONOR_NODE'|| CAST(t1.id AS TEXT)
+		'HONOR_NODE'|| CAST(t1.node_position AS TEXT)
 	ELSE
 		t1.node_name
 	END node_name,t1.api_address,t1.latitude,t1.longitude,t1.node_position,t1.consensus_mode,coalesce(t2.id,0) AS block,(SELECT count(1) FROM block_chain WHERE node_position = t1.node_position AND consensus_mode = t1.consensus_mode)node_block FROM(
