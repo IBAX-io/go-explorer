@@ -112,7 +112,7 @@ func (p *NftMinerItems) ParseSvgParams() (string, error) {
 	return fmt.Sprintf(app.Value, ret.Point, "#"+strconv.FormatInt(ret.Number, 10), formatLocation(ret.Location), smart.Date(SvgTimeFormat, MsToSeconds(ret.DateCreated)), ret.Owner, star), nil
 }
 
-//formatLocation example:NorthAmerica result:North America
+// formatLocation example:NorthAmerica result:North America
 func formatLocation(location string) string {
 	strs, indexList := StrReplaceAllString(location)
 	if strs.CapitalLetter >= 2 {
@@ -410,10 +410,13 @@ func (p *NftMinerItems) GetNftMetaverse() (*NftMinerMetaverseInfoResponse, error
 		return &rets, err
 	}
 	if f {
-		rets.Count = m.NftMinerCount
 		rets.BlockReward = m.NftBlockReward
 		rets.StakeAmounts = m.NftStakeAmounts
 		rets.HalveNumber = m.HalveNumber
+	}
+	err = GetDB(nil).Table("1_nft_miner_items").Count(&rets.Count).Error
+	if err != nil {
+		return &rets, err
 	}
 
 	var his History
