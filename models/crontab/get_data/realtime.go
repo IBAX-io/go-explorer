@@ -50,4 +50,8 @@ func realTimeDataServer() {
 	go models.SyncEcosystemInfo()
 	go models.SendUtxoTxSyncSignal()
 	go models.SendTxRelationSignal()
+	go models.GetAssignTotalBalanceAmount()
+	go models.GetNftMinerTotalSupply()
+	go models.GetAirdropStakedAllTotal()
+	go models.GetAirdropLockAllTotal()
 }

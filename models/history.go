@@ -161,14 +161,12 @@ type ContractTxDetail struct {
 }
 
 type HistoryExplorer struct {
-	//Comment string      `json:"comment"`
 	Fees   HistoryItem `json:"fees"`
 	Taxes  HistoryItem `json:"taxes"`
 	GasFee struct {
 		Amount      decimal.Decimal `json:"amount"`
 		TokenSymbol string          `json:"token_symbol,omitempty"`
 	} `json:"gas_fee"`
-	//TxFee     HistoryItem  `json:"tx_fee"`
 	Detail    transDetail  `json:"detail"`
 	EcoDetail *ecoExplorer `json:"eco_detail,omitempty"`
 	Status    int32        `json:"status"`
@@ -934,115 +932,19 @@ func getAccountTxCount(ecosystem int64, keyId int64) (inTx, outTx int64, err err
 		outSqlQuery string
 	)
 
+	//in tx
+	inSqlQuery = `
+	SELECT count(1) FROM transaction_relation 
+	WHERE recipient_ids LIKE ? AND sender_ids NOT LIKE ?
+`
+	//out tx
+	outSqlQuery = `
+	SELECT count(1) FROM transaction_relation 
+	WHERE sender_ids LIKE ?
+`
 	if ecosystem > 0 {
-		//in out tx
-		inSqlQuery = `
-SELECT count(1) FROM(
-	SELECT v1.*,CASE WHEN COALESCE(v2.sender_id,'') = '' THEN
-		CAST(v1.address AS VARCHAR)
-	ELSE
-	 v2.sender_id
-	END AS sender_id,
-	CASE WHEN v2.sender_id is NULL THEN 
-		v1.ecosystem_id
-	ELSE
-		v2.ecosystem
-	END AS ecosystem,
-	v2.recipient_id FROM(
-		SELECT hash,block,address,ecosystem_id FROM log_transactions
-	)AS v1
-	LEFT JOIN(
-		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
-		SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
-	)AS v1 GROUP BY hash,ecosystem
-		UNION
-	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
-		SELECT recipient_id,sender_id, hash,ecosystem FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
-	)AS v1 GROUP BY hash,ecosystem
-	
-	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block ASC
-)AS v1
-WHERE recipient_id like ? AND sender_id NOT like ?
-`
-		outSqlQuery = `
-SELECT count(1) FROM(
-	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
-		CAST(v1.address AS VARCHAR)
-	ELSE
-	 v2.sender_id
-	END AS sender_id,v2.recipient_id,
-	CASE WHEN v2.sender_id is NULL THEN 
-		v1.ecosystem_id
-	ELSE
-		v2.ecosystem
-	END AS ecosystem
-	FROM(
-		SELECT hash,block,address,ecosystem_id FROM log_transactions
-	)AS v1
-	LEFT JOIN(
-		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
-		SELECT recipient_id,sender_id,txhash AS hash,ecosystem FROM "1_history" GROUP BY txhash,ecosystem,recipient_id,sender_id
-	)AS v1 GROUP BY hash,ecosystem
-		UNION
-	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash,ecosystem FROM(
-		SELECT recipient_id,sender_id, hash,ecosystem FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
-	)AS v1 GROUP BY hash,ecosystem
-	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block ASC
-)AS v1
-WHERE sender_id LIKE ?
-`
 		inSqlQuery += fmt.Sprintf(" AND ecosystem = %d", ecosystem)
 		outSqlQuery += fmt.Sprintf(" AND ecosystem = %d", ecosystem)
-	} else {
-		inSqlQuery = `
-SELECT count(1) FROM(
-	SELECT v1.*,CASE WHEN COALESCE(v2.sender_id,'') = '' THEN
-		CAST(v1.address AS VARCHAR)
-	ELSE
-	 v2.sender_id
-	END AS sender_id,
-	v2.recipient_id FROM(
-		SELECT hash,block,address FROM log_transactions
-	)AS v1
-	LEFT JOIN(
-		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
-		SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
-	)AS v1 GROUP BY hash
-		UNION
-	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
-		SELECT recipient_id,sender_id, hash FROM spent_info_history GROUP BY hash,recipient_id,sender_id
-	)AS v1 GROUP BY hash
-	
-	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block ASC
-)AS v1
-WHERE recipient_id like ? AND sender_id NOT like ?
-`
-		outSqlQuery = `
-SELECT count(1) FROM(
-	SELECT v1.*,CASE WHEN v2.sender_id is NULL THEN
-		CAST(v1.address AS VARCHAR)
-	ELSE
-	 v2.sender_id
-	END AS sender_id,v2.recipient_id
-	FROM(
-		SELECT hash,block,address FROM log_transactions
-	)AS v1
-	LEFT JOIN(
-		SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
-		SELECT recipient_id,sender_id,txhash AS hash FROM "1_history" GROUP BY txhash,recipient_id,sender_id
-	)AS v1 GROUP BY hash
-		UNION
-	SELECT array_to_string(array_agg(sender_id),',') AS sender_id,array_to_string(array_agg(recipient_id),',') AS recipient_id,hash FROM(
-		SELECT recipient_id,sender_id, hash FROM spent_info_history GROUP BY hash,ecosystem,recipient_id,sender_id
-	)AS v1 GROUP BY hash
-	)AS v2 ON(v2.hash = v1.hash)
-	ORDER BY block ASC
-)AS v1
-WHERE sender_id LIKE ?
-`
 	}
 	err = GetDB(nil).Raw(inSqlQuery, keyIdLike, keyIdLike).Row().Scan(&inTx)
 	if err != nil {
@@ -1478,7 +1380,7 @@ func (th *History) Get24HourTxAmount() (string, error) {
 SELECT COALESCE(sum(amount),0)+
 	(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE type <> 1 AND created_at >= ? AND ecosystem = 1 ) AS amount 
 FROM "1_history" WHERE created_at >= ? AND ecosystem = 1 AND type <> 24
-`, t1.Unix(), t1.UnixMilli()).Scan(&res).Error
+`, t1.UnixMilli(), t1.UnixMilli()).Scan(&res).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err}).Warn("Get scan 24 Hour tx amount err")
 		return "0", err

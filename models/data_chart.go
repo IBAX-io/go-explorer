@@ -264,7 +264,7 @@ SELECT COALESCE(v1.days,v2.days)AS days,COALESCE(v1.amount,0)AS nft_mining,COALE
 )AS v1
 FULL JOIN(
 	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount 
-	FROM "1_history" WHERE ecosystem = 1 AND type IN(8,9,10,11,25,26,27,30,31) GROUP BY days ORDER BY days DESC limit ?
+	FROM "1_history" WHERE ecosystem = 1 AND type IN(8,9,10,11,25,26,27,30,31,34) GROUP BY days ORDER BY days DESC limit ?
 )AS v2 ON(v2.days = v1.days)
 `, getDays, getDays).Find(&list).Error
 	if err != nil {
@@ -424,30 +424,57 @@ FROM "1_history" AS h4
 
 func GetTopTenStakingAccount() ([]StakingAccountResponse, error) {
 	var (
-		rets         []StakingAccountResponse
-		totalStaking SumAmount
-		key          Key
+		rets           []StakingAccountResponse
+		totalStaking   SumAmount
+		key            Key
+		airdropStaking SumAmount
 	)
 
-	err := GetDB(nil).Raw(`
+	if NftMinerReady || NodeReady {
+		err := GetDB(nil).Raw(`
 SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
 		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
 		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999')) FROM "1_keys" WHERE ecosystem = 1
 `).Take(&totalStaking.Sum).Error
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Staking Account Total Staking Amount Failed")
-		return nil, err
-	}
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Staking Account Total nft or node Staking Amount Failed")
+			return nil, err
+		}
 
-	err = GetDB(nil).Table(key.TableName()).
-		Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
+		if AirdropReady {
+			err = GetDB(nil).Debug().Table(`"1_keys" as k1`).
+				Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
 		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount`).
-		Where("ecosystem = 1").Order("stake_amount desc").Limit(10).Find(&rets).Error
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Staking Account list Failed")
-		return nil, err
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+		COALESCE((SELECT stake_amount FROM "1_airdrop_info" as ao WHERE ao.account = k1.account),0)
+		AS stake_amount
+	`).Where("ecosystem = 1").Order("stake_amount desc").Limit(10).Find(&rets).Error
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Staking Account list Failed")
+				return nil, err
+			}
+		} else {
+			err = GetDB(nil).Table(key.TableName()).
+				Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999')
+		AS stake_amount
+	`).Where("ecosystem = 1").Order("stake_amount desc").Limit(10).Find(&rets).Error
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Staking Account list Failed")
+				return nil, err
+			}
+		}
 	}
+	if AirdropReady {
+		err := GetDB(nil).Model(AirdropInfo{}).Select("sum(stake_amount)").Take(&airdropStaking).Error
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Staking Account Total airdrop Staking Amount Failed")
+			return nil, err
+		}
+	}
+	totalStaking.Sum = totalStaking.Sum.Add(airdropStaking.Sum)
+
 	zero := decimal.New(0, 0)
 	if totalStaking.Sum.GreaterThan(zero) {
 		for i := 0; i < len(rets); i++ {
@@ -953,7 +980,6 @@ func addTimeFromLayout(layout string, startTime time.Time) time.Time {
 func GetHistoryNewEcosystemChangeChart() (DaysNumberResponse, error) {
 	var (
 		rets DaysNumberResponse
-		bk   Block
 	)
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	today := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
@@ -964,11 +990,6 @@ func GetHistoryNewEcosystemChangeChart() (DaysNumberResponse, error) {
 SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,count(1)num FROM "1_history" 
 WHERE comment = 'taxes for execution of @1NewEcosystem contract' AND type = 1 GROUP BY days ORDER BY days ASC
 `
-	firstSys, err := bk.GetSystemTime()
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get History New Ecosystem Change Chart Sys Time Failed")
-		return rets, err
-	}
 
 	list, err := FindDaysNumber(sql)
 	if err != nil {
@@ -986,7 +1007,7 @@ WHERE comment = 'taxes for execution of @1NewEcosystem contract' AND type = 1 GR
 		return 0
 	}
 	if len(list) > 0 {
-		ft := time.Unix(firstSys, 0)
+		ft := time.Unix(FirstBlockTime, 0)
 		startTime := time.Date(ft.Year(), ft.Month(), ft.Day(), 0, 0, 0, 0, time.Local)
 		var isFirst = true
 		for startTime.Unix() <= today.Unix() {

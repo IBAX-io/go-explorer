@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/IBAX-io/go-ibax/packages/smart"
+	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"reflect"
@@ -50,7 +51,10 @@ type StrReplaceStruct struct {
 	OtherString      int `json:"other_string"`
 }
 
-var NftMinerReady bool
+var (
+	NftMinerReady       bool
+	NftMinerTotalSupply decimal.Decimal
+)
 
 func (p *NftMinerItems) TableName() string {
 	return "1_nft_miner_items"
@@ -595,4 +599,18 @@ SELECT v3.nation as region,max(v3.total)total,count(v3.token_id)staking_number,s
 	rets.List = list
 
 	return &rets, nil
+}
+
+func GetNftMinerTotalSupply() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
+	if NftMinerReady {
+		err := GetDB(nil).Model(AppParam{}).Select("value").
+			Where("name = 'nft_miner_total_supply' AND ecosystem = 1").Take(&NftMinerTotalSupply).Error
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Get nft miner total supply Failed")
+		}
+	}
 }

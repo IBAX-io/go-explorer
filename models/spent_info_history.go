@@ -31,7 +31,7 @@ type SpentInfoHistory struct {
 	Hash             []byte `gorm:"column:hash;not null;index"`
 	CreatedAt        int64  `gorm:"column:created_at;not null"`
 	Ecosystem        int64  `gorm:"not null"`
-	Type             int    `gorm:"not null"` //1:UTXO_TransferSelf 2:UTXO_Tx
+	Type             int    `gorm:"not null"` //1:UTXO_TransferSelf 2:UTXO_Tx 3:fees 4:taxes 5:startUp 6:combustion
 	SubType          int    `gorm:"not null"` //type is 1 then 1:AccountUTXO 2:UTXO-Account
 }
 

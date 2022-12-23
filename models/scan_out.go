@@ -271,6 +271,7 @@ func InitGlobalSwitch() {
 	NftMinerReady = NftMinerTableIsExist()
 	VotingReady = VotingTableExist()
 	AssignReady = AssignTableExist()
+	AirdropReady = AirdropTableExist()
 }
 
 func (ret *ScanOut) Changes() error {

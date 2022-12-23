@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"sync"
 )
@@ -14,7 +15,13 @@ var (
 	ecoCascades       *EcosystemInfoMap
 	registrationTypes *EcosystemInfoMap
 	registrations     *EcosystemInfoMap
+
+	allKeyAmount *ecoAmountObject //key:ecosystem value:decimal.Decimal all keys circulations and staking amount
 )
+
+type ecoAmountObject struct {
+	sync.Map
+}
 
 type EcosystemInfoMap struct {
 	sync.Map
@@ -98,6 +105,7 @@ func InitEcosystemInfo() {
 	ecoCascades = &EcosystemInfoMap{}
 	registrationTypes = &EcosystemInfoMap{}
 	registrations = &EcosystemInfoMap{}
+	allKeyAmount = &ecoAmountObject{}
 
 	for k, v := range countryMap {
 		countrys.Store(k, v)
@@ -139,6 +147,17 @@ func (p *EcosystemInfoMap) GetId(infoId int, defaultValue string) string {
 		return value.(string)
 	}
 	return defaultValue
+}
+
+func (p *ecoAmountObject) Get(ecosystem int64) decimal.Decimal {
+	if p == nil {
+		return decimal.Zero
+	}
+	value, ok := p.Load(ecosystem)
+	if ok {
+		return value.(decimal.Decimal)
+	}
+	return decimal.Zero
 }
 
 func GetAllTokenSymbol() ([]Ecosystem, error) {
@@ -183,4 +202,45 @@ func SyncEcosystemInfo() {
 		}
 	}
 
+}
+
+func GetAllKeysTotalAmount(ecosystem int64) error {
+	var totalAmount decimal.Decimal
+
+	err := GetDB(nil).Raw(`
+SELECT sum(amount) +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?),0) AS total_amount
+FROM "1_keys" WHERE ecosystem = ?
+`, ecosystem, ecosystem).Take(&totalAmount).Error
+	if err != nil {
+		return err
+	}
+
+	if ecosystem == 1 {
+		//all staking
+		if NodeReady || NftMinerReady {
+			var staking decimal.Decimal
+			err = GetDB(nil).Raw(`
+					SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+						to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+						to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999'))
+					FROM "1_keys" WHERE ecosystem = 1
+			`).Take(&staking).Error
+			if err != nil {
+				return err
+			}
+			totalAmount = totalAmount.Add(staking)
+		}
+		if AirdropReady {
+			var staking decimal.Decimal
+			err = GetDB(nil).Model(AirdropInfo{}).Select("sum(stake_amount)").Take(&staking).Error
+			if err != nil {
+				return err
+			}
+			totalAmount = totalAmount.Add(staking)
+		}
+
+	}
+	allKeyAmount.Store(ecosystem, totalAmount)
+	return nil
 }

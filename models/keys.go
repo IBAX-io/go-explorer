@@ -123,8 +123,8 @@ type EcosyKeyList struct {
 	AccountName  string          `json:"account_name"`
 	Amount       string          `json:"amount"`
 	AccountedFor decimal.Decimal `json:"accounted_for"`
-	StakeAmount  string          `json:"stake_amount"`
-	LockAmount   string          `json:"lock_amount"`
+	StakeAmount  decimal.Decimal `json:"stake_amount"`
+	LockAmount   decimal.Decimal `json:"lock_amount"`
 	TokenSymbol  string          `json:"token_symbol"`
 }
 
@@ -326,22 +326,32 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 		}
 	}
 
-	t1 := time.Now()
-	//
 	ts := &History{}
 	dh, err := ts.GetAccountHistoryTotals(m.Ecosystem, keyId)
 	if err != nil {
 		return &d, err
 	}
 
-	t2 := time.Now()
-	fmt.Printf("pay utxo time:%f\n", t2.Sub(t1).Seconds())
-
-	ag := &AssignInfo{}
-	lockAmount, err := ag.GetBalance(nil, wallet)
-	if err != nil {
-		return &d, err
+	if AssignReady {
+		ag := &AssignInfo{}
+		lockAmount, err := ag.GetBalance(nil, wallet)
+		if err != nil {
+			return &d, err
+		}
+		d.LockAmount = d.LockAmount.Add(lockAmount)
 	}
+	if AirdropReady {
+		airdrop := &AirdropInfo{}
+		f, err = airdrop.Get(wallet)
+		if err != nil {
+			return nil, err
+		}
+		if f {
+			d.LockAmount = d.LockAmount.Add(airdrop.BalanceAmount)
+			d.StakeAmount = d.StakeAmount.Add(airdrop.StakeAmount)
+		}
+	}
+
 	if m.Lock != "" {
 		var stake KeyLocks
 		if err := json.Unmarshal([]byte(m.Lock), &stake); err != nil {
@@ -351,7 +361,7 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 		referendumLock, _ := decimal.NewFromString(stake.CandidateReferendum)
 		substituteLock, _ := decimal.NewFromString(stake.CandidateSubstitute)
 
-		d.StakeAmount = nftLock.Add(referendumLock).Add(substituteLock)
+		d.StakeAmount = d.StakeAmount.Add(nftLock.Add(referendumLock).Add(substituteLock))
 	}
 
 	d.Transaction = dh.Transaction
@@ -360,7 +370,6 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 	d.InAmount = dh.InAmount
 	d.OutAmount = dh.OutAmount
 	d.TxAmount = d.InAmount.Add(d.OutAmount).String()
-	d.LockAmount = lockAmount
 
 	accountAmount := decimal.Zero
 	if m.Amount.GreaterThan(decimal.Zero) {
@@ -565,6 +574,18 @@ k1.amount+(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx
 					return nil, err
 				}
 				da[k].LockAmount = lockAmount
+
+				if AirdropReady {
+					airdrop := &AirdropInfo{}
+					f, err := airdrop.Get(v.Account)
+					if err != nil {
+						return nil, err
+					}
+					if f {
+						da[k].LockAmount = da[k].LockAmount.Add(airdrop.BalanceAmount)
+						da[k].StakeAmount = da[k].StakeAmount.Add(airdrop.StakeAmount)
+					}
+				}
 			}
 			da[k].Name = EcoNames.Get(v.Ecosystem)
 			da[k].TokenSymbol = Tokens.Get(v.Ecosystem)
@@ -632,21 +653,12 @@ func (m *Key) GetStakeAmount() (string, error) {
 	return agm.String(), nil
 }
 
-func (m *Key) GetAccountList(page, limit int, reqOrder string, ecosystem int64) (*KeysListResult, error) {
+func (m *Key) GetAccountList(page, limit int, ecosystem int64) (*KeysListResult, error) {
 
 	var (
 		total int64
 		ret   KeysListResult
-		order string
 	)
-	if reqOrder == "" {
-		order = "amount desc"
-	} else {
-		if !CheckSql(reqOrder) {
-			return nil, errors.New("order params invalid")
-		}
-		order = reqOrder
-	}
 	ret.Limit = limit
 	ret.Page = page
 
@@ -658,63 +670,79 @@ func (m *Key) GetAccountList(page, limit int, reqOrder string, ecosystem int64) 
 	}
 	ret.Total = total
 
-	var totalAmount decimal.Decimal
-	err = GetDB(nil).Raw(`
-SELECT sum(k2.amount)+sum(to_number(coalesce(NULLIF(k2.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-	to_number(coalesce(NULLIF(k2.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-	to_number(coalesce(NULLIF(k2.lock->>'candidate_substitute',''),'0'),'999999999999999999999999')) +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?),0) AS total_amount
-FROM "1_keys" AS k2 WHERE k2.ecosystem = ?
-`, ecosystem, ecosystem).Take(&totalAmount).Error
-	if err != nil {
-		return nil, err
-	}
+	totalAmount := allKeyAmount.Get(ecosystem)
 	if totalAmount.Equal(decimal.Zero) {
 		return &ret, nil
 	}
 
-	if NftMinerReady || NodeReady {
-		err = GetDB(nil).Raw(fmt.Sprintf(`
-SELECT v1.account,v1.account_name,v1.ecosystem,v1.amount+
+	if (NftMinerReady || NodeReady) && ecosystem == 1 {
+		if AirdropReady {
+			err = GetDB(nil).Raw(`
+SELECT v1.account,v1.ecosystem,v1.amount+
 	v1.stake_amount +
-	coalesce((SELECT CASE WHEN sender_id = v1.id THEN
-		sender_balance
-	ELSE
-		recipient_balance
-	END AS balance
-	FROM spent_info_history 
-	WHERE(recipient_id = v1.id OR sender_id = v1.id) AND ecosystem = v1.ecosystem ORDER BY id DESC LIMIT 1),0) AS amount,
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name,
 v1.stake_amount FROM(
 	SELECT id,account,ecosystem,
-		coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = k1.ecosystem AND ms.account = k1.account LIMIT 1),'iName') as account_name,
-		k1.amount,
+		amount,
 
-		to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
+		AS stake_amount
 
-		FROM "1_keys" as k1 WHERE ecosystem = ?
+		FROM "1_keys" AS k1 WHERE ecosystem = ?
  )AS v1
- ORDER BY %s OFFSET ? LIMIT ?
-`, order), ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
-	} else {
-		err = GetDB(nil).Raw(fmt.Sprintf(`
-SELECT v1.account,v1.account_name,v1.ecosystem,v1.amount +
-	coalesce((SELECT CASE WHEN sender_id = v1.id THEN
-		sender_balance
-	ELSE
-		recipient_balance
-	END AS balance
-	FROM spent_info_history 
-	WHERE(recipient_id = v1.id OR sender_id = v1.id) AND ecosystem = v1.ecosystem ORDER BY id DESC LIMIT 1),0) AS amount,
+ ORDER BY amount desc OFFSET ? LIMIT ?
+`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
+		} else {
+			err = GetDB(nil).Raw(`
+SELECT v1.account,v1.ecosystem,v1.amount+
+	v1.stake_amount +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name,
 v1.stake_amount FROM(
 	SELECT id,account,ecosystem,
-		coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = k1.ecosystem AND ms.account = k1.account LIMIT 1),'iName') as account_name,
+		amount,
+
+		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+
+		FROM "1_keys" WHERE ecosystem = ?
+ )AS v1
+ ORDER BY amount desc OFFSET ? LIMIT ?
+`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
+		}
+	} else {
+		if AirdropReady && ecosystem == 1 {
+			err = GetDB(nil).Raw(`
+SELECT v1.account,v1.ecosystem,v1.amount + v1.stake_amount +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name,
+	v1.stake_amount
+FROM(
+	SELECT id,account,ecosystem,
+		amount,
+		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
+		FROM "1_keys" as k1 WHERE ecosystem = ?
+)AS v1
+ORDER BY amount desc OFFSET ? LIMIT ?
+`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
+		} else {
+			err = GetDB(nil).Raw(`
+SELECT v1.account,v1.ecosystem,v1.amount +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name 
+FROM(
+	SELECT id,account,ecosystem,
 		k1.amount
 		FROM "1_keys" as k1 WHERE ecosystem = ?
- )AS v1
- ORDER BY %s OFFSET ? LIMIT ?
-`, order), ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
+)AS v1
+ORDER BY amount desc OFFSET ? LIMIT ?
+`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -728,7 +756,7 @@ v1.stake_amount FROM(
 				if err != nil {
 					return &ret, err
 				}
-				ret.Rets[i].LockAmount = ba.String()
+				ret.Rets[i].LockAmount = ret.Rets[i].LockAmount.Add(ba)
 			}
 		}
 		ret.Rets[i].TokenSymbol = tokenSymbol
@@ -1030,6 +1058,17 @@ sender_id = k1.id OR recipient_id = k1.id AND ecosystem = k1.ecosystem ORDER BY 
 		}
 		rets.LockAmount = lockAmount
 
+	}
+	if AirdropReady {
+		airdrop := &AirdropInfo{}
+		f, err = airdrop.Get(account)
+		if err != nil {
+			return rets, err
+		}
+		if f {
+			rets.LockAmount = rets.LockAmount.Add(airdrop.BalanceAmount)
+			rets.StakeAmount = rets.StakeAmount.Add(airdrop.StakeAmount)
+		}
 	}
 
 	rets.TokenSymbol = Tokens.Get(ecosystem)
