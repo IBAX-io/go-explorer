@@ -26,7 +26,7 @@ func GetAccountList(c *gin.Context) {
 		return
 	}
 	ts := &models.Key{}
-	rets, err := ts.GetAccountList(req.Page, req.Limit, req.Order, req.Ecosystem)
+	rets, err := ts.GetAccountList(req.Page, req.Limit, req.Ecosystem)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)

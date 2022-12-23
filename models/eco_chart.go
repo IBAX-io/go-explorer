@@ -15,13 +15,13 @@ import (
 	"time"
 )
 
+var (
+	newCirculationsType = []int{8, 9, 10, 11, 12, 14, 21, 22, 23, 25, 26, 27, 30, 31, 34, 35}
+)
+
 type DaysAmount struct {
 	Days   string          `gorm:"column:days"`
 	Amount decimal.Decimal `gorm:"column:amount"`
-}
-
-func SyncChartDataMain() {
-
 }
 
 func GetDaysAmount(dayTime int64, list []DaysAmount) string {
@@ -120,7 +120,6 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 	var (
 		cycleDay     int64
 		timeDbFormat string
-		bk           Block
 		his          History
 		ret          EcoCirculationsResponse
 		err          error
@@ -129,12 +128,7 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 	tz := time.Now()
 
 	if ecosystem == 1 {
-		firstBk, err := bk.GetSystemTime()
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart system time Failed")
-			return ret, err
-		}
-		cycleDay = int64(time.Unix(tz.Unix(), 0).Sub(time.Unix(firstBk, 0)).Hours() / 24)
+		cycleDay = int64(time.Unix(tz.Unix(), 0).Sub(time.Unix(FirstBlockTime, 0)).Hours() / 24)
 	} else {
 		f, err := isFound(GetDB(nil).Select("created_at").Where("type = 6").First(&his))
 		if err != nil {
@@ -154,9 +148,9 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 		LockAmount       decimal.Decimal
 	}
 	type nowChartDataResponse struct {
-		Circulations          string
+		Circulations          decimal.Decimal
 		StakeAmount           decimal.Decimal
-		LockAmount            string
+		LockAmount            decimal.Decimal
 		NftMinerBalanceSupply string
 		BurningTokens         string
 		Combustion            string
@@ -228,15 +222,23 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 
 	if ecosystem == 1 {
 		//get circulations
-		err = GetDB(nil).Raw(`
-SELECT sum(amount)+
-	COALESCE((SELECT sum(output_value) FROM "spent_info" 
-	WHERE input_tx_hash is null AND ecosystem = 1),0) AS circulations
-FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <> 0
-`).Take(&nowChart.Circulations).Error
-		if err = handledErr(err, "get circulations"); err != nil {
+		//utxo account circulations
+		var utxo SpentInfo
+		var utxoTotal decimal.Decimal
+		err = GetDB(nil).Table(utxo.TableName()).Select("sum(output_value)").
+			Where("input_tx_hash is null AND ecosystem = 1").Take(&utxoTotal).Error
+		if err = handledErr(err, "get utxo circulations"); err != nil {
 			return ret, err
 		}
+		//contract account circulations
+		var k1 Key
+		var contractTotal decimal.Decimal
+		err = GetDB(nil).Table(k1.TableName()).Select("sum(amount)").
+			Where("ecosystem = 1 AND id <> 0 AND id <> 5555").Take(&contractTotal).Error
+		if err = handledErr(err, "get contract circulations"); err != nil {
+			return ret, err
+		}
+		nowChart.Circulations = utxoTotal.Add(contractTotal)
 
 		//node staking
 		if NodeReady {
@@ -249,6 +251,7 @@ FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <
 				return ret, err
 			}
 		}
+
 		if NftMinerReady {
 			var app AppParam
 			f, err := app.GetByName(1, "nft_miner_balance_supply")
@@ -259,6 +262,7 @@ FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <
 				nowChart.NftMinerBalanceSupply = app.Value
 			}
 
+			//nft staking
 			var staking decimal.Decimal
 			err = GetDB(nil).Raw(`
 		SELECT coalesce(sum(stake_amount),0)AS staking FROM "1_nft_miner_staking" WHERE staking_status = 1`).
@@ -271,23 +275,28 @@ FROM "1_keys" AS k1 WHERE ecosystem = 1 and deleted = 0 and blocked = 0 AND id <
 		} else {
 			nowChart.NftMinerBalanceSupply = decimal.Zero.String()
 		}
-		if AssignReady {
-			var lockAmount string
-			err = GetDB(nil).Raw(`
-SELECT CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_foundation' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_partners' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round1' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round2' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_public_round' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_dev_team' AND ecosystem = 1) as numeric)+
-	(SELECT COALESCE(sum(balance_amount),0) FROM "1_assign_info") AS lock_amount
-`).Take(&lockAmount).Error
-			if err = handledErr(err, "get freeze amount"); err != nil {
+
+		if AirdropReady {
+			//airdrop lock
+			var lockAmount decimal.Decimal
+			var airdrop AirdropInfo
+			err = GetDB(nil).Table(airdrop.TableName()).Select("COALESCE(sum(balance_amount),0)").Take(&lockAmount).Error
+			if err = handledErr(err, "get airdrop lock amount"); err != nil {
 				return ret, err
 			}
-			nowChart.LockAmount = lockAmount
-		} else {
-			nowChart.LockAmount = decimal.Zero.String()
+			nowChart.LockAmount = nowChart.LockAmount.Add(lockAmount)
+
+			//airdrop staking
+			var staking decimal.Decimal
+			err = GetDB(nil).Model(AirdropInfo{}).Select("coalesce(sum(stake_amount),0)").Take(&staking).Error
+			if err = handledErr(err, "get airdrop staking"); err != nil {
+				return ret, err
+			}
+			nowChart.StakeAmount = nowChart.StakeAmount.Add(staking)
+		}
+
+		if AssignReady {
+			nowChart.LockAmount = nowChart.LockAmount.Add(AssignTotalBalance)
 		}
 		nowChart.BurningTokens = decimal.Zero.String()
 		nowChart.Combustion = decimal.Zero.String()
@@ -312,15 +321,14 @@ LEFT JOIN(
 )AS v2 ON(v1.eco_id = v2.ecosystem)
 `, ecosystem, ecosystem, ecosystem).Take(&nowChart).Error
 		nowChart.NftMinerBalanceSupply = decimal.Zero.String()
-		nowChart.LockAmount = decimal.Zero.String()
 		if err = handledErr(err, "get ecosystem now circulations"); err != nil {
 			return ret, err
 		}
 	}
-	ret.Circulations = nowChart.Circulations
+	ret.Circulations = nowChart.Circulations.String()
 	ret.TokenSymbol = nowChart.TokenSymbol
 	ret.StakeAmount = nowChart.StakeAmount.String()
-	ret.LockAmount = nowChart.LockAmount
+	ret.LockAmount = nowChart.LockAmount.String()
 	ret.NftBalanceSupply = nowChart.NftMinerBalanceSupply
 	ret.Combustion = nowChart.Combustion
 	ret.BurningTokens = nowChart.BurningTokens
@@ -329,13 +337,26 @@ LEFT JOIN(
 	ret.Emission = nowChart.Emission
 	//get In the day Circulations
 	if ecosystem == 1 {
+		if NftMinerTotalSupply.Equal(decimal.Zero) {
+			GetNftMinerTotalSupply()
+		}
+		if AssignTotalBalance.Equal(decimal.Zero) {
+			GetAssignTotalBalanceAmount()
+		}
+		var unLockType []int
 		if AssignReady {
-			err = GetDB(nil).Raw(`
+			unLockType = append(unLockType, 8, 9, 10, 11, 25, 26, 27, 30, 31)
+		}
+		if AirdropReady {
+			unLockType = append(unLockType, 34)
+		}
+		if len(unLockType) > 0 {
+			err = GetDB(nil).Raw(fmt.Sprintf(`
 SELECT cir.days,cir.circulations,COALESCE(sy.nft_balance_supply,0)nft_balance_supply,COALESCE(ai.lock_amount,0)lock_amount
  FROM (
 	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
 	to_char(to_timestamp(created_at/1000),?) AS days
-	FROM "1_history" WHERE type IN(4,12,14,21,23,22,8,9,10,11,25,26,27,30,31) AND ecosystem = ?
+	FROM "1_history" WHERE type IN(?) AND ecosystem = 1
 	GROUP BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
 			5250000000000000000+(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS circulations
@@ -344,44 +365,38 @@ SELECT cir.days,cir.circulations,COALESCE(sy.nft_balance_supply,0)nft_balance_su
 LEFT JOIN(
 	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
 	to_char(to_timestamp(created_at/1000),?) AS days
-	FROM "1_history" WHERE type IN(4,12) AND ecosystem = ?
+	FROM "1_history" WHERE type IN(12) AND ecosystem = 1
 	GROUP BY days
 	ORDER BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
-			CAST((SELECT value AS nft_miner_total_supply FROM "1_app_params" WHERE "name" = 'nft_miner_total_supply' AND ecosystem = s1.ecosystem) as numeric)-
+			%s-
 				(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS nft_balance_supply
 	FROM "1_history" AS s1 
 )AS sy ON(sy.days = cir.days)
 LEFT JOIN(
 	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
 	to_char(to_timestamp(created_at/1000),?) AS days
-	FROM "1_history" WHERE type IN(4,8,9,10,11,25,26,27,30,31) AND ecosystem = ?
+	FROM "1_history" WHERE type IN(?) AND ecosystem = 1
 	GROUP BY days
 	ORDER BY days)
 	SELECT s3.days,s3.amount,s3.ecosystem,
-			(CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_foundation' AND ecosystem = s3.ecosystem) as numeric)+
-			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_partners' AND ecosystem = s3.ecosystem) as numeric)+
-			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round1' AND ecosystem = s3.ecosystem) as numeric)+
-			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round2' AND ecosystem = s3.ecosystem) as numeric)+
-			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_public_round' AND ecosystem = s3.ecosystem) as numeric)+
-			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_dev_team' AND ecosystem = s3.ecosystem) as numeric)+
-			(SELECT sum(total_amount) FROM "1_assign_info"))-
+			%s-
 			(SELECT SUM(amount) FROM "1_history" s4 WHERE s4.days <= s3.days AND SUBSTRING(s3.days,0,5) = SUBSTRING(s4.days,0,5)) AS lock_amount
 	FROM "1_history" AS s3
 )AS ai ON(ai.days = cir.days)
 ORDER BY cir.days asc
-`, timeDbFormat, ecosystem, timeDbFormat, ecosystem, timeDbFormat, ecosystem).Find(&cir).Error
+`, NftMinerTotalSupply.String(), AssignTotalBalance.Add(AirdropLockAll).String()),
+				timeDbFormat, newCirculationsType, timeDbFormat, timeDbFormat, unLockType).Find(&cir).Error
 			if err = handledErr(err, "get Circulations change"); err != nil {
 				return ret, err
 			}
-
 		} else {
-			err = GetDB(nil).Raw(`
+			err = GetDB(nil).Raw(fmt.Sprintf(`
 SELECT cir.days,cir.circulations,COALESCE(sy.nft_balance_supply,0)nft_balance_supply
  FROM (
 	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
 	to_char(to_timestamp(created_at/1000),?) AS days
-	FROM "1_history" WHERE type IN(4,6,12,14,21,22,23) AND ecosystem = ?
+	FROM "1_history" WHERE type IN(6,12,14,21,22,23,34,35) AND ecosystem = 1
 	GROUP BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
 		5250000000000000000+(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS circulations
@@ -390,16 +405,16 @@ SELECT cir.days,cir.circulations,COALESCE(sy.nft_balance_supply,0)nft_balance_su
 LEFT JOIN(
 	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
 	to_char(to_timestamp(created_at/1000),?) AS days
-	FROM "1_history" WHERE type IN(4,12) AND ecosystem = ?
+	FROM "1_history" WHERE type = 12 AND ecosystem = 1
 	GROUP BY days
 	ORDER BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
-			CAST((SELECT value AS nft_miner_total_supply FROM "1_app_params" WHERE "name" = 'nft_miner_total_supply' AND ecosystem = s1.ecosystem) as numeric)-
+			%s-
 				(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS nft_balance_supply
 	FROM "1_history" AS s1 
 )AS sy ON(sy.days = cir.days)
 ORDER BY cir.days asc
-`, timeDbFormat, ecosystem, timeDbFormat, ecosystem).Find(&cir).Error
+`, NftMinerTotalSupply), timeDbFormat, timeDbFormat).Find(&cir).Error
 			if err = handledErr(err, "get Circulations change"); err != nil {
 				return ret, err
 			}
@@ -410,7 +425,7 @@ SELECT cir.days,cir.circulations
  FROM (
 	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
 	to_char(to_timestamp(created_at/1000),?) AS days
-	FROM "1_history" WHERE type IN(4,6,12,14,21,22,29) AND ecosystem = ?
+	FROM "1_history" WHERE type IN(6,29) AND ecosystem = ?
 	GROUP BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
 		(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5))AS circulations
@@ -428,7 +443,7 @@ SELECT del.days,del.total_amount as amount
  FROM (
 	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
 	to_char(to_timestamp(created_at/1000),?) AS days
-	FROM "1_history" WHERE type IN(7,13,16,17,18,19,20,28) AND ecosystem = ?
+	FROM "1_history" WHERE type IN(7,13,16,17,18,19,20,28,33,36) AND ecosystem = ?
 	GROUP BY days
 	ORDER BY days desc)
 	SELECT s1.days,s1.amount,s1.ecosystem,
@@ -505,7 +520,7 @@ FULL JOIN(
 		//get Create staked by days
 		q := GetDB(nil).Table(his.TableName()).Select("to_char(to_timestamp(created_at/1000),?) AS days,sum(amount) as amount", timeDbFormat).
 			Where("ecosystem = ?", ecosystem).Group("days").Order("days desc")
-		err = q.Where("type IN(13,18,19,20)").Find(&newStaked).Error
+		err = q.Where("type IN(13,18,19,20,33)").Find(&newStaked).Error
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart cirStaked Failed")
 			return ret, err
@@ -513,7 +528,7 @@ FULL JOIN(
 
 		//get Transfer out staked by days
 		err = GetDB(nil).Table(his.TableName()).Select("to_char(to_timestamp(created_at/1000),?) AS days,sum(amount) as amount", timeDbFormat).
-			Where("ecosystem = ? AND type IN(14,21,22)", ecosystem).Group("days").Order("days desc").Find(&deleStaked).Error
+			Where("ecosystem = ? AND type IN(14,21,22,35)", ecosystem).Group("days").Order("days desc").Find(&deleStaked).Error
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart cirStaked Failed")
 			return ret, err
@@ -766,33 +781,47 @@ func GetAllEcosystemChartInfo() {
 	}
 
 	for _, v := range eco {
-		go func() {
-			err = getEcosystemCirculationsToRedis(v.ID)
+		go func(ecosystem int64) {
+			err := getEcosystemCirculationsToRedis(ecosystem)
 			if err != nil {
-				log.WithFields(log.Fields{"error": err, "ecosystem": v.ID}).Error("get circulations failed")
+				log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("get circulations failed")
 			}
-		}()
+		}(v.ID)
 
-		rets, err := getEcoTopTenHasTokenAccount(v.ID)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("get top ten has token account failed")
-			return
-		}
+		go func(ecosystem int64) {
+			GetTopTenHasTokenAccountToRedis(ecosystem)
+		}(v.ID)
 
-		res, err := msgpack.Marshal(rets)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err, "ecosystem": v.ID}).Error("get top ten has token account msgpack failed")
-			return
-		}
+		go func(ecosystem int64) {
+			err := GetAllKeysTotalAmount(ecosystem)
+			if err != nil {
+				log.WithFields(log.Fields{"INFO": err, "ecosystem": ecosystem}).Info("[Get All Keys Total Amount] failed")
+			}
+		}(v.ID)
 
-		rd := RedisParams{
-			Key:   "top-ten-has-token-" + strconv.FormatInt(v.ID, 10),
-			Value: string(res),
-		}
-		if err := rd.Set(); err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("get top ten has token account set redis error")
-			return
-		}
+	}
+}
+
+func GetTopTenHasTokenAccountToRedis(ecosystem int64) {
+	rets, err := getEcoTopTenHasTokenAccount(ecosystem)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get top ten has token account failed")
+		return
+	}
+
+	res, err := msgpack.Marshal(rets)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("get top ten has token account msgpack failed")
+		return
+	}
+
+	rd := RedisParams{
+		Key:   "top-ten-has-token-" + strconv.FormatInt(ecosystem, 10),
+		Value: string(res),
+	}
+	if err := rd.Set(); err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("get top ten has token account set redis error")
+		return
 	}
 }
 
@@ -823,9 +852,35 @@ func getEcoTopTenHasTokenAccount(ecosystem int64) (*EcoTopTenHasTokenResponse, e
 		StakeAmount decimal.Decimal
 	}
 	var list []accountHold
-
-	if NftMinerReady || NodeReady {
-		err = GetDB(nil).Raw(`
+	if ecosystem == 1 && (NftMinerReady || NodeReady) {
+		if AirdropReady {
+			err = GetDB(nil).Raw(`
+SELECT v1.key_id,COALESCE(v2.amount,0)+
+	COALESCE(v2.stake_amount,0)+
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.key_id),0)
+	AS amount,COALESCE(v2.stake_amount,0)AS stake_amount 
+FROM(							
+	SELECT id AS key_id,ecosystem FROM "1_keys" AS k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0 AND amount +
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+			COALESCE((SELECT sum(stake_amount) FROM "1_airdrop_info" WHERE account = k1.account),0)	>0
+		UNION
+	SELECT output_key_id AS key_id,ecosystem FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? GROUP BY output_key_id,ecosystem
+)AS v1
+LEFT JOIN(
+		SELECT id,amount,ecosystem,
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999')  +
+			COALESCE((SELECT sum(stake_amount) FROM "1_airdrop_info" WHERE account = k1.account),0)
+			AS stake_amount
+		FROM "1_keys" AS k1
+)AS v2 ON(v2.id = v1.key_id AND v2.ecosystem = v1.ecosystem)
+ORDER BY amount DESC
+`, ecosystem, ecosystem).Find(&list).Error
+		} else {
+			err = GetDB(nil).Raw(`
 SELECT v1.key_id,COALESCE(v2.amount,0)+
 	COALESCE(v2.stake_amount,0)+
 	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.key_id),0)
@@ -847,6 +902,7 @@ LEFT JOIN(
 )AS v2 ON(v2.id = v1.key_id AND v2.ecosystem = v1.ecosystem)
 ORDER BY amount DESC
 `, ecosystem, ecosystem).Find(&list).Error
+		}
 	} else {
 		err = GetDB(nil).Raw(`
 SELECT v1.key_id,COALESCE(v2.amount,0)+
@@ -862,6 +918,13 @@ LEFT JOIN(
 )AS v2 ON(v2.id = v1.key_id AND v2.ecosystem = v1.ecosystem)
 ORDER BY amount DESC
 `, ecosystem, ecosystem).Find(&list).Error
+		if ecosystem == 1 && AirdropReady {
+			for k, v := range list {
+				airdrop := &AirdropInfo{}
+				v.StakeAmount = airdrop.GetStaking(converter.AddressToString(v.KeyId))
+				list[k] = v
+			}
+		}
 	}
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Eco TopTen HasToken Account Chart Failed")
@@ -882,6 +945,15 @@ as total_amount FROM "1_keys" AS k2 WHERE ecosystem = ? AND blocked = 0 AND dele
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("Get Eco TopTen HasToken Account Chart Total Amount Failed")
 		return nil, err
+	}
+	if ecosystem == 1 && AirdropReady {
+		var staking decimal.Decimal
+		err = GetDB(nil).Model(AirdropInfo{}).Select("sum(stake_amount)").Take(&staking).Error
+		if err != nil {
+			log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("Get Eco TopTen HasToken Account Chart airdrop staking Amount Failed")
+			return nil, err
+		}
+		totalAmount.TotalAmount = totalAmount.TotalAmount.Add(staking)
 	}
 
 	otherAmount := decimal.Zero

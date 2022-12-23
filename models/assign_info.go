@@ -9,12 +9,16 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/shopspring/decimal"
+	log "github.com/sirupsen/logrus"
 	"strconv"
 	"time"
 	//"time"
 )
 
-var AssignReady bool
+var (
+	AssignReady        bool
+	AssignTotalBalance decimal.Decimal
+)
 
 type AssignRules struct {
 	StartBlockID    int64  `json:"start_blockid"`
@@ -63,13 +67,6 @@ func (m *AssignInfo) GetTotalBalance(dbTx *DbTransaction, account string) (decim
 		return amount, balance, nil
 	}
 
-	//genesis time
-	block := &Block{}
-	genesisAt, err := block.GetSystemTime()
-	if err != nil {
-		return amount, balance, err
-	}
-
 	now := time.Now()
 	for _, t := range mps {
 		list, err := getAssignDetail(t.Detail, t.Type)
@@ -79,7 +76,7 @@ func (m *AssignInfo) GetTotalBalance(dbTx *DbTransaction, account string) (decim
 
 		for _, v := range list {
 			st, _ := strconv.ParseInt(v.StartAt, 10, 64)
-			if st >= genesisAt && st <= now.Unix() && v.Status == 1 {
+			if st >= FirstBlockTime && st <= now.Unix() && v.Status == 1 {
 				am, _ := decimal.NewFromString(v.Amount)
 				amount = amount.Add(am)
 			}
@@ -134,4 +131,25 @@ func AssignTableExist() bool {
 		return false
 	}
 	return true
+}
+
+func GetAssignTotalBalanceAmount() {
+	RealtimeWG.Add(1)
+	defer func() {
+		RealtimeWG.Done()
+	}()
+	if AssignReady {
+		err := GetDB(nil).Raw(`
+SELECT CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_foundation' AND ecosystem = 1) as numeric)+
+	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_partners' AND ecosystem = 1) as numeric)+
+	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round1' AND ecosystem = 1) as numeric)+
+	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round2' AND ecosystem = 1) as numeric)+
+	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_public_round' AND ecosystem = 1) as numeric)+
+	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_dev_team' AND ecosystem = 1) as numeric)+
+	(SELECT COALESCE(sum(balance_amount),0) FROM "1_assign_info") AS lock_amount
+`).Take(&AssignTotalBalance).Error
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Get Assign Balance Amount Failed")
+		}
+	}
 }
