@@ -13,6 +13,7 @@ import (
 	"github.com/IBAX-io/go-explorer/conf"
 	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -273,10 +274,12 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 				d.MemberHash = hash
 			}
 		}
-		if mb.MemberName != "" {
-			d.MemberName = mb.MemberName
-		} else {
-			d.MemberName = "iName"
+	}
+	if INameReady {
+		ie := &IName{}
+		f, err := ie.Get(wallet)
+		if err == nil && f {
+			d.MemberName = ie.Name
 		}
 	}
 
@@ -681,7 +684,6 @@ func (m *Key) GetAccountList(page, limit int, ecosystem int64) (*KeysListResult,
 SELECT v1.account,v1.ecosystem,v1.amount+
 	v1.stake_amount +
 	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name,
 v1.stake_amount FROM(
 	SELECT id,account,ecosystem,
 		amount,
@@ -701,7 +703,6 @@ v1.stake_amount FROM(
 SELECT v1.account,v1.ecosystem,v1.amount+
 	v1.stake_amount +
 	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name,
 v1.stake_amount FROM(
 	SELECT id,account,ecosystem,
 		amount,
@@ -720,7 +721,6 @@ v1.stake_amount FROM(
 			err = GetDB(nil).Raw(`
 SELECT v1.account,v1.ecosystem,v1.amount + v1.stake_amount +
 	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name,
 	v1.stake_amount
 FROM(
 	SELECT id,account,ecosystem,
@@ -733,8 +733,7 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 		} else {
 			err = GetDB(nil).Raw(`
 SELECT v1.account,v1.ecosystem,v1.amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-	coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = v1.ecosystem AND ms.account = v1.account LIMIT 1),'iName') as account_name 
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
 FROM(
 	SELECT id,account,ecosystem,
 		k1.amount
@@ -765,6 +764,13 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 		if amount.GreaterThan(decimal.Zero) {
 			ret.Rets[i].AccountedFor = amount.Mul(decimal.NewFromInt(100)).DivRound(totalAmount, 2)
 		}
+		if INameReady {
+			in := &IName{}
+			f, err := in.Get(ret.Rets[i].Account)
+			if err == nil && f {
+				ret.Rets[i].AccountName = in.Name
+			}
+		}
 	}
 
 	return &ret, nil
@@ -785,113 +791,174 @@ func GetAccountListChart(ecosystem int64) (*KeysListChartResult, error) {
 	return &ret, nil
 }
 
-func (m *Key) GetEcosystemTokenSymbolList(page, limit int, order string, ecosystem int64) (*GeneralResponse, error) {
-
+func (k *Key) GetEcosystemTokenSymbolList(page, limit int, ecosystem int64) (*GeneralResponse, error) {
 	var (
-		total int64
-		rets  GeneralResponse
-		err   error
+		rets GeneralResponse
+		err  error
 	)
-	if order == "" {
-		order = "amount desc"
-	}
 	rets.Limit = limit
 	rets.Page = page
 
-	if NftMinerReady {
-		err = GetDB(nil).Table(m.TableName()).
-			Where("ecosystem = ? AND (amount > 0 OR lock->>'nft_miner_stake' != '')", ecosystem).
-			Count(&total).Error
-	} else {
-		err = GetDB(nil).Table(m.TableName()).
-			Where("ecosystem = ? AND amount > 0", ecosystem).
-			Count(&total).Error
+	ecoTotal := allKeyAmount.Get(ecosystem)
+	tokenSymbol := Tokens.Get(ecosystem)
+	if ecoTotal.Equal(decimal.Zero) {
+		return &rets, nil
 	}
+
+	var ret []EcosystemTokenSymbolList
+	var (
+		querySql *gorm.DB
+		countSql *gorm.DB
+	)
+	if (NftMinerReady || NodeReady) && ecosystem == 1 {
+		if AirdropReady {
+			countSql = GetDB(nil).Raw(`
+SELECT COUNT(1) FROM(
+	SELECT v1.amount+
+		v1.stake_amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount 
+	FROM(
+		SELECT id,account,ecosystem,
+			amount,
+	
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
+			AS stake_amount
+	
+			FROM "1_keys" AS k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
+	 )AS v1
+	 WHERE amount > 0
+)AS v2
+`)
+			querySql = GetDB(nil).Raw(`
+SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
+	v1.stake_amount +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount 
+FROM(
+	SELECT id,account,ecosystem,
+		amount,
+
+		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
+		AS stake_amount
+
+		FROM "1_keys" AS k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
+ )AS v1
+ WHERE amount > 0
+ ORDER BY amount desc OFFSET ? LIMIT ?
+`, (page-1)*limit, limit)
+		} else {
+			countSql = GetDB(nil).Raw(`
+SELECT COUNT(1) FROM(
+	SELECT v1.amount+
+		v1.stake_amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+	FROM(
+		SELECT id,account,ecosystem,
+			amount,
+	
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+	
+			FROM "1_keys" WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+	 )AS v1
+	 WHERE amount > 0
+)AS v2
+`)
+			querySql = GetDB(nil).Raw(`
+SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
+	v1.stake_amount +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+FROM(
+	SELECT id,account,ecosystem,
+		amount,
+
+		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+
+		FROM "1_keys" WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+ )AS v1
+ WHERE amount > 0
+ ORDER BY amount desc OFFSET ? LIMIT ?
+`, ecosystem, (page-1)*limit, limit)
+		}
+	} else {
+		if AirdropReady && ecosystem == 1 {
+			countSql = GetDB(nil).Raw(`
+SELECT COUNT(1) FROM(
+	SELECT v1.amount + v1.stake_amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
+	FROM(
+		SELECT id,account,ecosystem,
+			amount,
+			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
+			FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+	)AS v1
+	WHERE amount > 0
+)AS v2
+`)
+			querySql = GetDB(nil).Raw(`
+SELECT v1.account,v1.ecosystem,v1.amount + v1.stake_amount +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
+FROM(
+	SELECT id,account,ecosystem,
+		amount,
+		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
+		FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+)AS v1
+WHERE amount > 0
+ORDER BY amount desc OFFSET ? LIMIT ?
+`, ecosystem, (page-1)*limit, limit)
+		} else {
+			countSql = GetDB(nil).Raw(`
+SELECT COUNT(1) FROM(
+	SELECT v1.amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
+	FROM(
+		SELECT id,account,ecosystem,
+			k1.amount
+			FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+	)AS v1
+	WHERE amount > 0
+)AS v2
+`, ecosystem)
+			querySql = GetDB(nil).Raw(`
+SELECT v1.id,v1.account,v1.ecosystem,v1.amount +
+	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+CASE WHEN (SELECT control_mode FROM "1_ecosystems" WHERE id = v1.ecosystem AND id > 1) = 2 THEN
+	CASE WHEN (
+		SELECT count(1) FROM "1_votings_participants" WHERE
+			voting_id = (SELECT id FROM "1_votings" WHERE deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%' AND ecosystem = v1.ecosystem ORDER BY id DESC LIMIT 1)
+						AND member->>'account'=v1.account) > 0 
+	THEN
+		TRUE
+	ELSE
+		FALSE
+	END
+ELSE
+ FALSE
+END AS front_committee
+FROM(
+	SELECT id,account,ecosystem,
+		k1.amount
+		FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+)AS v1
+WHERE amount > 0
+ORDER BY amount desc OFFSET ? LIMIT ?
+`, ecosystem, (page-1)*limit, limit)
+		}
+	}
+	err = countSql.Take(&rets.Total).Error
 	if err != nil {
 		return nil, err
 	}
-	rets.Total = total
-
-	var ret []EcosystemTokenSymbolList
-	if NftMinerReady || NodeReady {
-		err = GetDB(nil).Table(`"1_keys" AS k1`).Select(fmt.Sprintf(
-			`k1,id,k1.account, 
- coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = k1.ecosystem AND ms.account = k1.account),'iName') as account_name,
- k1.amount +  to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999') as amount,
- 
-case WHEN (k1.amount +  to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999') = 0) OR 
-((SELECT sum(k2.amount)+sum(to_number(coalesce(NULLIF(k2.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k2.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k2.lock->>'candidate_substitute',''),'0'),'999999999999999999999999')) FROM "1_keys" AS k2 WHERE k1.ecosystem = k2.ecosystem) = 0) THEN
-0
-ELSE
-round(
-(k1.amount +  to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999')) * 100 / 
-  (SELECT sum(k2.amount)+sum(to_number(coalesce(NULLIF(k2.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k2.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k2.lock->>'candidate_substitute',''),'0'),'999999999999999999999999')) FROM "1_keys" AS k2 WHERE k1.ecosystem = k2.ecosystem) , 2) 
-	END as accounted_for,
-
-case WHEN k1.ecosystem = 1 THEN
- coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = k1.ecosystem),'%s')
-ELSE
- (SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = k1.ecosystem) 
-END as token_symbol,
-CASE WHEN (SELECT control_mode FROM "1_ecosystems" WHERE id = k1.ecosystem AND id > 1) = 2 THEN
-		CASE WHEN (SELECT count(1) FROM "1_votings_participants" WHERE 
-				voting_id = (SELECT id FROM "1_votings" WHERE deleted = 0 AND voting->>'name' like '%%voting_for_control_mode_template%%' AND ecosystem = k1.ecosystem ORDER BY id DESC LIMIT 1) 
-				AND member->>'account'=k1.account) > 0 THEN
-			TRUE
-		ELSE
-			FALSE
-		END
-ELSE
-	FALSE
-END AS front_committee
-`, SysTokenSymbol)).
-			Where("ecosystem = ? AND (amount > 0 OR lock->>'nft_miner_stake' != '' OR lock->>'candidate_substitute' != '' OR lock->>'candidate_referendum' != '')", ecosystem).
-			Order(order).Offset((page - 1) * limit).Limit(limit).
-			Find(&ret).Error
-	} else {
-		err = GetDB(nil).Table(`"1_keys" AS k1`).Select(fmt.Sprintf(
-			`k1,id,k1.account, 
- coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = k1.ecosystem AND ms.account = k1.account),'iName') as account_name,
- k1.amount as amount,
-CASE WHEN (SELECT control_mode FROM "1_ecosystems" WHERE id = k1.ecosystem AND id > 1) = 2 THEN
-		CASE WHEN (SELECT count(1) FROM "1_votings_participants" WHERE 
-				voting_id = (SELECT id FROM "1_votings" WHERE deleted = 0 AND voting->>'name' like '%%voting_for_control_mode_template%%' AND ecosystem = k1.ecosystem ORDER BY id DESC LIMIT 1) 
-				AND member->>'account'=k1.account) > 0 THEN
-			TRUE
-		ELSE
-			FALSE
-		END
-ELSE
-	FALSE
-END AS front_committee,
-case WHEN (k1.amount = 0) OR 
-((SELECT sum(k2.amount) FROM "1_keys" AS k2 WHERE k1.ecosystem = k2.ecosystem) = 0) THEN
-0
-ELSE
-round(
-k1.amount  * 100 / 
-  (SELECT sum(k2.amount) FROM "1_keys" AS k2 WHERE k1.ecosystem = k2.ecosystem) , 2) 
-	END as accounted_for,
-
-case WHEN k1.ecosystem = 1 THEN
- coalesce((SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = k1.ecosystem),'%s')
-ELSE
- (SELECT token_symbol FROM "1_ecosystems" as ec WHERE ec.id = k1.ecosystem) 
-END as token_symbol`, SysTokenSymbol)).
-			Where("ecosystem = ? AND amount > 0", ecosystem).
-			Order(order).Offset((page - 1) * limit).Limit(limit).
-			Find(&ret).Error
-	}
+	err = querySql.Find(&ret).Error
 	if err != nil {
 		return nil, err
 	}
@@ -901,8 +968,14 @@ END as token_symbol`, SysTokenSymbol)).
 	var committeeList []ids
 	if ecosystem > 1 {
 		err = GetDB(nil).Raw(`
-SELECT id FROM "1_keys" AS k1 WHERE (SELECT control_mode FROM "1_ecosystems" WHERE id = k1.ecosystem AND id > 1) = 2 AND
-ecosystem = ? AND deleted = 0 AND blocked = 0 AND amount > 0 ORDER BY row_number() OVER (ORDER BY amount DESC) <= 50
+SELECT v1.id,amount + COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
+FROM(
+	SELECT id,amount,ecosystem FROM "1_keys" AS k1 
+	WHERE (SELECT control_mode FROM "1_ecosystems" WHERE id = k1.ecosystem AND id > 1) = 2 AND ecosystem = ? AND deleted = 0 AND blocked = 0 
+)
+AS v1
+WHERE amount > 0
+ORDER BY row_number() OVER (ORDER BY amount DESC) <= 50
 `, ecosystem).Find(&committeeList).Error
 		if err != nil {
 			return nil, err
@@ -914,6 +987,15 @@ ecosystem = ? AND deleted = 0 AND blocked = 0 AND amount > 0 ORDER BY row_number
 				ret[i].Committee = true
 			}
 		}
+		if INameReady {
+			ie := &IName{}
+			f, err := ie.Get(ret[i].Account)
+			if err == nil && f {
+				ret[i].AccountName = ie.Name
+			}
+		}
+		ret[i].TokenSymbol = tokenSymbol
+		ret[i].AccountedFor = ret[i].Amount.Mul(decimal.NewFromInt(100)).DivRound(ecoTotal, 2)
 	}
 	rets.List = ret
 
@@ -945,13 +1027,21 @@ func (m *Key) GetEcosystemDetailMemberList(page, limit int, order string, ecosys
 (SELECT array_to_string(array(SELECT rs.role->>'name' FROM "1_roles_participants" as rs 
 WHERE rs.ecosystem=k1.ecosystem and rs.member->>'account' = k1.account AND rs.deleted = 0),' / '))
 as roles_name,
-coalesce((SELECT ms.member_name FROM "1_members" as ms WHERE ms.ecosystem = k1.ecosystem AND ms.account = k1.account LIMIT 1),'iName') as account_name ,
 
 (SELECT time from block_chain b WHERE b.id = coalesce((SELECT rt.block_id FROM rollback_tx rt WHERE table_name = '1_keys' AND table_id = cast(k1.id as VARCHAR) 
 || ','||  cast(k1.ecosystem as VARCHAR) AND data = '' LIMIT 1),1)) AS join_time`).
 		Where("ecosystem = ?", ecosystem).
 		Order(order).Offset((page - 1) * limit).Limit(limit).
 		Find(&ret).Error
+	if INameReady {
+		for k, v := range ret {
+			ie := &IName{}
+			f, err := ie.Get(v.Account)
+			if err == nil && f {
+				ret[k].AccountName = ie.Name
+			}
+		}
+	}
 	rets.List = ret
 
 	return &rets, err

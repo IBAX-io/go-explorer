@@ -256,7 +256,7 @@ func GetEcosystemDetailTokenHandler(c *gin.Context) {
 		return
 	}
 
-	rets, err := key.GetEcosystemTokenSymbolList(req.Page, req.Limit, req.Order, req.Ecosystem)
+	rets, err := key.GetEcosystemTokenSymbolList(req.Page, req.Limit, req.Ecosystem)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)

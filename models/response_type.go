@@ -233,7 +233,7 @@ type EcosystemTokenSymbolList struct {
 	Id             int64           `json:"id"`
 	Account        string          `json:"account"`
 	AccountName    string          `json:"account_name"`
-	Amount         string          `json:"amount"`
+	Amount         decimal.Decimal `json:"amount"`
 	AccountedFor   decimal.Decimal `json:"accounted_for"`
 	TokenSymbol    string          `json:"token_symbol"`
 	FrontCommittee bool            `json:"front_committee"`
