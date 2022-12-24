@@ -34,11 +34,6 @@ type Voting struct {
 	Voting      string `gorm:"column:voting;type:jsonb"`
 }
 
-type CreatorInfo struct {
-	Account    string `json:"account"`
-	MemberName string `json:"member_name"`
-}
-
 type FlagsInfo struct {
 	Success  string `json:"success"`
 	Decision string `json:"decision"`

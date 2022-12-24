@@ -272,6 +272,7 @@ func InitGlobalSwitch() {
 	VotingReady = VotingTableExist()
 	AssignReady = AssignTableExist()
 	AirdropReady = AirdropTableExist()
+	INameReady = INameTableExist()
 }
 
 func (ret *ScanOut) Changes() error {
