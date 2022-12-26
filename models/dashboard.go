@@ -202,8 +202,8 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 
 	rets.CirculationsChart.TotalAmount = TotalSupplyToken
 	rets.CirculationsChart.CirculationsAmount = cir
-	rets.CirculationsChart.StakeAmounts = nftStaking.Add(nodeStaking.Sum).String()
-	rets.CirculationsChart.LockAmount = agm.String()
+	rets.CirculationsChart.StakeAmounts = nftStaking.Add(nodeStaking.Sum).Add(AirdropStakedAll).String()
+	rets.CirculationsChart.LockAmount = agm.Add(AirdropLockAll).String()
 
 	rets.NftMinerChart.UnStakingCount = rets.NftMinerChart.Count - stakingNum
 	rets.NftMinerChart.NowStakingCount = stakingNum

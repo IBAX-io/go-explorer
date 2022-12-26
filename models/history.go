@@ -1355,16 +1355,19 @@ func deal_history_total(objArr *[]History) decimal.Decimal {
 	return total
 }
 
-func (th *History) GetTodayCirculationsAmount(nftBlockReward float64) (float64, error) {
+func (th *History) GetTodayCirculationsAmount() (string, error) {
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	nowDay := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 
-	var number int64
-	if err := GetDB(nil).Table(th.TableName()).Where("type IN(12) AND created_at >= ? AND ecosystem = 1", nowDay.UnixMilli()).Count(&number).Error; err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("GetTodayCirculationsAmount err")
-		return 0, err
+	var newCirculations decimal.Decimal
+	err := GetDB(nil).Table(th.TableName()).Select("coalesce(sum(amount),0)").
+		Where("ecosystem = 1 AND created_at >= ? AND type IN(8,9,10,11,12,14,21,22,23,25,26,27,30,31,34,35)",
+			nowDay.UnixMilli()).Take(&newCirculations).Error
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err}).Warn("Get Today New Circulations Amount err")
+		return newCirculations.String(), err
 	}
-	return float64(number) * nftBlockReward, nil
+	return newCirculations.String(), nil
 }
 
 func (th *History) Get24HourTxAmount() (string, error) {
