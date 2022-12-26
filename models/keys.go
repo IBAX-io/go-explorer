@@ -757,6 +757,13 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 				}
 				ret.Rets[i].LockAmount = ret.Rets[i].LockAmount.Add(ba)
 			}
+			if AirdropReady {
+				air := &AirdropInfo{}
+				f, err := air.Get(ret.Rets[i].Account)
+				if err == nil && f {
+					ret.Rets[i].LockAmount = ret.Rets[i].LockAmount.Add(air.BalanceAmount)
+				}
+			}
 		}
 		ret.Rets[i].TokenSymbol = tokenSymbol
 

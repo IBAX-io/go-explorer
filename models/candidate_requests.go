@@ -461,18 +461,18 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 				hashList = append(hashList, vue.Hash)
 			}
 			type txGasFee struct {
-				Amount      string
-				Ecosystem   int64
-				TokenSymbol string
+				Amount    string
+				Ecosystem int64
 			}
 			var gasFee []txGasFee
 			err = GetDB(nil).Raw(`
-				SELECT h1.ecosystem,h1.amount,es.token_symbol FROM(
+				SELECT v1.ecosystem,sum(v1.amount)as amount FROM(
 					SELECT ecosystem,sum(amount)amount FROM "1_history" WHERE txhash IN(?) AND type IN(1,2) GROUP BY ecosystem
-				)AS h1
-				LEFT JOIN(
-					SELECT coalesce(token_symbol,'') token_symbol,id FROM "1_ecosystems"
-				)AS es ON(es.id = h1.ecosystem)`, hashList).Find(&gasFee).Error
+					UNION
+					SELECT ecosystem,sum(amount)amount FROM "spent_info_history" WHERE hash IN(?) AND type IN(3,4) GROUP BY ecosystem
+				)AS v1
+				GROUP BY ecosystem
+			`, hashList, hashList).Find(&gasFee).Error
 			if err != nil {
 				log.WithFields(log.Fields{"err": err, "block_id": value.ID}).Warn("Get Node Block Tx List Failed")
 				return rets, err
@@ -482,9 +482,10 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 			rts.Time = value.Time
 			rts.Tx = value.Tx
 			for _, vue := range gasFee {
+				tokenSymbol := Tokens.Get(vue.Ecosystem)
 				if vue.Ecosystem == 1 {
 					rts.GasFee1.Amount = vue.Amount
-					rts.GasFee1.TokenSymbol = SysTokenSymbol
+					rts.GasFee1.TokenSymbol = tokenSymbol
 				} else {
 					gasFeeCursor += 1
 					if gasFeeCursor > 5 {
@@ -493,16 +494,16 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 					switch gasFeeCursor {
 					case 2:
 						rts.GasFee2.Amount = vue.Amount
-						rts.GasFee2.TokenSymbol = vue.TokenSymbol
+						rts.GasFee2.TokenSymbol = tokenSymbol
 					case 3:
 						rts.GasFee3.Amount = vue.Amount
-						rts.GasFee3.TokenSymbol = vue.TokenSymbol
+						rts.GasFee3.TokenSymbol = tokenSymbol
 					case 4:
 						rts.GasFee4.Amount = vue.Amount
-						rts.GasFee4.TokenSymbol = vue.TokenSymbol
+						rts.GasFee4.TokenSymbol = tokenSymbol
 					case 5:
 						rts.GasFee5.Amount = vue.Amount
-						rts.GasFee5.TokenSymbol = vue.TokenSymbol
+						rts.GasFee5.TokenSymbol = tokenSymbol
 					}
 				}
 			}
