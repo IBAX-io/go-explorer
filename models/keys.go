@@ -538,7 +538,7 @@ func (m *Key) GetWalletTotalEcosystem(page, limit int, order string, wallet stri
 		if err != nil {
 			return &ret, err
 		}
-		if NftMinerReady {
+		if NftMinerReady || NodeReady {
 			err = GetDB(nil).Table(`"1_keys" AS k1`).Select(`account,ecosystem,
 	(SELECT hash AS logo_hash FROM "1_binaries" as bs WHERE bs.id = coalesce((SELECT cast(es.info->>'logo' as numeric) FROM "1_ecosystems" as es WHERE es.id = k1.ecosystem LIMIT 1),0)),
 	(SELECT array_to_string(array(SELECT rs.role->>'name' FROM "1_roles_participants" as rs 
@@ -905,7 +905,7 @@ SELECT COUNT(1) FROM(
 		SELECT id,account,ecosystem,
 			amount,
 			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
-			FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+			FROM "1_keys" as k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
 	)AS v1
 	WHERE amount > 0
 )AS v2
@@ -917,11 +917,11 @@ FROM(
 	SELECT id,account,ecosystem,
 		amount,
 		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
-		FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+		FROM "1_keys" as k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
 )AS v1
 WHERE amount > 0
 ORDER BY amount desc OFFSET ? LIMIT ?
-`, ecosystem, (page-1)*limit, limit)
+`, (page-1)*limit, limit)
 		} else {
 			countSql = GetDB(nil).Raw(`
 SELECT COUNT(1) FROM(
