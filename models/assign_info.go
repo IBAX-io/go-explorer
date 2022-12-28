@@ -16,9 +16,14 @@ import (
 )
 
 var (
-	AssignReady        bool
+	AssignReady bool
+	//total amount: is not now amount
 	AssignTotalBalance decimal.Decimal
+
+	nowAssignLockAll decimal.Decimal
 )
+
+const AssignTotalSupply = 1071000000
 
 type AssignRules struct {
 	StartBlockID    int64  `json:"start_blockid"`
@@ -139,17 +144,22 @@ func GetAssignTotalBalanceAmount() {
 		RealtimeWG.Done()
 	}()
 	if AssignReady {
-		err := GetDB(nil).Raw(`
-SELECT CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_foundation' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_partners' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round1' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round2' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_public_round' AND ecosystem = 1) as numeric)+
-	CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_dev_team' AND ecosystem = 1) as numeric)+
-	(SELECT COALESCE(sum(balance_amount),0) FROM "1_assign_info") AS lock_amount
-`).Take(&AssignTotalBalance).Error
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Get Assign Balance Amount Failed")
-		}
+		AssignTotalBalance = decimal.NewFromInt(AssignTotalSupply).Mul(decimal.NewFromInt(1e12))
+		getAssignNowTotalBalance()
+	}
+}
+
+func getAssignNowTotalBalance() {
+	err := GetDB(nil).Raw(`SELECT CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_foundation' AND ecosystem = 1) as numeric)+
+			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_partners' AND ecosystem = 1) as numeric)+
+			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round1' AND ecosystem = 1) as numeric)+
+			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_private_round2' AND ecosystem = 1) as numeric)+
+			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_public_round' AND ecosystem = 1) as numeric)+
+			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_dev_team' AND ecosystem = 1) as numeric)+
+			(SELECT COALESCE(sum(balance_amount),0) FROM "1_assign_info")
+		AS lock_amount
+	`).Take(&nowAssignLockAll).Error
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get now assign Lock All Failed")
 	}
 }

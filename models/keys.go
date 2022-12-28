@@ -587,6 +587,7 @@ k1.amount+(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx
 					if f {
 						da[k].LockAmount = da[k].LockAmount.Add(airdrop.BalanceAmount)
 						da[k].StakeAmount = da[k].StakeAmount.Add(airdrop.StakeAmount)
+						da[k].TotalAmount = da[k].TotalAmount.Add(airdrop.StakeAmount)
 					}
 				}
 			}
@@ -1114,29 +1115,19 @@ func GetAccountTotalAmount(ecosystem int64, account string) (AccountTotalAmountC
 	if keyId == 0 {
 		return rets, errors.New("account invalid:" + account + " in ecosystem:" + strconv.FormatInt(ecosystem, 10))
 	}
-	if NftMinerReady {
-		f, err = isFound(GetDB(nil).Table(`"1_keys" as k1`).Select(`k1.amount + 
-(SELECT CASE WHEN sender_id = k1.id THEN
-    	COALESCE(sender_balance,0)
-	ELSE
-    	COALESCE(recipient_balance,0)
-	END AS balance 
-FROM spent_info_history WHERE 
-sender_id = k1.id OR recipient_id = k1.id AND ecosystem = k1.ecosystem ORDER BY id DESC LIMIT 1)AS amount,
+	if (NftMinerReady || NodeReady) && ecosystem == 1 {
+		f, err = isFound(GetDB(nil).Table(`"1_keys" as k1`).Select(`k1.amount +
+COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k1.ecosystem AND output_key_id = k1.id),0)
+AS amount,
 
 to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
 		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
 		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999')as stake_amount`).
 			Where("ecosystem = ? and id = ?", ecosystem, keyId).Take(&rets))
 	} else {
-		f, err = isFound(GetDB(nil).Table(`"1_keys" as k1`).Select(`k1.amount + 
-(SELECT CASE WHEN sender_id = k1.id THEN
-    	COALESCE(sender_balance,0)
-	ELSE
-    	COALESCE(recipient_balance,0)
-	END AS balance 
-FROM spent_info_history WHERE 
-sender_id = k1.id OR recipient_id = k1.id AND ecosystem = k1.ecosystem ORDER BY id DESC LIMIT 1)AS amount`).
+		f, err = isFound(GetDB(nil).Table(`"1_keys" as k1`).Select(`k1.amount +
+			COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k1.ecosystem AND output_key_id = k1.id),0)
+		AS amount`).
 			Where("ecosystem = ? and id = ?", ecosystem, keyId).Take(&rets))
 	}
 	if err != nil {

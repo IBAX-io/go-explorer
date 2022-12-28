@@ -180,12 +180,6 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 		return rets, err
 	}
 
-	var agi AssignInfo
-	agm, err := agi.GetBalance(nil, "")
-	if err != nil {
-		return rets, err
-	}
-
 	if NftMinerReady {
 		err := GetDB(nil).Table("1_nft_miner_items").Where("merge_status = ? ", 1).Count(&rets.NftMinerChart.Count).Error
 		if err != nil {
@@ -202,8 +196,8 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 
 	rets.CirculationsChart.TotalAmount = TotalSupplyToken
 	rets.CirculationsChart.CirculationsAmount = cir
-	rets.CirculationsChart.StakeAmounts = nftStaking.Add(nodeStaking.Sum).Add(AirdropStakedAll).String()
-	rets.CirculationsChart.LockAmount = agm.Add(AirdropLockAll).String()
+	rets.CirculationsChart.StakeAmounts = nftStaking.Add(nodeStaking.Sum).Add(nowAirdropStakingAll).String()
+	rets.CirculationsChart.LockAmount = nowAssignLockAll.Add(nowAirdropLockAll).String()
 
 	rets.NftMinerChart.UnStakingCount = rets.NftMinerChart.Count - stakingNum
 	rets.NftMinerChart.NowStakingCount = stakingNum
@@ -281,7 +275,7 @@ SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days ,sender_id as ke
  UNION 
 SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days , recipient_id as keyid  FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = 1 GROUP BY days,  recipient_id 
 
-) as tt GROUP BY days ORDER BY days desc `, t2.Unix(), t2.Unix()).Find(&activeList).Error
+) as tt GROUP BY days ORDER BY days desc`, t2.Unix(), t2.Unix()).Find(&activeList).Error
 	if err != nil {
 		return &rets, err
 	}
