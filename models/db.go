@@ -12,8 +12,6 @@ import (
 	"github.com/IBAX-io/go-ibax/packages/consts"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
-
 	"gorm.io/gorm"
 )
 
@@ -104,15 +102,6 @@ func (dbTx *DbTransaction) DropTables() error {
 
 func GetALL(tableName string, order string, v any) error {
 	return conf.GetDbConn().Conn().Table(tableName).Order(order).Find(v).Error
-}
-
-func GetBlockid(hash []byte) (int64, error) {
-	lt := sqldb.LogTransaction{}
-	fount, err := lt.GetByHash(hash)
-	if err == nil && fount {
-		return lt.Block, nil
-	}
-	return -1, err
 }
 
 var (
@@ -224,7 +213,7 @@ func HasTableOrView(names string) bool {
 	return name == names
 }
 
-//HasTable p is struct Pointer
+// HasTable p is struct Pointer
 func HasTable(p any) bool {
 	if !GetDB(nil).Migrator().HasTable(p) {
 		return false
