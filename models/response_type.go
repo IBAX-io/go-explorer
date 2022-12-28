@@ -443,16 +443,18 @@ type NodeContributionChartResponse struct {
 }
 
 type CirculationsChangeResponse struct {
-	Time         []int64  `json:"time"`
-	Circulations []string `json:"circulations"`
-	LockAmount   []string `json:"lock_amount"`
+	Time    []int64  `json:"time"`
+	Miner   []string `json:"miner"`
+	Unlock  []string `json:"unlock"`
+	Unstake []string `json:"unstake"`
 }
 
 type CirculationsChartResponse struct {
-	TotalCirculations string                     `json:"total_circulations"`
-	Circulations      string                     `json:"circulations"`
-	LockAmount        string                     `json:"lock_amount"`
-	Change            CirculationsChangeResponse `json:"change"`
+	Total   string                     `json:"total"`
+	Unlock  string                     `json:"unlock"`
+	Unstake string                     `json:"unstake"`
+	Miner   string                     `json:"miner"`
+	Change  CirculationsChangeResponse `json:"change"`
 }
 
 type AccountChangeChartResponse struct {

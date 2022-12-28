@@ -238,13 +238,11 @@ func GetNodeContributionChart() (NodeContributionChartResponse, error) {
 func Get15DayNewCirculationsChart() (CirculationsChartResponse, error) {
 	var (
 		rets CirculationsChartResponse
+
+		miner   []DaysAmount
+		unlock  []DaysAmount
+		unstake []DaysAmount
 	)
-	type daysNewCirculation struct {
-		Days       string          `gorm:"column:days"`
-		NftMining  decimal.Decimal `gorm:"column:nft_mining"`
-		LockAmount decimal.Decimal `gorm:"column:lock_amount"`
-	}
-	var list []daysNewCirculation
 
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
@@ -252,47 +250,60 @@ func Get15DayNewCirculationsChart() (CirculationsChartResponse, error) {
 	t1 := yesterday.AddDate(0, 0, -1*getDays)
 
 	rets.Change.Time = make([]int64, getDays)
-	rets.Change.LockAmount = make([]string, getDays)
-	rets.Change.Circulations = make([]string, getDays)
-	totalCir := decimal.New(0, 0)
-	totalLock := decimal.New(0, 0)
+	rets.Change.Unstake = make([]string, getDays)
+	rets.Change.Unlock = make([]string, getDays)
+	rets.Change.Miner = make([]string, getDays)
 
-	err := GetDB(nil).Raw(`
-SELECT COALESCE(v1.days,v2.days)AS days,COALESCE(v1.amount,0)AS nft_mining,COALESCE(v2.amount,0)AS lock_amount FROM(
-	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount 
-	FROM "1_history" WHERE ecosystem = 1 AND type = 12 GROUP BY days ORDER BY days DESC limit ?
-)AS v1
-FULL JOIN(
-	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount 
-	FROM "1_history" WHERE ecosystem = 1 AND type IN(8,9,10,11,25,26,27,30,31,34) GROUP BY days ORDER BY days DESC limit ?
-)AS v2 ON(v2.days = v1.days)
-`, getDays, getDays).Find(&list).Error
+	var (
+		totalUnlock  decimal.Decimal
+		totalUnstake decimal.Decimal
+		totalMiner   decimal.Decimal
+	)
+
+	err := GetDB(nil).Model(History{}).
+		Select("to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount").
+		Where("ecosystem = 1 AND type = 12").Group("days").
+		Order("days desc").Limit(getDays).Find(&miner).Error
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get 15 Day New Circulations Chart Failed")
+		log.WithFields(log.Fields{"error": err}).Error("Get 15 Day New Circulations Chart Miner Failed")
 		return rets, err
 	}
 
-	getDaysCirAmount := func(dayTime int64, list []daysNewCirculation) (decimal.Decimal, decimal.Decimal) {
-		for i := 0; i < len(list); i++ {
-			times, _ := time.ParseInLocation("2006-01-02", list[i].Days, time.Local)
-			if dayTime == times.Unix() {
-				return list[i].LockAmount, list[i].NftMining
-			}
-		}
-		return decimal.Zero, decimal.Zero
+	err = GetDB(nil).Model(History{}).
+		Select("to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount").
+		Where("ecosystem = 1 AND type IN(14,21,22,35)").Group("days").
+		Order("days desc").Limit(getDays).Find(&unstake).Error
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get 15 Day New Circulations Chart unstake Failed")
+		return rets, err
+	}
+
+	err = GetDB(nil).Model(History{}).
+		Select("to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount").
+		Where("ecosystem = 1 AND type IN(8,9,10,11,25,26,27,30,31,34)").Group("days").
+		Order("days desc").Limit(getDays).Find(&unlock).Error
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get 15 Day New Circulations Chart unlock Failed")
+		return rets, err
 	}
 
 	for i := 0; i < len(rets.Change.Time); i++ {
 		rets.Change.Time[i] = t1.AddDate(0, 0, i+1).Unix()
-		lock, cir := getDaysCirAmount(rets.Change.Time[i], list)
-		rets.Change.Circulations[i] = cir.Add(lock).String()
-		rets.Change.LockAmount[i] = lock.String()
-		totalCir = totalCir.Add(cir)
-		totalLock = totalLock.Add(lock)
+		unstakeAmount := GetAmount(rets.Change.Time[i], unstake)
+		unlockAmount := GetAmount(rets.Change.Time[i], unlock)
+		minerAmount := GetAmount(rets.Change.Time[i], miner)
+		rets.Change.Unstake[i] = unstakeAmount.String()
+		rets.Change.Unlock[i] = unlockAmount.String()
+		rets.Change.Miner[i] = minerAmount.String()
+
+		totalUnlock = totalUnlock.Add(unlockAmount)
+		totalUnstake = totalUnstake.Add(unstakeAmount)
+		totalMiner = totalMiner.Add(minerAmount)
 	}
-	rets.Circulations = totalCir.String()
-	rets.LockAmount = totalLock.String()
-	rets.TotalCirculations = totalCir.Add(totalLock).String()
+	rets.Miner = totalMiner.String()
+	rets.Unlock = totalUnlock.String()
+	rets.Unstake = totalUnstake.String()
+	rets.Total = totalUnstake.Add(totalUnlock).Add(totalMiner).String()
 
 	return rets, nil
 
