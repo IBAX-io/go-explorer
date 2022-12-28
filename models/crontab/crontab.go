@@ -145,20 +145,20 @@ func InitCrontabTask() {
 	loadContracts = NewGetDataProvider(3)
 	chart = NewGetDataProvider(4)
 
-	go honorNode.ReceiveSignal()
-	go history.ReceiveSignal()
 	go realTime.ReceiveSignal()
+	go honorNode.ReceiveSignal()
 	go loadContracts.ReceiveSignal()
 	go chart.ReceiveSignal()
+	go history.ReceiveSignal()
 
 	//wait receive channel start up finish
 	time.Sleep(3 * time.Second)
 
+	realTime.SendSignal()
 	loadContracts.SendSignal()
 	honorNode.SendSignal()
-	history.SendSignal()
-	realTime.SendSignal()
 	chart.SendSignal()
+	history.SendSignal()
 
 	models.InitHonorNodeByRedis("newest")
 	models.InitHonorNodeByRedis("pkg_rate")

@@ -34,6 +34,16 @@ func GetDaysAmount(dayTime int64, list []DaysAmount) string {
 	return "0"
 }
 
+func GetAmount(dayTime int64, list []DaysAmount) decimal.Decimal {
+	for i := 0; i < len(list); i++ {
+		times, _ := time.ParseInLocation("2006-01-02", list[i].Days, time.Local)
+		if dayTime == times.Unix() {
+			return list[i].Amount
+		}
+	}
+	return decimal.Zero
+}
+
 func GetDaysAmountEqual(findTime int64, list []DaysAmount, layout string, areEqual bool) decimal.Decimal {
 	for i := 0; i < len(list); i++ {
 		times, _ := time.ParseInLocation(layout, list[i].Days, time.Local)
@@ -97,19 +107,31 @@ ORDER BY days ASC
 		keyId, keyId, keyId, ecosystem,
 		keyId, keyId, keyId, ecosystem,
 		keyId, keyId, ecosystem, findTime,
-		keyId, keyId, ecosystem, time.UnixMilli(findTime).Unix()).Find(&balanceList).Error
+		keyId, keyId, ecosystem, findTime).Find(&balanceList).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Account Token Change Chart Failed")
 		return rets, nil
 	}
-	for i := 0; i < len(balanceList); i++ {
-		t1, err := time.ParseInLocation("2006-01-02", balanceList[i].Days, time.Local)
+
+	if len(balanceList) > 0 {
+		tz := time.Unix(GetNowTimeUnix(), 0)
+		today := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
+		startTime, err := time.ParseInLocation("2006-01-02", balanceList[0].Days, time.Local)
 		if err != nil {
-			log.WithFields(log.Fields{"error": err, "day": balanceList[i].Days}).Error("Get Account Token Change Chart ParseInLocation Failed")
+			log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem, "keyid": keyId}).
+				Error("Get Account Token Change Chart ParseInLocation Failed")
 			return rets, err
 		}
-		rets.Time = append(rets.Time, t1.Unix())
-		rets.Balance = append(rets.Balance, GetDaysAmount(rets.Time[i], balanceList))
+		var lastBalance decimal.Decimal
+		for startTime.Unix() <= today.Unix() {
+			rets.Time = append(rets.Time, startTime.Unix())
+			balance := GetAmount(startTime.Unix(), balanceList)
+			if !balance.IsZero() {
+				lastBalance = balance
+			}
+			rets.Balance = append(rets.Balance, lastBalance.String())
+			startTime = startTime.AddDate(0, 0, 1)
+		}
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
 
@@ -184,6 +206,15 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 		}
 		return decimal.Zero
 	}
+	escapeLock := func(findTime string, list []circulations) decimal.Decimal {
+		for i := 0; i < len(list); i++ {
+			if list[i].Days == findTime {
+				return list[i].LockAmount
+			}
+		}
+		return decimal.Zero
+	}
+
 	getListTime := func(days, layout string) int64 {
 		times, _ := time.ParseInLocation(layout, days, time.Local)
 		return times.Unix()
@@ -210,7 +241,8 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 	var cir []circulations
 	var delCir []DaysAmount
 	var newStaked []DaysAmount
-	var deleStaked []DaysAmount
+	var deleteStaked []DaysAmount
+	var addLockList []DaysAmount
 	var burning []DaysAmount
 	var combustion []DaysAmount
 	var emission []DaysAmount
@@ -278,25 +310,14 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 
 		if AirdropReady {
 			//airdrop lock
-			var lockAmount decimal.Decimal
-			var airdrop AirdropInfo
-			err = GetDB(nil).Table(airdrop.TableName()).Select("COALESCE(sum(balance_amount),0)").Take(&lockAmount).Error
-			if err = handledErr(err, "get airdrop lock amount"); err != nil {
-				return ret, err
-			}
-			nowChart.LockAmount = nowChart.LockAmount.Add(lockAmount)
+			nowChart.LockAmount = nowChart.LockAmount.Add(nowAirdropLockAll)
 
 			//airdrop staking
-			var staking decimal.Decimal
-			err = GetDB(nil).Model(AirdropInfo{}).Select("coalesce(sum(stake_amount),0)").Take(&staking).Error
-			if err = handledErr(err, "get airdrop staking"); err != nil {
-				return ret, err
-			}
-			nowChart.StakeAmount = nowChart.StakeAmount.Add(staking)
+			nowChart.StakeAmount = nowChart.StakeAmount.Add(nowAirdropStakingAll)
 		}
 
 		if AssignReady {
-			nowChart.LockAmount = nowChart.LockAmount.Add(AssignTotalBalance)
+			nowChart.LockAmount = nowChart.LockAmount.Add(nowAssignLockAll)
 		}
 		nowChart.BurningTokens = decimal.Zero.String()
 		nowChart.Combustion = decimal.Zero.String()
@@ -343,6 +364,7 @@ LEFT JOIN(
 		if AssignTotalBalance.Equal(decimal.Zero) {
 			GetAssignTotalBalanceAmount()
 		}
+
 		var unLockType []int
 		if AssignReady {
 			unLockType = append(unLockType, 8, 9, 10, 11, 25, 26, 27, 30, 31)
@@ -528,9 +550,28 @@ FULL JOIN(
 
 		//get Transfer out staked by days
 		err = GetDB(nil).Table(his.TableName()).Select("to_char(to_timestamp(created_at/1000),?) AS days,sum(amount) as amount", timeDbFormat).
-			Where("ecosystem = ? AND type IN(14,21,22,35)", ecosystem).Group("days").Order("days desc").Find(&deleStaked).Error
+			Where("ecosystem = ? AND type IN(14,21,22,35)", ecosystem).Group("days").Order("days desc").Find(&deleteStaked).Error
 		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart cirStaked Failed")
+			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart delete Staked Failed")
+			return ret, err
+		}
+
+		//get create lock by days
+		err = GetDB(nil).Raw(`
+SELECT del.days,del.total_amount as amount
+ FROM (
+	WITH "1_history" AS (SELECT sum(amount) as amount,max(ecosystem) ecosystem,
+	to_char(to_timestamp(created_at/1000),?) AS days
+	FROM "1_history" WHERE type = 28 AND ecosystem = 1
+	GROUP BY days
+	ORDER BY days desc)
+	SELECT s1.days,s1.amount,s1.ecosystem,
+			(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS total_amount
+	FROM "1_history" AS s1 
+)AS del
+`, timeDbFormat).Find(&addLockList).Error
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Get Ecosystem Circulations Chart add lock Failed")
 			return ret, err
 		}
 	}
@@ -549,6 +590,7 @@ FULL JOIN(
 	lastCombusAmount := decimal.Zero
 	lastNftBanlance := decimal.Zero
 	lastLockAmount := decimal.Zero
+	lastAddLockAmount := decimal.Zero
 	var startTime time.Time
 	end := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 
@@ -571,12 +613,17 @@ FULL JOIN(
 			if findTime == t1 {
 				isFindout = true
 				ret.Change.Time = append(ret.Change.Time, t1)
-
-				var circulations decimal.Decimal
-				var delCirculations decimal.Decimal
+				var (
+					delCirculations decimal.Decimal
+					addLock         decimal.Decimal
+					circulations    decimal.Decimal
+					lockAmount      decimal.Decimal
+				)
 				circulations = escapeCirculations(t1, cir)
-
+				lockAmount = escapeLock(t1, cir)
 				delCirculations = escapeAmount(t2, delCir, layout, false)
+				addLock = escapeAmount(t2, addLockList, layout, false)
+
 				if ecosystem != 1 {
 					burnAmount = escapeAmount(t2, burning, layout, true)
 					supplyAmount = escapeAmount(t2, supplyToken, layout, true)
@@ -611,17 +658,28 @@ FULL JOIN(
 						lastEmission = emissionAmount.Add(lastEmission)
 					}
 				} else {
+
 					if !cir[i].NftBalanceSupply.Equal(decimal.Zero) {
 						lastNftBanlance = cir[i].NftBalanceSupply
 					}
 					ret.Change.NftBalanceSupply = append(ret.Change.NftBalanceSupply, lastNftBanlance.String())
 
-					if !cir[i].LockAmount.Equal(decimal.Zero) {
-						lastLockAmount = cir[i].LockAmount
+					if !addLock.Equal(decimal.Zero) {
+						lastAddLockAmount = addLock
 					}
-					ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
 
-					stakingAmount = escapeAmount(t2, newStaked, layout, true).Sub(escapeAmount(t2, deleStaked, layout, true))
+					if lockAmount.Equal(decimal.Zero) {
+						if addLock.Equal(decimal.Zero) {
+							ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.Add(addLock).String())
+						} else {
+							ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
+						}
+					} else {
+						lastLockAmount = lockAmount.Add(lastAddLockAmount)
+						ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
+					}
+
+					stakingAmount = escapeAmount(t2, newStaked, layout, true).Sub(escapeAmount(t2, deleteStaked, layout, true))
 					if stakingAmount.Equal(decimal.Zero) {
 						ret.Change.StakeAmount = append(ret.Change.StakeAmount, lastStakingAmount.String())
 					} else {
@@ -643,7 +701,7 @@ FULL JOIN(
 					}
 				} else {
 					lastCirAmount = circulations.Sub(lastDelAmount)
-					ret.Change.Circulations = append(ret.Change.Circulations, circulations.Sub(lastDelAmount).String())
+					ret.Change.Circulations = append(ret.Change.Circulations, lastCirAmount.String())
 				}
 				break
 			}
@@ -651,13 +709,23 @@ FULL JOIN(
 		if !isFindout {
 			times, _ := time.ParseInLocation(layout, findTime, time.Local)
 			t1 := times.Unix()
-			var delCirculations decimal.Decimal
+			var (
+				delCirculations decimal.Decimal
+				addLockAmount   decimal.Decimal
+			)
 			delCirculations = escapeAmount(t1, delCir, layout, true)
 			if !delCirculations.Equal(decimal.Zero) {
 				ret.Change.Circulations = append(ret.Change.Circulations, lastCirAmount.Sub(delCirculations.Sub(lastDelAmount)).String())
 			} else {
-				ret.Change.Circulations = append(ret.Change.Circulations, ret.Change.Circulations[len(ret.Change.Circulations)-1])
+				ret.Change.Circulations = append(ret.Change.Circulations, lastCirAmount.String())
 			}
+			addLockAmount = escapeAmount(t1, addLockList, layout, true)
+			if !addLockAmount.Equal(decimal.Zero) {
+				ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.Add(addLockAmount.Add(lastAddLockAmount)).String())
+			} else {
+				ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
+			}
+
 			combusAmount = escapeAmount(t1, combustion, layout, true)
 			supplyAmount = escapeAmount(t1, supplyToken, layout, true)
 			emissionAmount = escapeAmount(t1, emission, layout, true)
@@ -692,7 +760,7 @@ FULL JOIN(
 					lastEmission = emissionAmount.Add(lastEmission)
 				}
 			} else {
-				stakingAmount = escapeAmount(t1, newStaked, layout, true).Sub(escapeAmount(t1, deleStaked, layout, true))
+				stakingAmount = escapeAmount(t1, newStaked, layout, true).Sub(escapeAmount(t1, deleteStaked, layout, true))
 				if stakingAmount.Equal(decimal.Zero) {
 					ret.Change.StakeAmount = append(ret.Change.StakeAmount, lastStakingAmount.String())
 				} else {
@@ -700,7 +768,7 @@ FULL JOIN(
 					lastStakingAmount = stakingAmount.Add(lastStakingAmount)
 				}
 				ret.Change.NftBalanceSupply = append(ret.Change.NftBalanceSupply, lastNftBanlance.String())
-				ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
+				//ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
 				//ret.Change.StakeAmount = append(ret.Change.StakeAmount, lastStakingAmount.String())
 				ret.Change.SupplyToken = append(ret.Change.SupplyToken, TotalSupplyToken)
 				ret.Change.Emission = append(ret.Change.Emission, "0")

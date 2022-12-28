@@ -22,9 +22,13 @@ type AirdropInfo struct {
 }
 
 var (
-	AirdropReady     bool
+	AirdropReady bool
+	//total amount: is not now amount
 	AirdropStakedAll decimal.Decimal
 	AirdropLockAll   decimal.Decimal
+
+	nowAirdropLockAll    decimal.Decimal
+	nowAirdropStakingAll decimal.Decimal
 )
 
 func (p AirdropInfo) TableName() string {
@@ -75,5 +79,21 @@ func GetAirdropLockAllTotal() {
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Get Airdrop Lock All Total Failed")
 		}
+		getNowAirdropLockAll()
+		getNowAirdropStakingAll()
+	}
+}
+
+func getNowAirdropLockAll() {
+	err := GetDB(nil).Model(AirdropInfo{}).Select("COALESCE(sum(balance_amount),0)").Take(&nowAirdropLockAll).Error
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get Airdrop Now Lock All Total Failed")
+	}
+}
+
+func getNowAirdropStakingAll() {
+	err := GetDB(nil).Model(AirdropInfo{}).Select("coalesce(sum(stake_amount),0)").Take(&nowAirdropStakingAll).Error
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get Airdrop Now Staking All Total Failed")
 	}
 }
