@@ -447,6 +447,7 @@ type CirculationsChangeResponse struct {
 	Miner   []string `json:"miner"`
 	Unlock  []string `json:"unlock"`
 	Unstake []string `json:"unstake"`
+	Total   []string `json:"total"`
 }
 
 type CirculationsChartResponse struct {
