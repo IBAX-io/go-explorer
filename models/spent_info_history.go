@@ -420,7 +420,7 @@ begin:
 			if !f {
 				return fmt.Errorf("[utxo sync]get log hash doesn't exist hash:%s", hex.EncodeToString(val.Hash))
 			}
-			amount := decimal.New(consts.FounderAmount, int32(consts.MoneyDigits))
+			amount := decimal.New(StartUpSupply, int32(consts.MoneyDigits))
 			data.Type = formatSpentInfoHistoryType(info.UtxoType)
 			data.SenderId = 5555
 			data.RecipientId = lt.Address

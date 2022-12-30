@@ -376,7 +376,7 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 		}
 		if ecoList[i].ID == 1 {
 			list[i].TokenSymbol = SysTokenSymbol
-			list[i].TotalAmount = TotalSupplyToken
+			list[i].TotalAmount = TotalSupplyToken.String()
 		}
 
 		if ecoList[i].Info != "" {
@@ -720,7 +720,7 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 	} else {
 		rets.BlockId = 1
 		rets.Time = FirstBlockTime
-		rets.TotalAmount = TotalSupplyToken
+		rets.TotalAmount = TotalSupplyToken.String()
 		rets.TokenSymbol = SysTokenSymbol
 		rets.EcoType = "-"
 		rets.EcoTag = "-"

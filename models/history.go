@@ -1553,7 +1553,7 @@ func GetAccountTxChart(ecosystem int64, account string) (AccountTxChart, error) 
 	today := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 	err := GetDB(nil).Raw(`
 SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,count(1)num FROM transaction_relation 
-WHERE (ecosystem = ? AND sender_ids LIKE ?) OR 
+WHERE (ecosystem = ? AND recipient_ids LIKE ?) OR 
 (ecosystem = ? AND sender_ids like ? AND recipient_ids NOT like ?)
 GROUP BY days ORDER BY days ASC
 `, ecosystem, keyIdLike, ecosystem, keyIdLike, keyIdLike).Find(&list).Error

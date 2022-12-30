@@ -7,6 +7,8 @@ package models
 
 import (
 	"fmt"
+	"github.com/IBAX-io/go-ibax/packages/consts"
+	"github.com/shopspring/decimal"
 	"strings"
 )
 
@@ -20,7 +22,6 @@ const (
 	ecosysTable      = "1_ecosystems"
 	SysTokenSymbol   = "IBXC"
 	SysEcosystemName = "platform ecosystem"
-	TotalSupplyToken = "2100000000000000000000"
 	UtxoTx           = "UTXO_Tx"
 	UtxoTransferSelf = "UTXO_Transfer_Self"
 	UtxoBurning      = "UTXO_Burning"
@@ -31,11 +32,28 @@ const (
 	UTXOAccount = "UTXO-Account"
 )
 
+const (
+	publicRoundSupply = 42000000
+	devTempSupply     = 315000000
+	foundationSupply  = 315000000
+	partnersSupply    = 210000000
+	privateRound1     = 42000000
+	privateRound2     = 147000000
+)
+
+const AssignTotalSupply = publicRoundSupply + devTempSupply + foundationSupply + partnersSupply + privateRound1 + privateRound2
+const NftMinerTotalSupply = 393750000
+const MintNodeTotalSupply = 630000000
+const StartUpSupply = consts.FounderAmount
+
+const TotalSupply = AssignTotalSupply + NftMinerTotalSupply + MintNodeTotalSupply + StartUpSupply
+
 var (
 	buildBranch = ""
 	buildDate   = ""
 	commitHash  = ""
 )
+var TotalSupplyToken decimal.Decimal
 
 var BuildInfo string
 
@@ -53,4 +71,8 @@ func InitBuildInfo() {
 		}
 		return fmt.Sprintf("branch.%s commit.%s time.%s", buildBranch, commitHash, buildDate)
 	}()
+}
+
+func init() {
+	TotalSupplyToken = decimal.New(TotalSupply, int32(consts.MoneyDigits))
 }
