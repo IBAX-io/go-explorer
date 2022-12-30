@@ -52,6 +52,6 @@ func realTimeDataServer() {
 	go models.SendTxRelationSignal()
 	go models.GetAssignTotalBalanceAmount()
 	go models.GetNftMinerTotalSupply()
-	go models.GetAirdropStakedAllTotal()
 	go models.GetAirdropLockAllTotal()
+	go models.GetMintNodeTotalBalance()
 }

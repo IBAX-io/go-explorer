@@ -674,8 +674,8 @@ func (m *Key) GetAccountList(page, limit int, ecosystem int64) (*KeysListResult,
 	}
 	ret.Total = total
 
-	totalAmount := allKeyAmount.Get(ecosystem)
-	if totalAmount.Equal(decimal.Zero) {
+	totalAmount, err := allKeyAmount.Get(ecosystem)
+	if err != nil {
 		return &ret, nil
 	}
 
@@ -807,11 +807,11 @@ func (k *Key) GetEcosystemTokenSymbolList(page, limit int, ecosystem int64) (*Ge
 	rets.Limit = limit
 	rets.Page = page
 
-	ecoTotal := allKeyAmount.Get(ecosystem)
-	tokenSymbol := Tokens.Get(ecosystem)
-	if ecoTotal.Equal(decimal.Zero) {
+	ecoTotal, err := allKeyAmount.Get(ecosystem)
+	if err != nil {
 		return &rets, nil
 	}
+	tokenSymbol := Tokens.Get(ecosystem)
 
 	var ret []EcosystemTokenSymbolList
 	var (
@@ -837,34 +837,36 @@ SELECT COUNT(1) FROM(
 	
 			FROM "1_keys" AS k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
 	 )AS v1
-	 WHERE amount > 0
 )AS v2
+WHERE amount > 0
 `)
 			querySql = GetDB(nil).Raw(`
-SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
-	v1.stake_amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount 
-FROM(
-	SELECT id,account,ecosystem,
-		amount,
-
-		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
-		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
-		AS stake_amount
-
-		FROM "1_keys" AS k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
- )AS v1
- WHERE amount > 0
- ORDER BY amount desc OFFSET ? LIMIT ?
+SELECT * FROM(
+	SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
+		v1.stake_amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount 
+	FROM(
+		SELECT id,account,ecosystem,
+			amount,
+	
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
+			AS stake_amount
+	
+			FROM "1_keys" AS k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
+	)AS v1
+)AS v2
+WHERE amount > 0
+ORDER BY amount desc OFFSET ? LIMIT ?
 `, (page-1)*limit, limit)
 		} else {
 			countSql = GetDB(nil).Raw(`
 SELECT COUNT(1) FROM(
 	SELECT v1.amount+
 		v1.stake_amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
 	FROM(
 		SELECT id,account,ecosystem,
 			amount,
@@ -873,28 +875,30 @@ SELECT COUNT(1) FROM(
 			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
 			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
 	
-			FROM "1_keys" WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+			FROM "1_keys" WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
 	 )AS v1
-	 WHERE amount > 0
 )AS v2
+WHERE amount > 0
 `)
 			querySql = GetDB(nil).Raw(`
-SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
-	v1.stake_amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-FROM(
-	SELECT id,account,ecosystem,
-		amount,
-
-		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
-
-		FROM "1_keys" WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
- )AS v1
- WHERE amount > 0
- ORDER BY amount desc OFFSET ? LIMIT ?
-`, ecosystem, (page-1)*limit, limit)
+SELECT * FROM(
+	SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
+		v1.stake_amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
+	FROM(
+		SELECT id,account,ecosystem,
+			amount,
+	
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+	
+			FROM "1_keys" WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
+	)AS v1
+)AS v2
+WHERE amount > 0
+ORDER BY amount desc OFFSET ? LIMIT ?
+`, (page-1)*limit, limit)
 		}
 	} else {
 		if AirdropReady && ecosystem == 1 {
@@ -908,18 +912,20 @@ SELECT COUNT(1) FROM(
 			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
 			FROM "1_keys" as k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
 	)AS v1
-	WHERE amount > 0
 )AS v2
+WHERE amount > 0
 `)
 			querySql = GetDB(nil).Raw(`
-SELECT v1.account,v1.ecosystem,v1.amount + v1.stake_amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-FROM(
-	SELECT id,account,ecosystem,
-		amount,
-		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
-		FROM "1_keys" as k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
-)AS v1
+SELECT * FROM(
+	SELECT v1.account,v1.ecosystem,v1.amount + v1.stake_amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
+	FROM(
+		SELECT id,account,ecosystem,
+			amount,
+			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
+			FROM "1_keys" as k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
+	)AS v1
+)AS v2
 WHERE amount > 0
 ORDER BY amount desc OFFSET ? LIMIT ?
 `, (page-1)*limit, limit)
@@ -933,30 +939,32 @@ SELECT COUNT(1) FROM(
 			k1.amount
 			FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
 	)AS v1
-	WHERE amount > 0
 )AS v2
+WHERE amount > 0
 `, ecosystem)
 			querySql = GetDB(nil).Raw(`
-SELECT v1.id,v1.account,v1.ecosystem,v1.amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-CASE WHEN (SELECT control_mode FROM "1_ecosystems" WHERE id = v1.ecosystem AND id > 1) = 2 THEN
-	CASE WHEN (
-		SELECT count(1) FROM "1_votings_participants" WHERE
-			voting_id = (SELECT id FROM "1_votings" WHERE deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%' AND ecosystem = v1.ecosystem ORDER BY id DESC LIMIT 1)
-						AND member->>'account'=v1.account) > 0 
-	THEN
-		TRUE
+SELECT * FROM(
+	SELECT v1.id,v1.account,v1.ecosystem,v1.amount +
+		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+	CASE WHEN (SELECT control_mode FROM "1_ecosystems" WHERE id = v1.ecosystem AND id > 1) = 2 THEN
+		CASE WHEN (
+			SELECT count(1) FROM "1_votings_participants" WHERE
+				voting_id = (SELECT id FROM "1_votings" WHERE deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%' AND ecosystem = v1.ecosystem ORDER BY id DESC LIMIT 1)
+							AND member->>'account'=v1.account) > 0 
+		THEN
+			TRUE
+		ELSE
+			FALSE
+		END
 	ELSE
-		FALSE
-	END
-ELSE
- FALSE
-END AS front_committee
-FROM(
-	SELECT id,account,ecosystem,
-		k1.amount
-		FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
-)AS v1
+	 FALSE
+	END AS front_committee
+	FROM(
+		SELECT id,account,ecosystem,
+			k1.amount
+			FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
+	)AS v1
+)AS v2
 WHERE amount > 0
 ORDER BY amount desc OFFSET ? LIMIT ?
 `, ecosystem, (page-1)*limit, limit)
@@ -976,12 +984,13 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 	var committeeList []ids
 	if ecosystem > 1 {
 		err = GetDB(nil).Raw(`
-SELECT v1.id,amount + COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-FROM(
-	SELECT id,amount,ecosystem FROM "1_keys" AS k1 
-	WHERE (SELECT control_mode FROM "1_ecosystems" WHERE id = k1.ecosystem AND id > 1) = 2 AND ecosystem = ? AND deleted = 0 AND blocked = 0 
-)
-AS v1
+SELECT * FROM(
+	SELECT v1.id,amount + COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
+	FROM(
+		SELECT id,amount,ecosystem FROM "1_keys" AS k1 
+		WHERE (SELECT control_mode FROM "1_ecosystems" WHERE id = k1.ecosystem AND id > 1) = 2 AND ecosystem = ? AND deleted = 0 AND blocked = 0 
+	)AS v1
+)AS v2
 WHERE amount > 0
 ORDER BY row_number() OVER (ORDER BY amount DESC) <= 50
 `, ecosystem).Find(&committeeList).Error

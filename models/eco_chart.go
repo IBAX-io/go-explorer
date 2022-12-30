@@ -170,16 +170,16 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 		LockAmount       decimal.Decimal
 	}
 	type nowChartDataResponse struct {
-		Circulations          decimal.Decimal
-		StakeAmount           decimal.Decimal
-		LockAmount            decimal.Decimal
-		NftMinerBalanceSupply string
-		BurningTokens         string
-		Combustion            string
-		TokenSymbol           string
-		Name                  string
-		SupplyToken           string
-		Emission              string
+		Circulations    decimal.Decimal
+		StakeAmount     decimal.Decimal
+		LockAmount      decimal.Decimal
+		NftMinerBalance string
+		BurningTokens   string
+		Combustion      string
+		TokenSymbol     string
+		Name            string
+		SupplyToken     string
+		Emission        string
 	}
 
 	escapeAmount := func(findTime int64, list []DaysAmount, layout string, areEqual bool) decimal.Decimal {
@@ -285,15 +285,6 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 		}
 
 		if NftMinerReady {
-			var app AppParam
-			f, err := app.GetByName(1, "nft_miner_balance_supply")
-			if err = handledErr(err, "get nft miner balance supply"); err != nil {
-				return ret, err
-			}
-			if f {
-				nowChart.NftMinerBalanceSupply = app.Value
-			}
-
 			//nft staking
 			var staking decimal.Decimal
 			err = GetDB(nil).Raw(`
@@ -303,10 +294,8 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 			if err = handledErr(err, "get nft miner staking"); err != nil {
 				return ret, err
 			}
-
-		} else {
-			nowChart.NftMinerBalanceSupply = decimal.Zero.String()
 		}
+		nowChart.NftMinerBalance = NftMinerTotalBalance.Add(MintNodeTotalBalance).String()
 
 		if AirdropReady {
 			//airdrop lock
@@ -317,11 +306,11 @@ func GetEcosystemCirculationsChart(ecosystem int64) (EcoCirculationsResponse, er
 		}
 
 		if AssignReady {
-			nowChart.LockAmount = nowChart.LockAmount.Add(nowAssignLockAll)
+			nowChart.LockAmount = nowChart.LockAmount.Add(AssignTotalBalance)
 		}
 		nowChart.BurningTokens = decimal.Zero.String()
 		nowChart.Combustion = decimal.Zero.String()
-		nowChart.SupplyToken = TotalSupplyToken
+		nowChart.SupplyToken = TotalSupplyToken.String()
 		nowChart.Emission = decimal.Zero.String()
 	} else {
 		err = GetDB(nil).Raw(`
@@ -341,7 +330,7 @@ LEFT JOIN(
 	SELECT COALESCE(amount,0)AS supply_token,ecosystem FROM "1_history" AS h1 WHERE type = 6 AND ecosystem = ? ORDER BY id ASC LIMIT 1
 )AS v2 ON(v1.eco_id = v2.ecosystem)
 `, ecosystem, ecosystem, ecosystem).Take(&nowChart).Error
-		nowChart.NftMinerBalanceSupply = decimal.Zero.String()
+		nowChart.NftMinerBalance = decimal.Zero.String()
 		if err = handledErr(err, "get ecosystem now circulations"); err != nil {
 			return ret, err
 		}
@@ -350,7 +339,7 @@ LEFT JOIN(
 	ret.TokenSymbol = nowChart.TokenSymbol
 	ret.StakeAmount = nowChart.StakeAmount.String()
 	ret.LockAmount = nowChart.LockAmount.String()
-	ret.NftBalanceSupply = nowChart.NftMinerBalanceSupply
+	ret.NftBalanceSupply = nowChart.NftMinerBalance
 	ret.Combustion = nowChart.Combustion
 	ret.BurningTokens = nowChart.BurningTokens
 	ret.Name = nowChart.Name
@@ -358,13 +347,6 @@ LEFT JOIN(
 	ret.Emission = nowChart.Emission
 	//get In the day Circulations
 	if ecosystem == 1 {
-		if NftMinerTotalSupply.Equal(decimal.Zero) {
-			GetNftMinerTotalSupply()
-		}
-		if AssignTotalBalance.Equal(decimal.Zero) {
-			GetAssignTotalBalanceAmount()
-		}
-
 		var unLockType []int
 		if AssignReady {
 			unLockType = append(unLockType, 8, 9, 10, 11, 25, 26, 27, 30, 31)
@@ -407,7 +389,7 @@ LEFT JOIN(
 	FROM "1_history" AS s3
 )AS ai ON(ai.days = cir.days)
 ORDER BY cir.days asc
-`, NftMinerTotalSupply.String(), AssignTotalBalance.Add(AirdropLockAll).String()),
+`, NftMinerTotalSupplyToken.Add(MintNodeTotalSupplyToken).String(), AssignTotalSupplyToken.Add(AirdropLockAll).String()),
 				timeDbFormat, newCirculationsType, timeDbFormat, timeDbFormat, unLockType).Find(&cir).Error
 			if err = handledErr(err, "get Circulations change"); err != nil {
 				return ret, err
@@ -436,7 +418,7 @@ LEFT JOIN(
 	FROM "1_history" AS s1 
 )AS sy ON(sy.days = cir.days)
 ORDER BY cir.days asc
-`, NftMinerTotalSupply), timeDbFormat, timeDbFormat).Find(&cir).Error
+`, NftMinerTotalSupplyToken.Add(MintNodeTotalSupplyToken).String()), timeDbFormat, timeDbFormat).Find(&cir).Error
 			if err = handledErr(err, "get Circulations change"); err != nil {
 				return ret, err
 			}
@@ -686,7 +668,7 @@ SELECT del.days,del.total_amount as amount
 						ret.Change.StakeAmount = append(ret.Change.StakeAmount, stakingAmount.Add(lastStakingAmount).String())
 						lastStakingAmount = stakingAmount.Add(lastStakingAmount)
 					}
-					ret.Change.SupplyToken = append(ret.Change.SupplyToken, TotalSupplyToken)
+					ret.Change.SupplyToken = append(ret.Change.SupplyToken, TotalSupplyToken.String())
 					ret.Change.Emission = append(ret.Change.Emission, "0")
 				}
 
@@ -770,7 +752,7 @@ SELECT del.days,del.total_amount as amount
 				ret.Change.NftBalanceSupply = append(ret.Change.NftBalanceSupply, lastNftBanlance.String())
 				//ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
 				//ret.Change.StakeAmount = append(ret.Change.StakeAmount, lastStakingAmount.String())
-				ret.Change.SupplyToken = append(ret.Change.SupplyToken, TotalSupplyToken)
+				ret.Change.SupplyToken = append(ret.Change.SupplyToken, TotalSupplyToken.String())
 				ret.Change.Emission = append(ret.Change.Emission, "0")
 			}
 
@@ -919,6 +901,11 @@ func getEcoTopTenHasTokenAccount(ecosystem int64) (*EcoTopTenHasTokenResponse, e
 		Amount      decimal.Decimal
 		StakeAmount decimal.Decimal
 	}
+	totalAmount, err := allKeyAmount.Get(ecosystem)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get Eco TopTen HasToken Total Amount Failed")
+		return nil, err
+	}
 	var list []accountHold
 	if ecosystem == 1 && (NftMinerReady || NodeReady) {
 		if AirdropReady {
@@ -999,31 +986,6 @@ ORDER BY amount DESC
 		return nil, err
 	}
 
-	type totalAmountRet struct {
-		TotalAmount decimal.Decimal `json:"total_amount"`
-	}
-	var totalAmount totalAmountRet
-	err = GetDB(nil).Raw(`
-SELECT sum(k2.amount)+sum(to_number(coalesce(NULLIF(k2.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999'))+
-	sum(to_number(coalesce(NULLIF(k2.lock->>'candidate_referendum',''),'0'),'999999999999999999999999')) + 
-	sum(to_number(coalesce(NULLIF(k2.lock->>'candidate_substitute',''),'0'),'999999999999999999999999'))+
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?),0) 
-as total_amount FROM "1_keys" AS k2 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
-`, ecosystem, ecosystem).Take(&totalAmount).Error
-	if err != nil {
-		log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("Get Eco TopTen HasToken Account Chart Total Amount Failed")
-		return nil, err
-	}
-	if ecosystem == 1 && AirdropReady {
-		var staking decimal.Decimal
-		err = GetDB(nil).Model(AirdropInfo{}).Select("sum(stake_amount)").Take(&staking).Error
-		if err != nil {
-			log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("Get Eco TopTen HasToken Account Chart airdrop staking Amount Failed")
-			return nil, err
-		}
-		totalAmount.TotalAmount = totalAmount.TotalAmount.Add(staking)
-	}
-
 	otherAmount := decimal.Zero
 	otherStaking := decimal.Zero
 	for key, val := range list {
@@ -1035,7 +997,7 @@ as total_amount FROM "1_keys" AS k2 WHERE ecosystem = ? AND blocked = 0 AND dele
 			rt.Account = converter.AddressToString(val.KeyId)
 			rt.StakeAmount = val.StakeAmount.String()
 			rt.Amount = val.Amount.String()
-			rt.AccountedFor = val.Amount.Mul(decimal.NewFromInt(100)).DivRound(totalAmount.TotalAmount, 2)
+			rt.AccountedFor = val.Amount.Mul(decimal.NewFromInt(100)).DivRound(totalAmount, 2)
 			rets.List = append(rets.List, rt)
 		}
 	}
@@ -1044,7 +1006,7 @@ as total_amount FROM "1_keys" AS k2 WHERE ecosystem = ? AND blocked = 0 AND dele
 		rt.Account = "Other"
 		rt.StakeAmount = otherStaking.String()
 		rt.Amount = otherAmount.String()
-		rt.AccountedFor = otherAmount.Mul(decimal.NewFromInt(100)).DivRound(totalAmount.TotalAmount, 2)
+		rt.AccountedFor = otherAmount.Mul(decimal.NewFromInt(100)).DivRound(totalAmount, 2)
 		rets.List = append(rets.List, rt)
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)

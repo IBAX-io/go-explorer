@@ -8,6 +8,7 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"github.com/IBAX-io/go-ibax/packages/consts"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"strconv"
@@ -17,13 +18,10 @@ import (
 
 var (
 	AssignReady bool
-	//total amount: is not now amount
-	AssignTotalBalance decimal.Decimal
 
-	nowAssignLockAll decimal.Decimal
+	AssignTotalBalance     decimal.Decimal
+	AssignTotalSupplyToken decimal.Decimal
 )
-
-const AssignTotalSupply = 1071000000
 
 type AssignRules struct {
 	StartBlockID    int64  `json:"start_blockid"`
@@ -143,9 +141,13 @@ func GetAssignTotalBalanceAmount() {
 	defer func() {
 		RealtimeWG.Done()
 	}()
+	if AssignTotalSupplyToken.IsZero() {
+		getAssignTotalSupplyToken()
+	}
 	if AssignReady {
-		AssignTotalBalance = decimal.NewFromInt(AssignTotalSupply).Mul(decimal.NewFromInt(1e12))
 		getAssignNowTotalBalance()
+	} else {
+		AssignTotalBalance = AssignTotalSupplyToken
 	}
 }
 
@@ -158,8 +160,12 @@ func getAssignNowTotalBalance() {
 			CAST((SELECT value FROM "1_app_params" WHERE "name" = 'balance_supply_dev_team' AND ecosystem = 1) as numeric)+
 			(SELECT COALESCE(sum(balance_amount),0) FROM "1_assign_info")
 		AS lock_amount
-	`).Take(&nowAssignLockAll).Error
+	`).Take(&AssignTotalBalance).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get now assign Lock All Failed")
 	}
+}
+
+func getAssignTotalSupplyToken() {
+	AssignTotalSupplyToken = decimal.New(AssignTotalSupply, int32(consts.MoneyDigits))
 }

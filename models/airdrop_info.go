@@ -24,8 +24,7 @@ type AirdropInfo struct {
 var (
 	AirdropReady bool
 	//total amount: is not now amount
-	AirdropStakedAll decimal.Decimal
-	AirdropLockAll   decimal.Decimal
+	AirdropLockAll decimal.Decimal
 
 	nowAirdropLockAll    decimal.Decimal
 	nowAirdropStakingAll decimal.Decimal
@@ -54,19 +53,6 @@ func (p *AirdropInfo) GetStaking(account string) decimal.Decimal {
 		return staking
 	}
 	return decimal.Zero
-}
-
-func GetAirdropStakedAllTotal() {
-	RealtimeWG.Add(1)
-	defer func() {
-		RealtimeWG.Done()
-	}()
-	if AirdropReady {
-		err := GetDB(nil).Model(AirdropInfo{}).Select("COALESCE(sum(lock_amount*priority),0)").Take(&AirdropStakedAll).Error
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Get Airdrop Staked All Total Failed")
-		}
-	}
 }
 
 func GetAirdropLockAllTotal() {

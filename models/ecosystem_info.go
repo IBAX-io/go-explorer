@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"sync"
@@ -149,15 +150,15 @@ func (p *EcosystemInfoMap) GetId(infoId int, defaultValue string) string {
 	return defaultValue
 }
 
-func (p *ecoAmountObject) Get(ecosystem int64) decimal.Decimal {
+func (p *ecoAmountObject) Get(ecosystem int64) (decimal.Decimal, error) {
 	if p == nil {
-		return decimal.Zero
+		return decimal.Zero, errors.New("eco amount object null")
 	}
 	value, ok := p.Load(ecosystem)
 	if ok {
-		return value.(decimal.Decimal)
+		return value.(decimal.Decimal), nil
 	}
-	return decimal.Zero
+	return decimal.Zero, errors.New("eco amount not exist")
 }
 
 func GetAllTokenSymbol() ([]Ecosystem, error) {
@@ -210,7 +211,7 @@ func GetAllKeysTotalAmount(ecosystem int64) error {
 	err := GetDB(nil).Raw(`
 SELECT sum(amount) +
 	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ?),0) AS total_amount
-FROM "1_keys" WHERE ecosystem = ?
+FROM "1_keys" WHERE ecosystem = ? AND id <> 0 AND id <> 5555
 `, ecosystem, ecosystem).Take(&totalAmount).Error
 	if err != nil {
 		return err

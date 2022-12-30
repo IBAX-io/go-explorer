@@ -521,7 +521,7 @@ func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	rets.TxInfo.WeekAverageTx = m.WeekAverageTx
 
 	rets.CirculationsInfo.Circulations = m.Circulations
-	rets.CirculationsInfo.TotalAmounts = TotalSupplyToken
+	rets.CirculationsInfo.TotalAmounts = TotalSupplyToken.String()
 	rets.CirculationsInfo.TodayCirculationsAmount = m.TodayCirculationsAmount
 	rets.CirculationsInfo.TwentyFourAmount = m.TwentyFourAmount
 

@@ -253,6 +253,7 @@ func Get15DayNewCirculationsChart() (CirculationsChartResponse, error) {
 	rets.Change.Unstake = make([]string, getDays)
 	rets.Change.Unlock = make([]string, getDays)
 	rets.Change.Miner = make([]string, getDays)
+	rets.Change.Total = make([]string, getDays)
 
 	var (
 		totalUnlock  decimal.Decimal
@@ -280,7 +281,7 @@ func Get15DayNewCirculationsChart() (CirculationsChartResponse, error) {
 
 	err = GetDB(nil).Model(History{}).
 		Select("to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd') AS days,sum(amount) AS amount").
-		Where("ecosystem = 1 AND type IN(8,9,10,11,25,26,27,30,31,34)").Group("days").
+		Where("ecosystem = 1 AND type IN(8,9,10,11,23,25,26,27,30,31,34)").Group("days").
 		Order("days desc").Limit(getDays).Find(&unlock).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get 15 Day New Circulations Chart unlock Failed")
@@ -295,6 +296,7 @@ func Get15DayNewCirculationsChart() (CirculationsChartResponse, error) {
 		rets.Change.Unstake[i] = unstakeAmount.String()
 		rets.Change.Unlock[i] = unlockAmount.String()
 		rets.Change.Miner[i] = minerAmount.String()
+		rets.Change.Total[i] = unstakeAmount.Add(unlockAmount).Add(minerAmount).String()
 
 		totalUnlock = totalUnlock.Add(unlockAmount)
 		totalUnstake = totalUnstake.Add(unstakeAmount)

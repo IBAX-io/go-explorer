@@ -25,13 +25,13 @@ func CreateCrontab() {
 	InitCrontabTask()
 	CrontabInfo := conf.GetEnvConf().Crontab
 	if CrontabInfo != nil {
-		go CreateCrontabFromHonorNode(CrontabInfo.HonorNode)
+		CreateCrontabFromHonorNode(CrontabInfo.HonorNode)
 
-		//go CreateCrontabFromNodeTransaction(CrontabInfo.NodeTransaction)
-		go CreateCrontabFromChartData(CrontabInfo.ChartData)
-		go CreateCrontabFromRealtime(CrontabInfo.Realtime)
-		go CreateCrontabFromLoadContracts(CrontabInfo.LoadContracts)
-		go CreateCrontabFromHistoryData(CrontabInfo.HistoryData)
+		//CreateCrontabFromNodeTransaction(CrontabInfo.NodeTransaction)
+		CreateCrontabFromChartData(CrontabInfo.ChartData)
+		CreateCrontabFromRealtime(CrontabInfo.Realtime)
+		CreateCrontabFromLoadContracts(CrontabInfo.LoadContracts)
+		CreateCrontabFromHistoryData(CrontabInfo.HistoryData)
 	}
 
 }
@@ -158,6 +158,7 @@ func InitCrontabTask() {
 	loadContracts.SendSignal()
 	honorNode.SendSignal()
 	chart.SendSignal()
+	time.Sleep(3 * time.Second)
 	history.SendSignal()
 
 	models.InitHonorNodeByRedis("newest")

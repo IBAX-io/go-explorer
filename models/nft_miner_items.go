@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/IBAX-io/go-ibax/packages/consts"
 	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/IBAX-io/go-ibax/packages/smart"
 	"github.com/shopspring/decimal"
@@ -52,8 +53,9 @@ type StrReplaceStruct struct {
 }
 
 var (
-	NftMinerReady       bool
-	NftMinerTotalSupply decimal.Decimal
+	NftMinerReady            bool
+	NftMinerTotalSupplyToken decimal.Decimal
+	NftMinerTotalBalance     decimal.Decimal
 )
 
 func (p *NftMinerItems) TableName() string {
@@ -607,10 +609,27 @@ func GetNftMinerTotalSupply() {
 		RealtimeWG.Done()
 	}()
 	if NftMinerReady {
-		err := GetDB(nil).Model(AppParam{}).Select("value").
-			Where("name = 'nft_miner_total_supply' AND ecosystem = 1").Take(&NftMinerTotalSupply).Error
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Get nft miner total supply Failed")
+		if NftMinerTotalSupplyToken.IsZero() {
+			err := GetDB(nil).Model(AppParam{}).Select("value").
+				Where("name = 'nft_miner_total_supply' AND ecosystem = 1").Take(&NftMinerTotalSupplyToken).Error
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Get nft miner total supply Failed")
+			}
 		}
+		GetNftMinerTotalBalance()
+	} else {
+		NftMinerTotalSupplyToken = decimal.New(NftMinerTotalSupply, int32(consts.MoneyDigits))
+		NftMinerTotalBalance = NftMinerTotalSupplyToken
+	}
+}
+
+func GetNftMinerTotalBalance() {
+	var app AppParam
+	f, err := app.GetByName(1, "nft_miner_balance_supply")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Get nft miner total balance Failed")
+	}
+	if f {
+		NftMinerTotalBalance, _ = decimal.NewFromString(app.Value)
 	}
 }
