@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/IBAX-io/go-explorer/models"
+	"github.com/IBAX-io/go-explorer/models/buffer"
 	"github.com/IBAX-io/go-explorer/services"
 )
 
@@ -69,6 +70,11 @@ func StartDaemons(ctx context.Context) {
 		if err != nil {
 			ExitCh <- fmt.Errorf("Init transaction relation err:%s\n", err.Error())
 		}
+
+		err = models.CreateIndexMain()
+		if err != nil {
+			ExitCh <- fmt.Errorf("Create Table main err:%s\n", err.Error())
+		}
 	}()
 	err := models.InitCountryLocator()
 	if err != nil {
@@ -81,6 +87,6 @@ func StartDaemons(ctx context.Context) {
 	}
 
 	models.InitEcosystemInfo()
-	models.InitGlobalSwitch()
+	go buffer.RefreshServer()
 
 }

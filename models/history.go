@@ -1003,7 +1003,7 @@ FULL JOIN(
 	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM spent_info_history 
 	WHERE recipient_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? GROUP BY days ORDER BY days ASC
 )AS v2 ON(v2.days = v1.days)
-`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.Unix()).Find(&inAmount).Error
+`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.UnixMilli()).Find(&inAmount).Error
 	if err != nil {
 		return &ret, err
 	}
@@ -1022,7 +1022,7 @@ FULL JOIN(
 	SELECT to_char(to_timestamp(created_at/1000), 'yyyy-mm-dd')AS days,sum(amount)AS amount FROM spent_info_history 
 	WHERE sender_id = ? AND ecosystem = ? AND type <> 1 AND created_at >= ? GROUP BY days ORDER BY days ASC
 )AS v2 ON(v2.days = v1.days)
-`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.Unix()).Find(&outAmount).Error
+`, keyId, ecosystem, t1.UnixMilli(), keyId, ecosystem, t1.UnixMilli()).Find(&outAmount).Error
 	if err != nil {
 		return &ret, err
 	}

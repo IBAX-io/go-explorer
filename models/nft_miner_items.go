@@ -424,6 +424,10 @@ func (p *NftMinerItems) GetNftMetaverse() (*NftMinerMetaverseInfoResponse, error
 	if err != nil {
 		return &rets, err
 	}
+	err = GetDB(nil).Model(NftMinerItems{}).Where("merge_status = 1").Count(&rets.ValidCount).Error
+	if err != nil {
+		return &rets, err
+	}
 
 	var his History
 	var nftIns SumAmount
@@ -434,6 +438,11 @@ func (p *NftMinerItems) GetNftMetaverse() (*NftMinerMetaverseInfoResponse, error
 	}
 	rets.RewardAmount = nftIns.Sum.String()
 
+	err = GetDB(nil).Table(p.TableName()).Where("merge_status = 1").Group("nation").Count(&rets.ValidRegion).Error
+	if err != nil {
+		log.Info("get nft nation failed:", err.Error())
+		return nil, err
+	}
 	err = GetDB(nil).Table(p.TableName()).Group("nation").Count(&rets.Region).Error
 	if err != nil {
 		log.Info("get nft nation failed:", err.Error())
@@ -510,10 +519,10 @@ SELECT v5.days,array_to_string(array_agg(v5.nation),',')nation,array_to_string(a
 	SELECT v4.days,v4.nation,v4.total,ROW_NUMBER () OVER (PARTITION BY v4.days ORDER BY v4.total desc) AS rowd FROM(
 		SELECT v3.days,v3.nation,count(1) total FROM (
 			SELECT v1.days,v2.nation FROM(
-				SELECT to_char(to_timestamp(date_created),'yyyy-MM-dd') AS days FROM "1_nft_miner_items" WHERE merge_status = 1 GROUP BY days
+				SELECT to_char(to_timestamp(date_created),'yyyy-MM-dd') AS days FROM "1_nft_miner_items" GROUP BY days
 			)AS v1
 			LEFT JOIN(
-				SELECT date_created,nation FROM "1_nft_miner_items" WHERE merge_status = 1
+				SELECT date_created,nation FROM "1_nft_miner_items"
 			)AS v2 ON(to_char(to_timestamp(v2.date_created),'yyyy-MM-dd') <= v1.days)
 		)AS v3 GROUP BY days,nation ORDER BY days ASC,total DESC
 	)AS v4 
@@ -526,10 +535,10 @@ SELECT v5.days,array_to_string(array_agg(v5.nation),',')nation,array_to_string(a
 	SELECT v4.days,v4.nation,v4.total,ROW_NUMBER () OVER (PARTITION BY v4.days ORDER BY v4.total desc) AS rowd FROM(
 		SELECT v3.days,v3.nation,count(1) total FROM (
 			SELECT v1.days,v2.nation FROM(
-				SELECT to_char(to_timestamp(date_created),'yyyy-MM-dd') AS days FROM "1_nft_miner_items" WHERE merge_status = 1 GROUP BY days
+				SELECT to_char(to_timestamp(date_created),'yyyy-MM-dd') AS days FROM "1_nft_miner_items" GROUP BY days
 			)AS v1
 			LEFT JOIN(
-				SELECT date_created,nation FROM "1_nft_miner_items" WHERE merge_status = 1
+				SELECT date_created,nation FROM "1_nft_miner_items"
 			)AS v2 ON(to_char(to_timestamp(v2.date_created),'yyyy-MM-dd') <= v1.days)
 		)AS v3 GROUP BY days,nation ORDER BY days ASC,total DESC
 	)AS v4 

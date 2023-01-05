@@ -7,6 +7,14 @@ import (
 	"sync"
 )
 
+type ecoAmountObject struct {
+	sync.Map
+}
+
+type EcosystemInfoMap struct {
+	sync.Map
+}
+
 var (
 	Tokens            *EcosystemInfoMap
 	EcoNames          *EcosystemInfoMap
@@ -16,17 +24,11 @@ var (
 	ecoCascades       *EcosystemInfoMap
 	registrationTypes *EcosystemInfoMap
 	registrations     *EcosystemInfoMap
+	EcosystemIdList   []int64
 
 	allKeyAmount *ecoAmountObject //key:ecosystem value:decimal.Decimal all keys circulations and staking amount
+	EcoTxCount   *EcosystemInfoMap
 )
-
-type ecoAmountObject struct {
-	sync.Map
-}
-
-type EcosystemInfoMap struct {
-	sync.Map
-}
 
 var countryMap = map[int]string{
 	1: "Afghanistan", 2: "Albania", 3: "Algeria", 4: "American Samoa", 5: "Andorra", 6: "Angola", 7: "Anguilla",
@@ -107,6 +109,7 @@ func InitEcosystemInfo() {
 	registrationTypes = &EcosystemInfoMap{}
 	registrations = &EcosystemInfoMap{}
 	allKeyAmount = &ecoAmountObject{}
+	EcoTxCount = &EcosystemInfoMap{}
 
 	for k, v := range countryMap {
 		countrys.Store(k, v)
@@ -134,7 +137,11 @@ func (p *EcosystemInfoMap) Get(ecosystem int64) string {
 	}
 	value, ok := p.Load(ecosystem)
 	if ok {
-		return value.(string)
+		if cp, ok := value.(string); !ok {
+			return ""
+		} else {
+			return cp
+		}
 	}
 	return ""
 }
@@ -145,7 +152,26 @@ func (p *EcosystemInfoMap) GetId(infoId int, defaultValue string) string {
 	}
 	value, ok := p.Load(infoId)
 	if ok {
-		return value.(string)
+		if cp, ok := value.(string); !ok {
+			return ""
+		} else {
+			return cp
+		}
+	}
+	return defaultValue
+}
+
+func (p *EcosystemInfoMap) GetCount(ecosystem int64, defaultValue int64) int64 {
+	if p == nil {
+		return 0
+	}
+	value, ok := p.Load(ecosystem)
+	if ok {
+		if cp, ok := value.(int64); !ok {
+			return 0
+		} else {
+			return cp
+		}
 	}
 	return defaultValue
 }
@@ -161,28 +187,29 @@ func (p *ecoAmountObject) Get(ecosystem int64) (decimal.Decimal, error) {
 	return decimal.Zero, errors.New("eco amount not exist")
 }
 
-func GetAllTokenSymbol() ([]Ecosystem, error) {
+func GetAllEcosystemInfo() {
 	var (
-		list []Ecosystem
+		list  []Ecosystem
+		total int64
 	)
-	err := GetDB(nil).Select("token_symbol,id").Find(&list).Error
+	err := GetDB(nil).Model(Ecosystem{}).Count(&total).Error
 	if err != nil {
-		log.WithFields(log.Fields{"INFO": err}).Info("get all token symbol failed")
-		return nil, err
+		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id total failed")
+		return
 	}
-	return list, nil
-}
-
-func GetAllEcosystemName() ([]Ecosystem, error) {
-	var (
-		list []Ecosystem
-	)
-	err := GetDB(nil).Select("name,id").Find(&list).Error
-	if err != nil {
-		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem name failed")
-		return nil, err
+	if total != int64(len(EcosystemIdList)) {
+		err = GetDB(nil).Select("id,token_symbol,name").Find(&list).Error
+		if err != nil {
+			log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id list failed")
+			return
+		}
+		EcosystemIdList = nil
+		for _, v := range list {
+			EcosystemIdList = append(EcosystemIdList, v.ID)
+			Tokens.Store(v.ID, v.TokenSymbol)
+			EcoNames.Store(v.ID, v.Name)
+		}
 	}
-	return list, nil
 }
 
 func SyncEcosystemInfo() {
@@ -190,19 +217,8 @@ func SyncEcosystemInfo() {
 	defer func() {
 		RealtimeWG.Done()
 	}()
-	list, err := GetAllTokenSymbol()
-	if err == nil {
-		for _, val := range list {
-			Tokens.Store(val.ID, val.TokenSymbol)
-		}
-	}
-	list, err = GetAllEcosystemName()
-	if err == nil {
-		for _, val := range list {
-			EcoNames.Store(val.ID, val.Name)
-		}
-	}
-
+	GetAllEcosystemInfo()
+	getEcosystemTxCount()
 }
 
 func GetAllKeysTotalAmount(ecosystem int64) error {
@@ -244,4 +260,16 @@ FROM "1_keys" WHERE ecosystem = ? AND id <> 0 AND id <> 5555
 	}
 	allKeyAmount.Store(ecosystem, totalAmount)
 	return nil
+}
+
+func getEcosystemTxCount() {
+	for _, id := range EcosystemIdList {
+		var total int64
+		err := GetDB(nil).Model(LogTransaction{}).Where("ecosystem_id = ?", id).Count(&total).Error
+		if err != nil {
+			log.WithFields(log.Fields{"error": err, "ecosystem": id}).Error("get ecosystem tx count failed")
+			return
+		}
+		EcoTxCount.Store(id, total)
+	}
 }

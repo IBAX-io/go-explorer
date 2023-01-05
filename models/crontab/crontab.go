@@ -158,7 +158,7 @@ func InitCrontabTask() {
 	loadContracts.SendSignal()
 	honorNode.SendSignal()
 	chart.SendSignal()
-	time.Sleep(3 * time.Second)
+	time.Sleep(10 * time.Second)
 	history.SendSignal()
 
 	models.InitHonorNodeByRedis("newest")

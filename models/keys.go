@@ -794,7 +794,11 @@ func GetAccountListChart(ecosystem int64) (*KeysListChartResult, error) {
 	} else {
 		ret.KeysInfo, _ = getScanOutKeyInfo(ecosystem)
 	}
-	ret.KeyChart = GetEcosystemNewKeyChart(ecosystem, 15)
+	newKey, err := Get15DaysNewKeyFromRedis(ecosystem)
+	if err != nil {
+		return &ret, err
+	}
+	ret.KeyChart = *newKey
 
 	return &ret, nil
 }
@@ -1064,7 +1068,7 @@ as roles_name,
 	return &rets, err
 }
 
-func GetEcosystemNewKeyChart(ecosystem int64, getDay int) KeyInfoChart {
+func getEcosystemNewKeyChart(ecosystem int64, getDay int) KeyInfoChart {
 	var rets KeyInfoChart
 	var bk Block
 	tz := time.Unix(GetNowTimeUnix(), 0)
