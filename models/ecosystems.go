@@ -529,14 +529,15 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 	if eco.TypeEmission == 1 {
 		rets.IsEmission = true
 	}
+
+	total := decimal.New(0, 0)
+	withdraw := decimal.New(0, 0)
+	emission := decimal.New(0, 0)
 	if eco.EmissionAmount != "" {
 		info := eco.EmissionAmount
 		if err := json.Unmarshal([]byte(info), &emissionAmount); err != nil {
 			return nil, err
 		}
-		total := decimal.New(0, 0)
-		withdraw := decimal.New(0, 0)
-		emission := decimal.New(0, 0)
 		for _, v := range emissionAmount {
 			switch v.Type {
 			case "issue":
@@ -547,10 +548,10 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 				withdraw = withdraw.Add(v.Val)
 			}
 		}
-		rets.TotalAmount = total.String()
-		rets.Emission = emission.String()
-		rets.Withdraw = withdraw.String()
 	}
+	rets.TotalAmount = total.String()
+	rets.Emission = emission.String()
+	rets.Withdraw = withdraw.String()
 	if eco.Info != "" {
 		minfo := make(map[string]any)
 		err := json.Unmarshal([]byte(eco.Info), &minfo)

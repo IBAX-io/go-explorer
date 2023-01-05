@@ -10,8 +10,6 @@ import (
 	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
-	"github.com/vmihailenco/msgpack/v5"
-	"strconv"
 	"time"
 )
 
@@ -788,109 +786,6 @@ SELECT del.days,del.total_amount as amount
 	return ret, nil
 }
 
-func getEcosystemCirculationsToRedis(ecosystem int64) error {
-	rets, err := GetEcosystemCirculationsChart(ecosystem)
-	if err != nil {
-		return err
-	}
-	key := "ecosystem-circulations-" + strconv.FormatInt(ecosystem, 10)
-	f := func() ([]byte, error) {
-		return msgpack.Marshal(rets)
-	}
-
-	return getEcosystemChartInfoToRedis(key, f)
-}
-
-func GetEcosystemCirculationsFromRedis(ecosystem int64) (*EcoCirculationsResponse, error) {
-	var rets EcoCirculationsResponse
-	f := func(data []byte) error {
-		return msgpack.Unmarshal(data, &rets)
-	}
-
-	key := "ecosystem-circulations-" + strconv.FormatInt(ecosystem, 10)
-	err := getEcosystemChartInfoFromRedis(key, f)
-	if err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("get top ten has token account From Redis msgpack err")
-		return &rets, err
-	}
-
-	return &rets, nil
-}
-
-func GetAllEcosystemChartInfo() {
-	HistoryWG.Add(1)
-	defer func() {
-		HistoryWG.Done()
-	}()
-
-	var eco []Ecosystem
-	err := GetDB(nil).Select("id").Find(&eco).Error
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("get top ten has token account all ecosystem failed")
-		return
-	}
-
-	for _, v := range eco {
-		go func(ecosystem int64) {
-			err := getEcosystemCirculationsToRedis(ecosystem)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("get circulations failed")
-			}
-		}(v.ID)
-
-		go func(ecosystem int64) {
-			GetTopTenHasTokenAccountToRedis(ecosystem)
-		}(v.ID)
-
-		go func(ecosystem int64) {
-			err := GetAllKeysTotalAmount(ecosystem)
-			if err != nil {
-				log.WithFields(log.Fields{"INFO": err, "ecosystem": ecosystem}).Info("[Get All Keys Total Amount] failed")
-			}
-		}(v.ID)
-
-	}
-}
-
-func GetTopTenHasTokenAccountToRedis(ecosystem int64) {
-	rets, err := getEcoTopTenHasTokenAccount(ecosystem)
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("get top ten has token account failed")
-		return
-	}
-
-	res, err := msgpack.Marshal(rets)
-	if err != nil {
-		log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Error("get top ten has token account msgpack failed")
-		return
-	}
-
-	rd := RedisParams{
-		Key:   "top-ten-has-token-" + strconv.FormatInt(ecosystem, 10),
-		Value: string(res),
-	}
-	if err := rd.Set(); err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("get top ten has token account set redis error")
-		return
-	}
-}
-
-func GetTopTenHasTokenAccountFromRedis(ecosystem int64) (*EcoTopTenHasTokenResponse, error) {
-	var rets EcoTopTenHasTokenResponse
-	f := func(data []byte) error {
-		return msgpack.Unmarshal(data, &rets)
-	}
-
-	key := "top-ten-has-token-" + strconv.FormatInt(ecosystem, 10)
-	err := getEcosystemChartInfoFromRedis(key, f)
-	if err != nil {
-		log.WithFields(log.Fields{"warn": err}).Warn("get top ten has token account From Redis msgpack err")
-		return &rets, err
-	}
-
-	return &rets, nil
-}
-
 func getEcoTopTenHasTokenAccount(ecosystem int64) (*EcoTopTenHasTokenResponse, error) {
 	var (
 		err  error
@@ -1014,7 +909,7 @@ ORDER BY amount DESC
 	return &rets, nil
 }
 
-func GetEcoTopTenTxAccountChart(ecosystem int64) (*EcoTopTenTxAmountResponse, error) {
+func getEcoTopTenTxAccountChart(ecosystem int64) (*EcoTopTenTxAmountResponse, error) {
 	var (
 		err   error
 		rets  EcoTopTenTxAmountResponse
@@ -1036,8 +931,8 @@ SELECT COALESCE(sum(amount),0)+
 	COALESCE((SELECT sum(amount) FROM "1_history" WHERE ecosystem = ? AND type <> 24 AND created_at >= ? AND sender_id <> 0 AND sender_id <> 5555),0)
 AS total
 FROM "1_history" WHERE ecosystem = ? AND created_at >= ? AND type <> 24 AND recipient_id <> 0 AND recipient_id <> 5555
-`, ecosystem, t1.Unix(),
-		ecosystem, t1.Unix(),
+`, ecosystem, t1.UnixMilli(),
+		ecosystem, t1.UnixMilli(),
 		ecosystem, t1.UnixMilli(),
 		ecosystem, t1.UnixMilli()).Take(&total).Error
 	if err != nil {
@@ -1046,33 +941,25 @@ FROM "1_history" WHERE ecosystem = ? AND created_at >= ? AND type <> 24 AND reci
 	}
 
 	err = GetDB(nil).Raw(`
-SELECT keyid,amount
-FROM(
-	SELECT keyid,ecosystem,
-		(SELECT COALESCE(sum(amount),0)+
-			(SELECT COALESCE(sum(amount),0) FROM "1_history" WHERE recipient_id = t1.keyid AND ecosystem = t1.ecosystem AND created_at >= ? AND type <> 24)+
-			(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE recipient_id = t1.keyid AND ecosystem = t1.ecosystem AND type <> 1 AND created_at >= ?)+
-			(SELECT COALESCE(sum(amount),0) FROM spent_info_history WHERE sender_id = t1.keyid AND ecosystem = t1.ecosystem AND type <> 1 AND created_at >= ?)
-		FROM "1_history" WHERE sender_id = t1.keyid AND ecosystem = t1.ecosystem AND created_at >= ? AND type <> 24)AS amount
-	FROM(
-		SELECT sender_id as keyid,max(ecosystem) ecosystem FROM "1_history" WHERE ecosystem = ? AND created_at >= ? GROUP BY sender_id
-		 UNION
-		SELECT recipient_id as keyid,max(ecosystem) ecosystem FROM "1_history" WHERE ecosystem = ? AND created_at >= ? GROUP BY recipient_id
-		 UNION
-		SELECT output_key_id AS keyid,max(ecosystem) ecosystem FROM spent_info AS s1 LEFT JOIN log_transactions AS l1 ON(l1.hash = s1.output_tx_hash) 
-			WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
-		 UNION
-		SELECT output_key_id AS keyid,max(ecosystem) ecosystem FROM spent_info AS s1 LEFT JOIN log_transactions AS l1 ON(l1.hash = s1.input_tx_hash) 
-			WHERE ecosystem = ? AND timestamp >= ? GROUP BY output_key_id
-	)AS t1
-)AS tt
+SELECT COALESCE(v6.recipient_id,v5.keyid)AS keyid,COALESCE(v6.amount,0)+COALESCE(v5.amount,0)AS amount FROM(
+	SELECT COALESCE(v4.sender_id,v3.keyid)AS keyid,COALESCE(v3.amount,0)+COALESCE(v4.amount,0)AS amount FROM(
+		SELECT COALESCE(v1.sender_id,v2.recipient_id)AS keyid,COALESCE(v1.amount,0)+COALESCE(v2.amount,0)AS amount FROM(
+			SELECT sender_id,sum(amount)AS amount FROM "1_history" WHERE amount > 0 AND ecosystem = ? AND created_at >= ? AND type <> 24 GROUP BY sender_id
+		)AS v1
+		FULL JOIN(
+			SELECT recipient_id,sum(amount)AS amount FROM "1_history" WHERE amount > 0 AND ecosystem = ? AND created_at >= ? AND type <> 24 GROUP BY recipient_id
+		)AS v2 ON(v2.recipient_id = v1.sender_id)
+	)AS v3
+	FULL JOIN(
+		SELECT sender_id,sum(amount)AS amount FROM spent_info_history WHERE amount > 0 AND ecosystem = ? AND type <> 1 AND created_at >= ? GROUP BY sender_id
+	)AS v4 ON(v4.sender_id = v3.keyid)
+)AS v5
+FULL JOIN(
+	SELECT recipient_id,sum(amount)AS amount FROM spent_info_history WHERE amount > 0 AND ecosystem = ? AND type <> 1 AND created_at >= ? GROUP BY recipient_id
+)AS v6 ON(v6.recipient_id = v5.keyid)
 WHERE keyid <> 0 AND keyid <> 5555
 order by amount desc limit 10
-`, t1.UnixMilli(),
-		t1.Unix(),
-		t1.Unix(),
-		t1.UnixMilli(),
-		ecosystem, t1.UnixMilli(),
+`, ecosystem, t1.UnixMilli(),
 		ecosystem, t1.UnixMilli(),
 		ecosystem, t1.UnixMilli(),
 		ecosystem, t1.UnixMilli()).Find(&ret).Error
@@ -1092,7 +979,7 @@ order by amount desc limit 10
 	return &rets, nil
 }
 
-func GetGasCombustionPieChart(ecosystem int64) (EcoGasFeeResponse, error) {
+func getGasCombustionPieChart(ecosystem int64) (EcoGasFeeResponse, error) {
 	var rets EcoGasFeeResponse
 
 	err := GetDB(nil).Raw(`
@@ -1112,7 +999,7 @@ FROM "1_history" WHERE type IN(1,2) AND ecosystem = ?
 	return rets, nil
 }
 
-func GetGasCombustionLineChart(ecosystem int64) (EcoGasFeeChangeResponse, error) {
+func getGasCombustionLineChart(ecosystem int64) (EcoGasFeeChangeResponse, error) {
 	var (
 		his  History
 		rets EcoGasFeeChangeResponse
@@ -1231,7 +1118,7 @@ ORDER BY time ASC
 	return rets, nil
 }
 
-func GetEco15DayTxAmountChart(ecosystem int64) (EcoTxAmountDiffResponse, error) {
+func getEco15DayTxAmountChart(ecosystem int64) (EcoTxAmountDiffResponse, error) {
 	var rets EcoTxAmountDiffResponse
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
@@ -1290,7 +1177,7 @@ SELECT days,sum(amount)amount FROM(
 	FROM spent_info_history WHERE ecosystem = ? AND created_at >= ? AND "type" IN(3,4) GROUP BY days
 )AS v1 GROUP BY days
 ORDER BY days
-`, ecosystem, t1.UnixMilli(), ecosystem, t1.Unix()).Find(&list).Error
+`, ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli()).Find(&list).Error
 	if err != nil {
 		return rets, err
 	}
@@ -1305,7 +1192,7 @@ ORDER BY days
 	return rets, nil
 }
 
-func GetEco15DayActiveKeysChart(ecosystem int64) (KeyInfoChart, error) {
+func getEco15DayActiveKeysChart(ecosystem int64) (KeyInfoChart, error) {
 	var keyChart KeyInfoChart
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
@@ -1328,7 +1215,7 @@ SELECT days,count(keyid) as num  FROM (
 	SELECT to_char(to_timestamp(timestamp/1000),'yyyy-MM-dd') days,output_key_id AS keyid FROM spent_info AS s1 LEFT JOIN log_transactions AS l1 ON(l1.hash = s1.input_tx_hash) 
 	WHERE timestamp >= ? AND ecosystem = ? GROUP BY days,output_key_id
 ) as tt GROUP BY days ORDER BY days DESC
-`, t1.Unix(), ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem, t1.Unix(), ecosystem).Find(&activeList).Error
+`, t1.UnixMilli(), ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli(), ecosystem, t1.UnixMilli(), ecosystem).Find(&activeList).Error
 	if err != nil {
 		return keyChart, err
 	}
@@ -1342,7 +1229,7 @@ SELECT days,count(keyid) as num  FROM (
 	return keyChart, nil
 }
 
-func GetEco15DayTransactionChart(ecosystem int64) (TxListChart, error) {
+func getEco15DayTransactionChart(ecosystem int64) (TxListChart, error) {
 	var (
 		txChart TxListChart
 		list    []DaysNumber
@@ -1368,7 +1255,7 @@ count(1) AS num FROM log_transactions WHERE ecosystem_id = %d AND "timestamp" >=
 	return txChart, nil
 }
 
-func GetEco15DayStorageCapacitysChart(ecosystem int64) (StorageCapacitysChart, error) {
+func getEco15DayStorageCapacityChart(ecosystem int64) (StorageCapacitysChart, error) {
 	var (
 		rets StorageCapacitysChart
 		list []DaysNumber
@@ -1392,27 +1279,4 @@ func GetEco15DayStorageCapacitysChart(ecosystem int64) (StorageCapacitysChart, e
 	}
 	rets.Name = EcoNames.Get(ecosystem)
 	return rets, nil
-}
-
-func getEcosystemChartInfoToRedis(key string, marshal func() ([]byte, error)) error {
-	v, err := marshal()
-	if err != nil {
-		return err
-	}
-	rd := RedisParams{
-		Key:   key,
-		Value: string(v),
-	}
-	return rd.Set()
-}
-
-func getEcosystemChartInfoFromRedis(key string, unmarshal func([]byte) error) error {
-	rd := RedisParams{
-		Key: key,
-	}
-	if err := rd.Get(); err != nil {
-		return err
-	}
-	return unmarshal([]byte(rd.Value))
-
 }

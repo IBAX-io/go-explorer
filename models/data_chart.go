@@ -23,7 +23,6 @@ const (
 	FifteenDaysGasFee          = "15_days_gas_fee_chart"
 	FifteenDaysNewCirculations = "15_days_new_circulations_chart"
 	FifteenDaysBlockSize       = "15_days_block_size_chart"
-	FifteenDaysTransaction     = "15_days_transaction_chart"
 	FifteenDaysBlockNumber     = "15_days_block_number_chart"
 	NewNfTMinerChange          = "new_nft_miner_change_chart"
 	NftMinerRewardChange       = "nft_miner_reward_change_chart"
@@ -92,7 +91,6 @@ func DataChartHistoryServer() {
 	InsertRedis(FifteenDaysGasFee, GetDataChart(Get15DayGasFeeChart()))
 	InsertRedis(FifteenDaysNewCirculations, GetDataChart(Get15DayNewCirculationsChart()))
 	InsertRedis(FifteenDaysBlockSize, GetDataChart(Get15DayBlockSizeChart()))
-	InsertRedis(FifteenDaysTransaction, GetDataChart(GetEco15DayTransactionChart(1)))
 	InsertRedis(FifteenDaysBlockNumber, GetDataChart(Get15DayBlockNumberChart()))
 	InsertRedis(NewNfTMinerChange, GetDataChart(GetNewNftMinerChangeChart()))
 	InsertRedis(NftMinerRewardChange, GetDataChart(GetNftMinerRewardChangeChart()))
@@ -153,7 +151,7 @@ FULL JOIN(
 )AS v2 ON(v2.days = v1.days)
 
 ORDER BY days DESC LIMIT ?
-`, t1.UnixMilli(), getDays, t1.Unix(), getDays, getDays).Find(&list).Error
+`, t1.UnixMilli(), getDays, t1.UnixMilli(), getDays, getDays).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get 15Day Gas Fee Chart Failed")
 		return rets, err
@@ -170,13 +168,20 @@ ORDER BY days DESC LIMIT ?
 func GetNodeContributionList(page, limit int) (NodeContributionListResponse, error) {
 	var rets NodeContributionListResponse
 	type nodeGasFee struct {
-		NodePosition int64           `json:"node_position" gorm:"column:node_position"`
-		GasFee       decimal.Decimal `json:"gas_fee" gorm:"column:gas_fee"`
+		NodePosition  int64           `json:"node_position" gorm:"column:node_position"`
+		ConsensusMode int32           `json:"consensus_mode"`
+		GasFee        decimal.Decimal `json:"gas_fee" gorm:"column:gas_fee"`
 	}
 	var list []nodeGasFee
-	err := GetDB(nil).Raw(`SELECT node_position,
-(SELECT sum(amount) AS gas_fee FROM "1_history" WHERE type = 1  AND  ecosystem = 1 AND recipient_id = bk.key_id AND block_id >= min(bk.id) AND block_id <= max(bk.id))  
-FROM block_chain AS bk GROUP BY node_position,key_id,consensus_mode`).Find(&list).Error
+	err := GetDB(nil).Raw(`
+SELECT node_position,consensus_mode,
+	COALESCE((SELECT sum(amount) FROM "1_history" WHERE type = 1  AND  ecosystem = 1 AND recipient_id = bk.key_id 
+		AND block_id >= min(bk.id) AND block_id <= max(bk.id)),0)+
+	COALESCE((SELECT sum(amount) FROM spent_info_history WHERE type = 3 AND  ecosystem = 1 
+		AND recipient_id = bk.key_id AND block >= min(bk.id) AND block <= max(bk.id)),0)AS gas_fee
+FROM block_chain AS bk GROUP BY node_position,key_id,consensus_mode
+ORDER BY gas_fee DESC
+`).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Node Contribution List Failed")
 		return rets, err
@@ -201,12 +206,13 @@ FROM block_chain AS bk GROUP BY node_position,key_id,consensus_mode`).Find(&list
 			rets.List[i].IconUrl = data[i].IconUrl
 			rets.List[i].NodeBlocks = data[i].NodeBlock
 			rets.List[i].PkgAccountedFor = data[i].PkgAccountedFor
+			rets.List[i].consensusMode = data[i].ConsensusMode
 		}
 	}
 
 	for i := 0; i < len(list); i++ {
 		for key, value := range rets.List {
-			if value.NodePosition == list[i].NodePosition {
+			if value.NodePosition == list[i].NodePosition && value.consensusMode == list[i].ConsensusMode {
 				rets.List[key].GasFee = list[i].GasFee.String()
 			}
 		}
@@ -455,7 +461,7 @@ SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'99999999
 		}
 
 		if AirdropReady {
-			err = GetDB(nil).Debug().Table(`"1_keys" as k1`).
+			err = GetDB(nil).Table(`"1_keys" as k1`).
 				Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
 		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
 		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
@@ -722,34 +728,34 @@ func GetNftMinerIntervalChart() (NftMinerIntervalResponse, error) {
 	sql := `
 SELECT 
 	sum(
-		case when energy_point between 1 and 11 then 1 else 0 end
+		case when energy_point between 1 and 10 then 1 else 0 end
   ) as one_to_ten,
 	sum(
-		case when energy_point between 11 and 21 then 1 else 0 end
+		case when energy_point between 11 and 20 then 1 else 0 end
   ) as ten_to_twenty,
 	sum(
-		case when energy_point between 21 and 31 then 1 else 0 end
+		case when energy_point between 21 and 30 then 1 else 0 end
   ) as twenty_to_thirty,
 	sum(
-		case when energy_point between 31 and 41 then 1 else 0 end
+		case when energy_point between 31 and 40 then 1 else 0 end
   ) as thirty_to_forty,
 	sum(
-		case when energy_point between 41 and 51 then 1 else 0 end
+		case when energy_point between 41 and 50 then 1 else 0 end
   ) as forty_to_fifty,
 	sum(
-		case when energy_point between 51 and 61 then 1 else 0 end
+		case when energy_point between 51 and 60 then 1 else 0 end
   ) as fifty_to_sixty,
 	sum(
-		case when energy_point between 61 and 71 then 1 else 0 end
+		case when energy_point between 61 and 70 then 1 else 0 end
   ) as sixty_to_seventy,
 	sum(
-		case when energy_point between 71 and 81 then 1 else 0 end
+		case when energy_point between 71 and 80 then 1 else 0 end
   ) as seventy_to_eighty,
 	sum(
-		case when energy_point between 81 and 91 then 1 else 0 end
+		case when energy_point between 81 and 90 then 1 else 0 end
   ) as eighty_to_ninety,
 	sum(
-		case when energy_point between 91 and 101 then 1 else 0 end
+		case when energy_point between 91 and 100 then 1 else 0 end
   ) as ninety_to_hundred
 
 FROM "1_nft_miner_items" where merge_status = 1
@@ -786,34 +792,34 @@ SELECT count(1) FROM(
  WITH "1_nft_miner_items" AS(
 	SELECT to_char(to_timestamp(date_created),'%s') AS time,
 	sum(
-		case when energy_point between 1 and 11 then 1 else 0 end
+		case when energy_point between 1 and 10 then 1 else 0 end
 	) as one_to_ten,
 	sum(
-		case when energy_point between 11 and 21 then 1 else 0 end
+		case when energy_point between 11 and 20 then 1 else 0 end
 	) as ten_to_twenty,
 	sum(
-		case when energy_point between 21 and 31 then 1 else 0 end
+		case when energy_point between 21 and 30 then 1 else 0 end
 	) as twenty_to_thirty,
 	sum(
-		case when energy_point between 31 and 41 then 1 else 0 end
+		case when energy_point between 31 and 40 then 1 else 0 end
 	) as thirty_to_forty,
 	sum(
-		case when energy_point between 41 and 51 then 1 else 0 end
+		case when energy_point between 41 and 50 then 1 else 0 end
 	) as forty_to_fifty,
 	sum(
-		case when energy_point between 51 and 61 then 1 else 0 end
+		case when energy_point between 51 and 60 then 1 else 0 end
 	) as fifty_to_sixty,
 	sum(
-		case when energy_point between 61 and 71 then 1 else 0 end
+		case when energy_point between 61 and 70 then 1 else 0 end
 	) as sixty_to_seventy,
 	sum(
-		case when energy_point between 71 and 81 then 1 else 0 end
+		case when energy_point between 71 and 80 then 1 else 0 end
 	) as seventy_to_eighty,
 	sum(
-		case when energy_point between 81 and 91 then 1 else 0 end
+		case when energy_point between 81 and 90 then 1 else 0 end
 	) as eighty_to_ninety,
 	sum(
-		case when energy_point between 91 and 101 then 1 else 0 end
+		case when energy_point between 91 and 100 then 1 else 0 end
 	) as ninety_to_hundred
 	FROM "1_nft_miner_items" WHERE merge_status = 1 GROUP BY time ORDER BY time ASC
 )
@@ -1509,13 +1515,8 @@ FROM "1_history" s1
 `, timeDbFormat)
 
 	withdrawSql := fmt.Sprintf(`
-WITH "1_history" AS (SELECT sum(amount) as amount,
-	to_char(to_timestamp(created_at/1000),'%s') AS days
-FROM "1_history" WHERE type IN(21) AND ecosystem = 1
-GROUP BY days ORDER BY days)
-SELECT s1.days,
-	(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS amount
-FROM "1_history" s1
+SELECT to_char(to_timestamp(created_at/1000),'%s') AS days,SUM(amount) as amount FROM "1_history" 
+WHERE type = 21 AND ecosystem = 1 GROUP BY days ORDER BY days
 `, timeDbFormat)
 	var staking []DaysAmount
 	var withdraw []DaysAmount
@@ -1543,7 +1544,7 @@ FROM "1_history" s1
 		for startTime.Unix() < today.Unix() {
 			rets.Time = append(rets.Time, startTime.Format(layout))
 			stakingAmount := GetDaysAmount(startTime.Unix(), staking)
-			withdrawAmount := GetDaysAmountEqual(startTime.Unix(), withdraw, layout, false)
+			withdrawAmount := GetDaysAmountEqual(startTime.Unix(), withdraw, layout, true)
 
 			if withdrawAmount.String() != "0" {
 				lastDelAmount = withdrawAmount

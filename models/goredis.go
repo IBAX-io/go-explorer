@@ -44,7 +44,7 @@ func InitRedisDb() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("res:", res)
+	fmt.Println("result:", res)
 	return nil
 }
 
@@ -56,7 +56,7 @@ func InitRedisDbAll() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("res all:", res)
+	fmt.Println("result:", res)
 	return nil
 }
 

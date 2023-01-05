@@ -35,6 +35,8 @@ func (p *RealTime) ReceiveSignal() {
 }
 
 func realTimeDataServer() {
+	go models.SyncEcosystemInfo()
+	go models.InitGlobalSwitch()
 	go models.SyncBlockListToRedis()
 	go models.DealRedisBlockTpsList()
 	go models.GetTransactionBlockToRedis()
@@ -46,8 +48,6 @@ func realTimeDataServer() {
 	go models.UpdateHonorNodeInfo()
 	go models.InitPledgeAmount()
 	go models.SendTxDataSyncSignal()
-	go models.InitGlobalSwitch()
-	go models.SyncEcosystemInfo()
 	go models.SendUtxoTxSyncSignal()
 	go models.SendTxRelationSignal()
 	go models.GetAssignTotalBalanceAmount()

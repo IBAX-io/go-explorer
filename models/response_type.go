@@ -142,6 +142,7 @@ type NftMinerCoordinate struct {
 
 type NftMinerMetaverseInfoResponse struct {
 	Count        int64           `json:"count"`
+	ValidCount   int64           `json:"valid_count"`
 	BlockReward  float64         `json:"block_reward"`
 	HalveNumber  int64           `json:"halve_number"`
 	StakeAmounts string          `json:"stake_amounts"`
@@ -150,6 +151,7 @@ type NftMinerMetaverseInfoResponse struct {
 	StakedCount  int64           `json:"staked_count"`
 	StakingCount int64           `json:"staking_count"`
 	Region       int64           `json:"region"`
+	ValidRegion  int64           `json:"valid_region"`
 }
 
 type NftMinerStakeInfoResponse struct {
@@ -428,6 +430,7 @@ type HonorNodeListResponse struct {
 	NodeBlocks      int64           `json:"node_blocks"`
 	PkgAccountedFor decimal.Decimal `json:"pkg_accounted_for"`
 	NodePosition    int64           `json:"node_position"`
+	consensusMode   int32
 }
 
 type NodeContributionListResponse struct {

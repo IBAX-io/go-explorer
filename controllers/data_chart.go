@@ -187,7 +187,7 @@ func GetBlockSizeListHandler(c *gin.Context) {
 
 func GetTxChartHandler(c *gin.Context) {
 	ret := &Response{}
-	rets, err := models.GetRedis(models.FifteenDaysTransaction)
+	rets, err := models.Get15DaysTxCountFromRedis(1)
 	if err != nil {
 		ret.ReturnFailureString("Get Tx Chart Handler Failed")
 		JsonResponse(c, ret)

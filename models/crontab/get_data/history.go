@@ -7,6 +7,7 @@ package get_data
 
 import (
 	"github.com/IBAX-io/go-explorer/models"
+	"github.com/IBAX-io/go-explorer/models/buffer"
 )
 
 type History struct {
@@ -43,6 +44,6 @@ func historyDataServer() {
 	go models.GetMaxTxToRedis()
 
 	//Delayed chart data
-	go models.GetAllEcosystemChartInfo()
 	go models.SyncNationalFlagIcon()
+	go buffer.StartServer(buffer.GetBufferType(2))
 }

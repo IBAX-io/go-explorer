@@ -24,9 +24,9 @@ type SpentInfoHistory struct {
 	Id               int64  `gorm:"primary_key;not null"`
 	SenderId         int64  `gorm:"column:sender_id;not null"`
 	RecipientId      int64  `gorm:"column:recipient_id;not null"`
-	SenderBalance    string `gorm:"type:decimal(50);default:'0';not null"`
-	RecipientBalance string `gorm:"type:decimal(50);default:'0';not null"`
-	Amount           string `gorm:"column:amount;type:decimal(40);default:'0';not null"`
+	SenderBalance    string `gorm:"type:decimal(30);default:'0';not null"`
+	RecipientBalance string `gorm:"type:decimal(30);default:'0';not null"`
+	Amount           string `gorm:"column:amount;type:decimal(30);default:'0';not null"`
 	Block            int64  `gorm:"column:block;not null;index"`
 	Hash             []byte `gorm:"column:hash;not null;index"`
 	CreatedAt        int64  `gorm:"column:created_at;not null"`

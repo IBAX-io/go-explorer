@@ -93,7 +93,7 @@ func GetEcoTopTenTxAccountChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEcoTopTenTxAccountChart(ecosystem)
+	rets, err := models.GetTopTenTxAccountFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("get ecosystem top ten tx chart failed")
 		JsonResponse(c, ret)
@@ -113,7 +113,7 @@ func GetGasCombustionPieChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetGasCombustionPieChart(ecosystem)
+	rets, err := models.GetGasCombustionPieFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("Get Gas Combustion Pie Chart Handler failed")
 		JsonResponse(c, ret)
@@ -133,7 +133,7 @@ func GetGasCombustionLineChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetGasCombustionLineChart(ecosystem)
+	rets, err := models.GetGasCombustionLineFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("Get Gas Combustion Line Chart Handler Failed")
 		JsonResponse(c, ret)
@@ -153,7 +153,7 @@ func GetEcoTxAmountChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEco15DayTxAmountChart(ecosystem)
+	rets, err := models.Get15DaysTxAmountFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("get ecosystem tx amount chart failed")
 		JsonResponse(c, ret)
@@ -173,7 +173,7 @@ func GetEcoGasFeeChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEco15DayGasFeeChart(ecosystem)
+	rets, err := models.Get15DaysGasFeeFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("get ecosystem gas fee chart failed")
 		JsonResponse(c, ret)
@@ -193,7 +193,12 @@ func GetEcoNewKeyChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets := models.GetEcosystemNewKeyChart(ecosystem, 15)
+	rets, err := models.Get15DaysNewKeyFromRedis(ecosystem)
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
 
 	ret.Return(rets, CodeSuccess)
 	JsonResponse(c, ret)
@@ -208,7 +213,7 @@ func GetEcoActiveKeyChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEco15DayActiveKeysChart(ecosystem)
+	rets, err := models.GetFifteenDaysActiveKeysFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("get ecosystem active key chart failed")
 		JsonResponse(c, ret)
@@ -228,7 +233,7 @@ func GetEcoTransactionChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEco15DayTransactionChart(ecosystem)
+	rets, err := models.Get15DaysTxCountFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("get ecosystem transaction chart failed")
 		JsonResponse(c, ret)
@@ -248,7 +253,7 @@ func GetEcoStorageCapacityChartHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
-	rets, err := models.GetEco15DayStorageCapacitysChart(ecosystem)
+	rets, err := models.Get15DaysStorageCapacityFromRedis(ecosystem)
 	if err != nil {
 		ret.ReturnFailureString("get ecosystem storage capacity chart failed")
 		JsonResponse(c, ret)

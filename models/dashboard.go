@@ -277,7 +277,7 @@ SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days ,sender_id as ke
  UNION 
 SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days , recipient_id as keyid  FROM "1_history" WHERE recipient_id <> 0 AND created_at >= ? AND ecosystem = 1 GROUP BY days,  recipient_id 
 
-) as tt GROUP BY days ORDER BY days desc`, t2.Unix(), t2.Unix()).Find(&activeList).Error
+) as tt GROUP BY days ORDER BY days desc`, t2.UnixMilli(), t2.UnixMilli()).Find(&activeList).Error
 	if err != nil {
 		return &rets, err
 	}

@@ -461,15 +461,12 @@ func (lt *LogTransaction) GetEcosystemTransactionFind(ecosystem int64, page, lim
 	}
 	if len(where) == 0 {
 		if search == "chart" {
-			q = GetDB(nil).Table(lt.TableName()+" as lg").Where("ecosystem_id = ? AND timestamp >= ? AND timestamp < ?", ecosystem, startTime.UnixMilli(), endTime.AddDate(0, 0, 1).UnixMilli())
+			q = GetDB(nil).Table(lt.TableName()).Where("ecosystem_id = ? AND timestamp >= ? AND timestamp < ?", ecosystem, startTime.UnixMilli(), endTime.AddDate(0, 0, 1).UnixMilli())
 		} else {
-			q = GetDB(nil).Table(lt.TableName()+"  as lg").Where("ecosystem_id = ?", ecosystem)
+			q = GetDB(nil).Table(lt.TableName()).Where("ecosystem_id = ?", ecosystem)
 		}
-		err := q.Count(&total).Error
-		if err != nil {
-			return nil, 0, err
-		}
-		err = q.Select(`hash,block,timestamp,contract_name,address,status`).
+		total = EcoTxCount.GetCount(ecosystem, 0)
+		err := q.Select(`hash,block,timestamp,contract_name,address,status`).
 			Order(order).Offset((page - 1) * limit).Limit(limit).Find(&txList).Error
 		if err != nil {
 			return nil, 0, err
@@ -481,9 +478,10 @@ func (lt *LogTransaction) GetEcosystemTransactionFind(ecosystem int64, page, lim
 			return nil, 0, err
 		}
 		if search == "chart" {
-			q = GetDB(nil).Table(lt.TableName()+"  as lg").Where(cond, vals...).Where("timestamp >= ? AND timestamp < ?", startTime.UnixMilli(), endTime.AddDate(0, 0, 1).UnixMilli())
+			q = GetDB(nil).Table(lt.TableName()).Where(cond, vals...).Where("timestamp >= ? AND timestamp < ?",
+				startTime.UnixMilli(), endTime.AddDate(0, 0, 1).UnixMilli())
 		} else {
-			q = GetDB(nil).Table(lt.TableName()+"  as lg").Where(cond, vals...)
+			q = GetDB(nil).Table(lt.TableName()).Where(cond, vals...)
 		}
 		err = q.Count(&total).Error
 		if err != nil {

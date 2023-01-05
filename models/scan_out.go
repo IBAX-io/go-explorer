@@ -1235,6 +1235,7 @@ func idIsRepeat(id int64, list []int64) bool {
 func getScanOutNodeInfo() (CandidateHonorNodeRet, error) {
 	var rets CandidateHonorNodeRet
 	if !NodeReady {
+		rets.NodeStakeAmounts = decimal.Zero.String()
 		return rets, nil
 	}
 	var nodeStakeAmounts SumAmount
@@ -1272,9 +1273,19 @@ func getScanOutNodeInfo() (CandidateHonorNodeRet, error) {
 }
 
 func getDatabaseSize() (size string, err error) {
-	if err = GetDB(nil).Raw("SELECT pg_size_pretty(pg_database_size(?))", conf.GetDbConn().Name).Scan(&size).Error; err != nil {
+	var totalSize int64
+	if err = GetDB(nil).Raw(`
+SELECT pg_database_size(?)-
+COALESCE((SELECT pg_relation_size('spent_info_history')),0)-
+COALESCE((SELECT pg_relation_size('daily_node_report')),0)-
+COALESCE((SELECT pg_relation_size('daily_active_report')),0)-
+COALESCE((SELECT pg_relation_size('honor_node_info')),0)-
+COALESCE((SELECT pg_relation_size('transaction_data')),0)-
+COALESCE((SELECT pg_relation_size('transaction_relation')),0)
+`, conf.GetDbConn().Name).Scan(&totalSize).Error; err != nil {
 		return "", err
 	}
+	size = ToCapacityString(totalSize)
 	return
 }
 
