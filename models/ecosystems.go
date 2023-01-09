@@ -35,6 +35,7 @@ type Ecosystem struct {
 	TypeEmission   int64
 	TypeWithdraw   int64
 	ControlMode    int64
+	Digits         int64
 }
 
 type Combustion struct {
@@ -80,6 +81,7 @@ type EcosystemTotalResponse struct {
 	GovernModel int64  `json:"govern_model"`
 	FeeModel    int    `json:"fee_model"`
 	TokenSymbol string `json:"token_symbol"`
+	Digits      int64  `json:"digits"`
 	Creator     string `json:"creator"`
 	TotalAmount string `json:"total_amount"`
 	Member      int64  `json:"member"`
@@ -360,20 +362,21 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 	for i := 0; i < len(ecoList); i++ {
 		list[i].ID = ecoList[i].ID
 		list[i].TokenSymbol = ecoList[i].TokenSymbol
+		list[i].Digits = ecoList[i].Digits
 		list[i].Name = ecoList[i].Name
+		amount := decimal.New(0, 0)
 		if ecoList[i].EmissionAmount != "" {
 			info := ecoList[i].EmissionAmount
 			if err := json.Unmarshal([]byte(info), &emissionAmount); err != nil {
 				return 0, nil, err
 			}
-			amount := decimal.New(0, 0)
 			for k, v := range emissionAmount {
 				if v.Type == "issue" && k == 0 {
 					amount = amount.Add(v.Val)
 				}
 			}
-			list[i].TotalAmount = amount.String()
 		}
+		list[i].TotalAmount = amount.String()
 		if ecoList[i].ID == 1 {
 			list[i].TokenSymbol = SysTokenSymbol
 			list[i].TotalAmount = TotalSupplyToken.String()
@@ -430,18 +433,6 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 		var crt Contract
 		list[i].Contract = crt.GetContractsByEcoLibs(list[i].ID)
 	}
-	//if isSort {
-	//	offset := (page - 1) * limit
-	//	sort.Sort(EcoList(list))
-	//	if len(list) >= offset {
-	//		list = list[offset:]
-	//		if len(list) >= limit {
-	//			list = list[:limit]
-	//		}
-	//	} else {
-	//		return 0, nil, nil
-	//	}
-	//}
 
 	return total, &list, nil
 }
@@ -522,6 +513,7 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 	}
 	rets.EcosystemId = eco.ID
 	rets.TokenSymbol = eco.TokenSymbol
+	rets.Digits = eco.Digits
 	rets.Ecosystem = eco.Name
 	if eco.TypeWithdraw == 1 {
 		rets.IsWithdraw = true
@@ -722,7 +714,6 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 		rets.BlockId = 1
 		rets.Time = FirstBlockTime
 		rets.TotalAmount = TotalSupplyToken.String()
-		rets.TokenSymbol = SysTokenSymbol
 		rets.EcoType = "-"
 		rets.EcoTag = "-"
 		rets.Country = countrys.GetId(185, "")

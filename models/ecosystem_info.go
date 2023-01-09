@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"sync"
@@ -28,6 +29,7 @@ var (
 
 	allKeyAmount *ecoAmountObject //key:ecosystem value:decimal.Decimal all keys circulations and staking amount
 	EcoTxCount   *EcosystemInfoMap
+	EcoDigits    *EcosystemInfoMap
 )
 
 var countryMap = map[int]string{
@@ -110,6 +112,7 @@ func InitEcosystemInfo() {
 	registrations = &EcosystemInfoMap{}
 	allKeyAmount = &ecoAmountObject{}
 	EcoTxCount = &EcosystemInfoMap{}
+	EcoDigits = &EcosystemInfoMap{}
 
 	for k, v := range countryMap {
 		countrys.Store(k, v)
@@ -161,7 +164,7 @@ func (p *EcosystemInfoMap) GetId(infoId int, defaultValue string) string {
 	return defaultValue
 }
 
-func (p *EcosystemInfoMap) GetCount(ecosystem int64, defaultValue int64) int64 {
+func (p *EcosystemInfoMap) GetInt64(ecosystem int64, defaultValue int64) int64 {
 	if p == nil {
 		return 0
 	}
@@ -184,7 +187,7 @@ func (p *ecoAmountObject) Get(ecosystem int64) (decimal.Decimal, error) {
 	if ok {
 		return value.(decimal.Decimal), nil
 	}
-	return decimal.Zero, errors.New("eco amount not exist")
+	return decimal.Zero, fmt.Errorf("eco[%d] amount not exist", ecosystem)
 }
 
 func GetAllEcosystemInfo() {
@@ -197,18 +200,17 @@ func GetAllEcosystemInfo() {
 		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id total failed")
 		return
 	}
-	if total != int64(len(EcosystemIdList)) {
-		err = GetDB(nil).Select("id,token_symbol,name").Find(&list).Error
-		if err != nil {
-			log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id list failed")
-			return
-		}
-		EcosystemIdList = nil
-		for _, v := range list {
-			EcosystemIdList = append(EcosystemIdList, v.ID)
-			Tokens.Store(v.ID, v.TokenSymbol)
-			EcoNames.Store(v.ID, v.Name)
-		}
+	err = GetDB(nil).Select("id,token_symbol,name,digits").Find(&list).Error
+	if err != nil {
+		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id list failed")
+		return
+	}
+	EcosystemIdList = nil
+	for _, v := range list {
+		EcosystemIdList = append(EcosystemIdList, v.ID)
+		Tokens.Store(v.ID, v.TokenSymbol)
+		EcoNames.Store(v.ID, v.Name)
+		EcoDigits.Store(v.ID, v.Digits)
 	}
 }
 
@@ -238,9 +240,9 @@ FROM "1_keys" WHERE ecosystem = ? AND id <> 0 AND id <> 5555
 		if NodeReady || NftMinerReady {
 			var staking decimal.Decimal
 			err = GetDB(nil).Raw(`
-					SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-						to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-						to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999'))
+					SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
+						to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+						to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999'))
 					FROM "1_keys" WHERE ecosystem = 1
 			`).Take(&staking).Error
 			if err != nil {
@@ -258,7 +260,10 @@ FROM "1_keys" WHERE ecosystem = ? AND id <> 0 AND id <> 5555
 		}
 
 	}
-	allKeyAmount.Store(ecosystem, totalAmount)
+	if !totalAmount.IsZero() {
+		allKeyAmount.Store(ecosystem, totalAmount)
+	}
+
 	return nil
 }
 

@@ -577,15 +577,12 @@ SELECT v5.days,array_to_string(array_agg(v5.nation),',')nation,array_to_string(a
 	return &rets, nil
 }
 
-func GetNftMinerRegionList(page, limit int, order string) (*GeneralResponse, error) {
+func GetNftMinerRegionList(page, limit int) (*GeneralResponse, error) {
 	var (
 		list []NftMinerRegionListResponse
 		rets GeneralResponse
 	)
 
-	if order == "" {
-		order = "staking_amount DESC,total DESC"
-	}
 	err := GetDB(nil).Raw(`
 SELECT v3.nation as region,max(v3.total)total,count(v3.token_id)staking_number,sum(coalesce(stake_amount,0))staking_amount FROM(
 	SELECT v1.nation,v1.total,v2.token_id,stake_amount FROM(
@@ -594,8 +591,8 @@ SELECT v3.nation as region,max(v3.total)total,count(v3.token_id)staking_number,s
 	LEFT JOIN(
 		SELECT token_id,stake_amount FROM "1_nft_miner_staking" WHERE staking_status = 1
 	)AS v2 ON(v2.token_id = any(v1.id_list))
-)AS v3 GROUP BY nation ORDER BY ? OFFSET ? LIMIT ?
-`, order, (page-1)*limit, limit).Find(&list).Error
+)AS v3 GROUP BY nation ORDER BY staking_amount DESC,total DESC OFFSET ? LIMIT ?
+`, (page-1)*limit, limit).Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"info": err}).Error("Get Nft Miner Region List Failed")
 		return nil, err

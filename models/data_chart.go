@@ -334,7 +334,7 @@ WITH rollback_tx AS(
 	)AS log ON (log.hash = rb.tx_hash) GROUP BY days ORDER BY days ASC
 )
 SELECT rk1.days,
-(SELECT SUM(num)+5 FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
+(SELECT SUM(num)+5 FROM rollback_tx s2 WHERE s2.days <= rk1.days) as num
 FROM rollback_tx AS rk1
 `).Find(&acList).Error
 	if err != nil {
@@ -365,7 +365,7 @@ with "1_history" AS(
 	)AS h3 GROUP BY days ORDER BY days ASC
 )
 SELECT h4.days,
-(SELECT sum(num) FROM "1_history" h5 WHERE h5.days <= h4.days AND SUBSTRING(h4.days,0,5) = SUBSTRING(h5.days,0,5)) as num
+(SELECT sum(num) FROM "1_history" h5 WHERE h5.days <= h4.days) as num
 FROM "1_history" AS h4
 `).Find(&htList).Error
 	if err != nil {
@@ -451,9 +451,9 @@ func GetTopTenStakingAccount() ([]StakingAccountResponse, error) {
 
 	if NftMinerReady || NodeReady {
 		err := GetDB(nil).Raw(`
-SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999')) FROM "1_keys" WHERE ecosystem = 1
+SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')) FROM "1_keys" WHERE ecosystem = 1
 `).Take(&totalStaking.Sum).Error
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Staking Account Total nft or node Staking Amount Failed")
@@ -462,9 +462,9 @@ SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'99999999
 
 		if AirdropReady {
 			err = GetDB(nil).Table(`"1_keys" as k1`).
-				Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+				Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
 		COALESCE((SELECT stake_amount FROM "1_airdrop_info" as ao WHERE ao.account = k1.account),0)
 		AS stake_amount
 	`).Where("ecosystem = 1").Order("stake_amount desc").Limit(10).Find(&rets).Error
@@ -474,9 +474,9 @@ SELECT sum(to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'99999999
 			}
 		} else {
 			err = GetDB(nil).Table(key.TableName()).
-				Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999')
+				Select(`account,to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')
 		AS stake_amount
 	`).Where("ecosystem = 1").Order("stake_amount desc").Limit(10).Find(&rets).Error
 			if err != nil {
@@ -824,16 +824,16 @@ SELECT count(1) FROM(
 	FROM "1_nft_miner_items" WHERE merge_status = 1 GROUP BY time ORDER BY time ASC
 )
 	SELECT nf.time,
-	(SELECT sum(one_to_ten) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS one_to_ten,
-	(SELECT sum(ten_to_twenty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS ten_to_twenty,
-	(SELECT sum(twenty_to_thirty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS twenty_to_thirty,
-	(SELECT sum(thirty_to_forty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS thirty_to_forty,
-	(SELECT sum(forty_to_fifty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS forty_to_fifty,
-	(SELECT sum(fifty_to_sixty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS fifty_to_sixty,
-	(SELECT sum(sixty_to_seventy) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS sixty_to_seventy,
-	(SELECT sum(seventy_to_eighty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS seventy_to_eighty,
-	(SELECT sum(eighty_to_ninety) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS eighty_to_ninety,
-	(SELECT sum(ninety_to_hundred) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time AND SUBSTRING(nf.time,0,5) = SUBSTRING(ns.time,0,5))AS ninety_to_hundred
+	(SELECT sum(one_to_ten) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS one_to_ten,
+	(SELECT sum(ten_to_twenty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS ten_to_twenty,
+	(SELECT sum(twenty_to_thirty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS twenty_to_thirty,
+	(SELECT sum(thirty_to_forty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS thirty_to_forty,
+	(SELECT sum(forty_to_fifty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS forty_to_fifty,
+	(SELECT sum(fifty_to_sixty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS fifty_to_sixty,
+	(SELECT sum(sixty_to_seventy) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS sixty_to_seventy,
+	(SELECT sum(seventy_to_eighty) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS seventy_to_eighty,
+	(SELECT sum(eighty_to_ninety) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS eighty_to_ninety,
+	(SELECT sum(ninety_to_hundred) FROM "1_nft_miner_items" ns WHERE ns.time <= nf.time)AS ninety_to_hundred
 FROM "1_nft_miner_items" AS nf
 `, timeDbFormat)
 	err = GetDB(nil).Raw(sql).Find(&rets).Error
@@ -1187,7 +1187,7 @@ END
  FROM "1_ecosystems" AS e 
 
 LEFT JOIN(
-			SELECT coalesce(block_id,0) as block,coalesce(tx_hash,'') as hash,coalesce(to_number(coalesce(NULLIF(table_id,''),'0'),'999999999999999999999999'),0)as ecoid FROM rollback_tx WHERE table_name = '1_ecosystems' AND data = ''
+			SELECT coalesce(block_id,0) as block,coalesce(tx_hash,'') as hash,coalesce(to_number(coalesce(NULLIF(table_id,''),'0'),'999999999999999999999999999999'),0)as ecoid FROM rollback_tx WHERE table_name = '1_ecosystems' AND data = ''
 )AS rk ON(rk.ecoid = e.id)
 
 LEFT JOIN(
@@ -1510,7 +1510,7 @@ WITH "1_history" AS (SELECT sum(amount) as amount,
 FROM "1_history" WHERE type IN(18,19) AND ecosystem = 1
 GROUP BY days ORDER BY days)
 SELECT s1.days,
-	(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS amount
+	(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days) AS amount
 FROM "1_history" s1
 `, timeDbFormat)
 

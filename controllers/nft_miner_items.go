@@ -278,7 +278,7 @@ func NftMinerRegionListHandler(c *gin.Context) {
 		return
 	}
 
-	res, err := models.GetNftMinerRegionList(req.Page, req.Limit, req.Order)
+	res, err := models.GetNftMinerRegionList(req.Page, req.Limit)
 	if err != nil {
 		ret.Return(nil, CodeDBfinderr.Errorf(err))
 		JsonResponse(c, ret)
