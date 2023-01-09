@@ -72,6 +72,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	rets.Comment = info.Comment
 	rets.Expedite = info.Expedite
 	rets.TokenSymbol = info.TokenSymbol
+	rets.Digits = EcoDigits.GetInt64(info.Ecosystem, 0)
 	rets.Ecosystem = info.Ecosystem
 	rets.Size = strconv.FormatInt(info.Size, 10) + " Byte"
 
@@ -101,21 +102,26 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						basisGasFee.Fees.Recipient = recipient
 						basisGasFee.Fees.Sender = rets.Sender
 						basisGasFee.Fees.TokenSymbol = rets.TokenSymbol
+						basisGasFee.Fees.Digits = rets.Digits
 
 						basisGasFee.TokenSymbol = rets.TokenSymbol
+						basisGasFee.Digits = rets.Digits
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
 					case 21:
 						basisGasFee.Taxes.Amount = amount.String()
 						basisGasFee.Taxes.Recipient = recipient
 						basisGasFee.Taxes.Sender = rets.Sender
 						basisGasFee.Taxes.TokenSymbol = rets.TokenSymbol
+						basisGasFee.Taxes.Digits = rets.Digits
 
 						basisGasFee.TokenSymbol = rets.TokenSymbol
+						basisGasFee.Digits = rets.Digits
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
 					case 22:
 						var change utxoDetail
 						change.Address = recipient
 						change.TokenSymbol = rets.TokenSymbol
+						change.Digits = rets.Digits
 						change.Amount = amount.String()
 						change.Hash = outputTxHash
 
@@ -130,21 +136,26 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						basisGasFee.Fees.Recipient = recipient
 						basisGasFee.Fees.Sender = rets.Sender
 						basisGasFee.Fees.TokenSymbol = Tokens.Get(v.Ecosystem)
+						basisGasFee.Fees.Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
 
 						basisGasFee.TokenSymbol = basisGasFee.Fees.TokenSymbol
+						basisGasFee.Digits = basisGasFee.Fees.Digits
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
 					case 21:
 						basisGasFee.Taxes.Amount = amount.String()
 						basisGasFee.Taxes.Recipient = recipient
 						basisGasFee.Taxes.Sender = rets.Sender
 						basisGasFee.Taxes.TokenSymbol = Tokens.Get(v.Ecosystem)
+						basisGasFee.Taxes.Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
 
 						basisGasFee.TokenSymbol = basisGasFee.Taxes.TokenSymbol
+						basisGasFee.Digits = basisGasFee.Taxes.Digits
 						basisGasFee.Amount = basisGasFee.Amount.Add(amount)
 					case 22:
 						var change utxoDetail
 						change.Address = recipient
 						change.TokenSymbol = Tokens.Get(v.Ecosystem)
+						change.Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
 						change.Amount = amount.String()
 						change.Hash = outputTxHash
 
@@ -157,21 +168,26 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						ecoGasFee.Fees.Recipient = recipient
 						ecoGasFee.Fees.Sender = rets.Sender
 						ecoGasFee.Fees.TokenSymbol = rets.TokenSymbol
+						ecoGasFee.Fees.Digits = rets.Digits
 
 						ecoGasFee.TokenSymbol = rets.TokenSymbol
+						ecoGasFee.Digits = rets.Digits
 						ecoGasFee.Amount = ecoGasFee.Amount.Add(amount)
 					case 21:
 						ecoGasFee.Taxes.Amount = amount.String()
 						ecoGasFee.Taxes.Recipient = recipient
 						ecoGasFee.Taxes.Sender = rets.Sender
 						ecoGasFee.Taxes.TokenSymbol = rets.TokenSymbol
+						ecoGasFee.Taxes.Digits = rets.Digits
 
 						ecoGasFee.TokenSymbol = rets.TokenSymbol
+						ecoGasFee.Digits = rets.Digits
 						ecoGasFee.Amount = ecoGasFee.Amount.Add(amount)
 					case 22:
 						var change utxoDetail
 						change.Address = recipient
 						change.TokenSymbol = rets.TokenSymbol
+						change.Digits = rets.Digits
 						change.Amount = amount.String()
 						change.Hash = outputTxHash
 
@@ -182,6 +198,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						fee.Recipient = recipient
 						fee.Amount = amount
 						fee.TokenSymbol = rets.TokenSymbol
+						fee.Digits = rets.Digits
 						ecoGasFee.Combustion = fee
 						combusionExist = true
 					}
@@ -197,6 +214,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 				ecoGasFee.Combustion.Rate = ecoGasFee.Combustion.Amount.Mul(decimal.NewFromInt(100)).DivRound(totalGasFee, 2).String()
 				if ecoGasFee.TokenSymbol == "" {
 					ecoGasFee.TokenSymbol = ecoGasFee.Combustion.TokenSymbol
+					ecoGasFee.Digits = ecoGasFee.Combustion.Digits
 				}
 			} else {
 				ecoGasFee.FuelRate = FuelRateResponse{ecoGasFee.Amount.DivRound(txSize, 0).String(), ecoGasFee.TokenSymbol + unit}
@@ -269,8 +287,13 @@ func (si *SpentInfo) GetInputs(txHash []byte, page, limit int) (rlts []utxoDetai
 	err = GetDB(nil).Table(si.TableName()).Select("output_key_id,output_value,output_tx_hash,ecosystem").
 		Where("input_tx_hash = ?", txHash).Order("ecosystem ASC").Offset((page - 1) * limit).Limit(limit).Find(&list).Error
 	for _, val := range list {
-		rlts = append(rlts, utxoDetail{Address: converter.AddressToString(val.OutputKeyId), Amount: val.OutputValue, Hash: hex.EncodeToString(val.OutputTxHash),
-			TokenSymbol: Tokens.Get(val.Ecosystem)})
+		rlts = append(rlts, utxoDetail{
+			Address:     converter.AddressToString(val.OutputKeyId),
+			Amount:      val.OutputValue,
+			Hash:        hex.EncodeToString(val.OutputTxHash),
+			TokenSymbol: Tokens.Get(val.Ecosystem),
+			Digits:      EcoDigits.GetInt64(val.Ecosystem, 0),
+		})
 	}
 	return
 }
@@ -279,7 +302,13 @@ func (si *SpentInfo) GetOutputs(txHash []byte) (rlts []utxoDetail, list []SpentI
 	err = GetDB(nil).Table(si.TableName()).
 		Where("output_tx_hash = ?", txHash).Order("ecosystem ASC").Find(&list).Error
 	for _, val := range list {
-		rlts = append(rlts, utxoDetail{Address: converter.AddressToString(val.OutputKeyId), Amount: val.OutputValue, Hash: hex.EncodeToString(val.OutputTxHash), TokenSymbol: Tokens.Get(val.Ecosystem)})
+		rlts = append(rlts, utxoDetail{
+			Address:     converter.AddressToString(val.OutputKeyId),
+			Amount:      val.OutputValue,
+			Hash:        hex.EncodeToString(val.OutputTxHash),
+			TokenSymbol: Tokens.Get(val.Ecosystem),
+			Digits:      EcoDigits.GetInt64(val.Ecosystem, 0),
+		})
 	}
 	return
 }

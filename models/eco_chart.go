@@ -132,6 +132,7 @@ ORDER BY days ASC
 		}
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 
 	return rets, nil
 }
@@ -335,6 +336,7 @@ LEFT JOIN(
 	}
 	ret.Circulations = nowChart.Circulations.String()
 	ret.TokenSymbol = nowChart.TokenSymbol
+	ret.Digits = EcoDigits.GetInt64(ecosystem, 0)
 	ret.StakeAmount = nowChart.StakeAmount.String()
 	ret.LockAmount = nowChart.LockAmount.String()
 	ret.NftBalanceSupply = nowChart.NftMinerBalance
@@ -361,7 +363,7 @@ SELECT cir.days,cir.circulations,COALESCE(sy.nft_balance_supply,0)nft_balance_su
 	FROM "1_history" WHERE type IN(?) AND ecosystem = 1
 	GROUP BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
-			5250000000000000000+(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS circulations
+			5250000000000000000+(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days) AS circulations
 	FROM "1_history" AS s1 
 )AS cir
 LEFT JOIN(
@@ -372,7 +374,7 @@ LEFT JOIN(
 	ORDER BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
 			%s-
-				(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS nft_balance_supply
+				(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days) AS nft_balance_supply
 	FROM "1_history" AS s1 
 )AS sy ON(sy.days = cir.days)
 LEFT JOIN(
@@ -383,7 +385,7 @@ LEFT JOIN(
 	ORDER BY days)
 	SELECT s3.days,s3.amount,s3.ecosystem,
 			%s-
-			(SELECT SUM(amount) FROM "1_history" s4 WHERE s4.days <= s3.days AND SUBSTRING(s3.days,0,5) = SUBSTRING(s4.days,0,5)) AS lock_amount
+			(SELECT SUM(amount) FROM "1_history" s4 WHERE s4.days <= s3.days) AS lock_amount
 	FROM "1_history" AS s3
 )AS ai ON(ai.days = cir.days)
 ORDER BY cir.days asc
@@ -401,7 +403,7 @@ SELECT cir.days,cir.circulations,COALESCE(sy.nft_balance_supply,0)nft_balance_su
 	FROM "1_history" WHERE type IN(6,12,14,21,22,23,34,35) AND ecosystem = 1
 	GROUP BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
-		5250000000000000000+(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS circulations
+		5250000000000000000+(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days) AS circulations
 	FROM "1_history" AS s1 
 )AS cir
 LEFT JOIN(
@@ -412,7 +414,7 @@ LEFT JOIN(
 	ORDER BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
 			%s-
-				(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS nft_balance_supply
+				(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days) AS nft_balance_supply
 	FROM "1_history" AS s1 
 )AS sy ON(sy.days = cir.days)
 ORDER BY cir.days asc
@@ -430,7 +432,7 @@ SELECT cir.days,cir.circulations
 	FROM "1_history" WHERE type IN(6,29) AND ecosystem = ?
 	GROUP BY days)
 	SELECT s1.days,s1.amount,s1.ecosystem,
-		(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5))AS circulations
+		(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days)AS circulations
 	FROM "1_history" AS s1 
 )AS cir
 ORDER BY cir.days asc
@@ -449,7 +451,7 @@ SELECT del.days,del.total_amount as amount
 	GROUP BY days
 	ORDER BY days desc)
 	SELECT s1.days,s1.amount,s1.ecosystem,
-			(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS total_amount
+			(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days) AS total_amount
 	FROM "1_history" AS s1 
 )AS del
 `, timeDbFormat, ecosystem).Find(&delCir).Error
@@ -546,7 +548,7 @@ SELECT del.days,del.total_amount as amount
 	GROUP BY days
 	ORDER BY days desc)
 	SELECT s1.days,s1.amount,s1.ecosystem,
-			(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days AND SUBSTRING(s1.days,0,5) = SUBSTRING(s2.days,0,5)) AS total_amount
+			(SELECT SUM(amount) FROM "1_history" s2 WHERE s2.days <= s1.days) AS total_amount
 	FROM "1_history" AS s1 
 )AS del
 `, timeDbFormat).Find(&addLockList).Error
@@ -568,7 +570,7 @@ SELECT del.days,del.total_amount as amount
 	lastEmission := decimal.Zero
 	combusAmount := decimal.Zero
 	lastCombusAmount := decimal.Zero
-	lastNftBanlance := decimal.Zero
+	lastNftBalance := NftMinerTotalSupplyToken.Add(MintNodeTotalSupplyToken)
 	lastLockAmount := decimal.Zero
 	lastAddLockAmount := decimal.Zero
 	var startTime time.Time
@@ -640,9 +642,9 @@ SELECT del.days,del.total_amount as amount
 				} else {
 
 					if !cir[i].NftBalanceSupply.Equal(decimal.Zero) {
-						lastNftBanlance = cir[i].NftBalanceSupply
+						lastNftBalance = cir[i].NftBalanceSupply
 					}
-					ret.Change.NftBalanceSupply = append(ret.Change.NftBalanceSupply, lastNftBanlance.String())
+					ret.Change.NftBalanceSupply = append(ret.Change.NftBalanceSupply, lastNftBalance.String())
 
 					if !addLock.Equal(decimal.Zero) {
 						lastAddLockAmount = addLock
@@ -747,7 +749,7 @@ SELECT del.days,del.total_amount as amount
 					ret.Change.StakeAmount = append(ret.Change.StakeAmount, stakingAmount.Add(lastStakingAmount).String())
 					lastStakingAmount = stakingAmount.Add(lastStakingAmount)
 				}
-				ret.Change.NftBalanceSupply = append(ret.Change.NftBalanceSupply, lastNftBanlance.String())
+				ret.Change.NftBalanceSupply = append(ret.Change.NftBalanceSupply, lastNftBalance.String())
 				//ret.Change.LockAmount = append(ret.Change.LockAmount, lastLockAmount.String())
 				//ret.Change.StakeAmount = append(ret.Change.StakeAmount, lastStakingAmount.String())
 				ret.Change.SupplyToken = append(ret.Change.SupplyToken, TotalSupplyToken.String())
@@ -811,18 +813,18 @@ SELECT v1.key_id,COALESCE(v2.amount,0)+
 	AS amount,COALESCE(v2.stake_amount,0)AS stake_amount 
 FROM(							
 	SELECT id AS key_id,ecosystem FROM "1_keys" AS k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0 AND amount +
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
 			COALESCE((SELECT sum(stake_amount) FROM "1_airdrop_info" WHERE account = k1.account),0)	>0
 		UNION
 	SELECT output_key_id AS key_id,ecosystem FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? GROUP BY output_key_id,ecosystem
 )AS v1
 LEFT JOIN(
 		SELECT id,amount,ecosystem,
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999')  +
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')  +
 			COALESCE((SELECT sum(stake_amount) FROM "1_airdrop_info" WHERE account = k1.account),0)
 			AS stake_amount
 		FROM "1_keys" AS k1
@@ -837,17 +839,17 @@ SELECT v1.key_id,COALESCE(v2.amount,0)+
 	AS amount,COALESCE(v2.stake_amount,0)AS stake_amount 
 FROM(							
 	SELECT id AS key_id,ecosystem FROM "1_keys" WHERE ecosystem = ? AND blocked = 0 AND deleted = 0 AND amount +
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999')>0
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')>0
 		UNION
 	SELECT output_key_id AS key_id,ecosystem FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? GROUP BY output_key_id,ecosystem
 )AS v1
 LEFT JOIN(
 		SELECT id,amount,ecosystem,
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
 		FROM "1_keys"
 )AS v2 ON(v2.id = v1.key_id AND v2.ecosystem = v1.ecosystem)
 ORDER BY amount DESC
@@ -905,6 +907,7 @@ ORDER BY amount DESC
 		rets.List = append(rets.List, rt)
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 
 	return &rets, nil
 }
@@ -975,6 +978,7 @@ order by amount desc limit 10
 		rets.List = append(rets.List, qt)
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 
 	return &rets, nil
 }
@@ -995,6 +999,7 @@ FROM "1_history" WHERE type IN(1,2) AND ecosystem = ?
 	}
 	rets.Name = EcoNames.Get(ecosystem)
 	rets.TokenSymbol = Tokens.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 
 	return rets, nil
 }
@@ -1114,6 +1119,7 @@ ORDER BY time ASC
 	}
 
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 
 	return rets, nil
 }
@@ -1149,6 +1155,7 @@ func getEco15DayTxAmountChart(ecosystem int64) (EcoTxAmountDiffResponse, error) 
 	}
 
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 
 	for i := 0; i < len(rets.Time); i++ {
 		rets.Time[i] = t1.AddDate(0, 0, i+1).Unix()
@@ -1182,6 +1189,7 @@ ORDER BY days
 		return rets, err
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 
 	rets.Time = make([]int64, getDays)
 	rets.EcoGasAmount = make([]string, getDays)

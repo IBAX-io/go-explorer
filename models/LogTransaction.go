@@ -141,8 +141,10 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 					if bh.Ecosystemname == "" {
 						bh.Ecosystemname = SysEcosystemName
 					}
+					bh.Digits = EcoDigits.GetInt64(1, 12)
 				} else {
 					bh.Token_symbol = rt.Transactions[j].TokenSymbol
+					bh.Digits = EcoDigits.GetInt64(bh.Ecosystem, 0)
 				}
 				Ten := unsafe.Sizeof(rt.Transactions[j])
 				bh.Size = int64(Ten)
@@ -465,7 +467,7 @@ func (lt *LogTransaction) GetEcosystemTransactionFind(ecosystem int64, page, lim
 		} else {
 			q = GetDB(nil).Table(lt.TableName()).Where("ecosystem_id = ?", ecosystem)
 		}
-		total = EcoTxCount.GetCount(ecosystem, 0)
+		total = EcoTxCount.GetInt64(ecosystem, 0)
 		err := q.Select(`hash,block,timestamp,contract_name,address,status`).
 			Order(order).Offset((page - 1) * limit).Limit(limit).Find(&txList).Error
 		if err != nil {

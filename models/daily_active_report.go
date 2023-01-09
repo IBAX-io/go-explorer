@@ -258,7 +258,7 @@ SELECT h2.ds as days,coalesce(h3.num, 0) AS active,coalesce(h2.num+5,0) AS total
 					)AS log ON (log.hash = rb.tx_hash) GROUP BY days
 				)
 				SELECT rk1.days,
-					(SELECT SUM(num) FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
+					(SELECT SUM(num) FROM rollback_tx s2 WHERE s2.days <= rk1.days) as num
 				FROM rollback_tx AS rk1 
 			) AS rk ON (h1.ds = rk.days)
 
@@ -335,7 +335,7 @@ func GetDailyActiveReportList() ([]DailyActiveReport, error) {
 					)AS log ON (log.hash = rb.tx_hash) GROUP BY days
 				)
 				SELECT rk1.days,
-					(SELECT SUM(num) FROM rollback_tx s2 WHERE s2.days <= rk1.days AND SUBSTRING(rk1.days,0,5) = SUBSTRING(s2.days,0,5)) as num
+					(SELECT SUM(num) FROM rollback_tx s2 WHERE s2.days <= rk1.days) as num
 				FROM rollback_tx AS rk1 
 			) AS rk ON (h1.ds = rk.days)
 			

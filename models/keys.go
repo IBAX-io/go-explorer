@@ -90,6 +90,7 @@ type EcosyKeyTotalHex struct {
 	TotalAmount    decimal.Decimal `json:"total_amount"`
 	JoinTime       int64           `json:"join_time"`
 	RolesName      string          `json:"roles_name"`
+	Digits         int64           `json:"digits"`
 }
 
 type EcosyKeyTotalDetail struct {
@@ -103,12 +104,15 @@ type EcosyKeyTotalDetail struct {
 	LockAmount  decimal.Decimal `json:"lock_amount"`
 	StakeAmount decimal.Decimal `json:"stake_amount"`
 	RolesName   string          `json:"roles_name"`
+	Digits      int64           `json:"digits"`
 }
 
 type AccountHistoryChart struct {
-	Time      []int64  `json:"time"`
-	Inamount  []string `json:"inamount"`
-	Outamount []string `json:"outamount"`
+	Time        []int64  `json:"time"`
+	Inamount    []string `json:"inamount"`
+	Outamount   []string `json:"outamount"`
+	TokenSymbol string   `json:"token_symbol"`
+	Digits      int64    `json:"digits"`
 }
 
 type KeysResult struct {
@@ -127,6 +131,7 @@ type EcosyKeyList struct {
 	StakeAmount  decimal.Decimal `json:"stake_amount"`
 	LockAmount   decimal.Decimal `json:"lock_amount"`
 	TokenSymbol  string          `json:"token_symbol"`
+	Digits       int64           `json:"digits"`
 }
 
 type KeysListResult struct {
@@ -319,14 +324,8 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 
 			}
 		}
-		if d.Ecosystem == 1 {
-			d.TokenSymbol = SysTokenSymbol
-			if d.Ecosystemname == "" {
-				d.Ecosystemname = SysEcosystemName
-			}
-		} else {
-			d.TokenSymbol = ems.TokenSymbol
-		}
+		d.TokenSymbol = ems.TokenSymbol
+		d.Digits = ems.Digits
 	}
 
 	ts := &History{}
@@ -546,13 +545,13 @@ func (m *Key) GetWalletTotalEcosystem(page, limit int, order string, wallet stri
 	(SELECT time from block_chain b WHERE b.id = coalesce((SELECT rt.block_id FROM rollback_tx rt WHERE table_name = '1_keys' AND table_id = cast(k1.id as VARCHAR) 
 	|| ','||  cast(k1.ecosystem as VARCHAR) AND data = '' LIMIT 1),1)) AS join_time,
 	k1.amount +(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx_hash is null AND output_key_id = k1.id AND ecosystem = k1.ecosystem)+ 
-		to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999')as total_amount,
+		to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
+		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')as total_amount,
 
-	to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount`).
+	to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
+		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount`).
 				Where("id = ?", wid).Offset((page - 1) * limit).Limit(limit).Order(order).Find(&da).Error
 		} else {
 			err = GetDB(nil).Table(`"1_keys" AS k1`).Select(`account,ecosystem,
@@ -593,6 +592,7 @@ k1.amount+(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx
 			}
 			da[k].Name = EcoNames.Get(v.Ecosystem)
 			da[k].TokenSymbol = Tokens.Get(v.Ecosystem)
+			da[k].Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
 		}
 		ret.List = da
 		return &ret, nil
@@ -689,9 +689,9 @@ v1.stake_amount FROM(
 	SELECT id,account,ecosystem,
 		amount,
 
-		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
 		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
 		AS stake_amount
 
@@ -708,9 +708,9 @@ v1.stake_amount FROM(
 	SELECT id,account,ecosystem,
 		amount,
 
-		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
 
 		FROM "1_keys" WHERE ecosystem = ?
  )AS v1
@@ -748,6 +748,7 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 		return nil, err
 	}
 	tokenSymbol := Tokens.Get(ecosystem)
+	digits := EcoDigits.GetInt64(ecosystem, 0)
 	for i := 0; i < len(ret.Rets); i++ {
 		if ecosystem == 1 {
 			if AssignReady {
@@ -767,6 +768,7 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 			}
 		}
 		ret.Rets[i].TokenSymbol = tokenSymbol
+		ret.Rets[i].Digits = digits
 
 		amount, _ := decimal.NewFromString(ret.Rets[i].Amount)
 		if amount.GreaterThan(decimal.Zero) {
@@ -816,6 +818,7 @@ func (k *Key) GetEcosystemTokenSymbolList(page, limit int, ecosystem int64) (*Ge
 		return &rets, nil
 	}
 	tokenSymbol := Tokens.Get(ecosystem)
+	digits := EcoDigits.GetInt64(ecosystem, 0)
 
 	var ret []EcosystemTokenSymbolList
 	var (
@@ -833,9 +836,9 @@ SELECT COUNT(1) FROM(
 		SELECT id,account,ecosystem,
 			amount,
 	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
 			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
 			AS stake_amount
 	
@@ -853,9 +856,9 @@ SELECT * FROM(
 		SELECT id,account,ecosystem,
 			amount,
 	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
 			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
 			AS stake_amount
 	
@@ -875,9 +878,9 @@ SELECT COUNT(1) FROM(
 		SELECT id,account,ecosystem,
 			amount,
 	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
 	
 			FROM "1_keys" WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
 	 )AS v1
@@ -893,9 +896,9 @@ SELECT * FROM(
 		SELECT id,account,ecosystem,
 			amount,
 	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') AS stake_amount
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
 	
 			FROM "1_keys" WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
 	)AS v1
@@ -1016,6 +1019,7 @@ ORDER BY row_number() OVER (ORDER BY amount DESC) <= 50
 			}
 		}
 		ret[i].TokenSymbol = tokenSymbol
+		ret[i].Digits = digits
 		ret[i].AccountedFor = ret[i].Amount.Mul(decimal.NewFromInt(100)).DivRound(ecoTotal, 2)
 	}
 	rets.List = ret
@@ -1133,9 +1137,9 @@ func GetAccountTotalAmount(ecosystem int64, account string) (AccountTotalAmountC
 COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k1.ecosystem AND output_key_id = k1.id),0)
 AS amount,
 
-to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999')as stake_amount`).
+to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
+		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
+		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')as stake_amount`).
 			Where("ecosystem = ? and id = ?", ecosystem, keyId).Take(&rets))
 	} else {
 		f, err = isFound(GetDB(nil).Table(`"1_keys" as k1`).Select(`k1.amount +
@@ -1173,6 +1177,7 @@ to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'9999999999999999
 	}
 
 	rets.TokenSymbol = Tokens.Get(ecosystem)
+	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
 	rets.TotalAmount = rets.Amount.Add(rets.LockAmount).Add(rets.StakeAmount)
 	zeroDec := decimal.New(0, 0)
 	if rets.TotalAmount.GreaterThan(zeroDec) {

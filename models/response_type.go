@@ -16,6 +16,7 @@ type BlockListHeaderResponse struct {
 	Limit     int                 `json:"limit"`
 	BlockInfo *BlockRet           `json:"block_info,omitempty"`
 	List      []BlockListResponse `json:"list"`
+	Digits    int64               `json:"digits"`
 }
 
 type BlockListResponse struct {
@@ -208,6 +209,7 @@ type EcosystemDetailInfoResponse struct {
 	RegistrationType string            `json:"registration_type"`
 	WebPage          string            `json:"web_page"`
 	Social           map[string]string `json:"social"`
+	Digits           int64             `json:"digits"`
 }
 
 type EcosystemTxList struct {
@@ -238,6 +240,7 @@ type EcosystemTokenSymbolList struct {
 	Amount         decimal.Decimal `json:"amount"`
 	AccountedFor   decimal.Decimal `json:"accounted_for"`
 	TokenSymbol    string          `json:"token_symbol"`
+	Digits         int64           `json:"digits"`
 	FrontCommittee bool            `json:"front_committee"`
 	Committee      bool            `json:"committee"`
 }
@@ -319,6 +322,7 @@ type accountRatio struct {
 // EcoSystem Chart response
 type EcoTopTenHasTokenResponse struct {
 	TokenSymbol string         `json:"token_symbol"`
+	Digits      int64          `json:"digits"`
 	Name        string         `json:"name"` //ecosystem name
 	List        []accountRatio `json:"list"`
 }
@@ -338,6 +342,7 @@ type EcoCirculationsResponse struct {
 	Name             string `json:"name"`
 	SupplyToken      string `json:"supply_token"`
 	Emission         string `json:"emission"`
+	Digits           int64  `json:"digits"`
 
 	Change EcoCirculationsChangeResponse `json:"change"`
 }
@@ -358,15 +363,17 @@ type EcoGasFeeResponse struct {
 	GasFee      string `json:"gas_fee"`
 	Combustion  string `json:"combustion"`
 	TokenSymbol string `json:"token_symbol"`
-	Name        string `json:"name"` //ecosystem name
+	Name        string `json:"name"`
+	Digits      int64  `json:"digits"`
 }
 
 type EcoGasFeeChangeResponse struct {
 	TokenSymbol string   `json:"token_symbol"`
-	Name        string   `json:"name"` //ecosystem name
+	Name        string   `json:"name"`
 	Time        []string `json:"time"`
 	GasFee      []string `json:"gas_fee"`
 	Combustion  []string `json:"combustion"`
+	Digits      int64    `json:"digits"`
 }
 
 type EcoTxAmountDiffResponse struct {
@@ -374,10 +381,12 @@ type EcoTxAmountDiffResponse struct {
 	Name        string   `json:"name"` //ecosystem name
 	Time        []int64  `json:"time"`
 	Amount      []string `json:"amount"`
+	Digits      int64    `json:"digits"`
 }
 
 type EcoTxGasFeeDiffResponse struct {
 	TokenSymbol    string   `json:"token_symbol"`
+	Digits         int64    `json:"digits"`
 	Name           string   `json:"name"` //ecosystem name
 	Time           []int64  `json:"time"`
 	EcoGasAmount   []string `json:"eco_gas_amount"`
@@ -393,12 +402,14 @@ type AccountTotalAmountChart struct {
 	LockAmount       decimal.Decimal `json:"lock_amount"`
 	LockRatio        float64         `json:"lock_ratio"`
 	TokenSymbol      string          `json:"token_symbol"`
+	Digits           int64           `json:"digits"`
 }
 
 type AccountAmountChangePieChart struct {
 	Outcome     decimal.Decimal `json:"outcome" gorm:"column:outcome"`
 	Income      decimal.Decimal `json:"income" gorm:"column:income"`
 	TokenSymbol string          `json:"token_symbol" gorm:"column:token_symbol"`
+	Digits      int64           `json:"digits"`
 }
 
 type AccountAmountChangeBarChart struct {
@@ -408,6 +419,7 @@ type AccountAmountChangeBarChart struct {
 	Outcome     []string `json:"outcome"`
 	Income      []string `json:"income"`
 	Balance     []string `json:"balance"`
+	Digits      int64    `json:"digits"`
 }
 
 type AccountTxChart struct {
@@ -668,6 +680,7 @@ type NodeVoteResponse struct {
 type GasFee struct {
 	Amount      string `json:"amount"`
 	TokenSymbol string `json:"token_symbol"`
+	Digits      int64  `json:"digits"`
 }
 
 type NodeBlockListResponse struct {
@@ -801,6 +814,7 @@ type utxoDetail struct {
 	Amount      string `json:"amount"`
 	Hash        string `json:"hash"`
 	TokenSymbol string `json:"token_symbol"`
+	Digits      int64  `json:"digits"`
 }
 
 type FuelRateResponse struct {
@@ -813,6 +827,7 @@ type FeeInfo struct {
 	Recipient   string `json:"recipient"`
 	Amount      string `json:"amount"`
 	TokenSymbol string `json:"tokenSymbol"`
+	Digits      int64  `json:"digits"`
 }
 
 type combusionInfo struct {
@@ -821,6 +836,7 @@ type combusionInfo struct {
 	Amount      decimal.Decimal `json:"amount"`
 	TokenSymbol string          `json:"tokenSymbol"`
 	Rate        string          `json:"rate"`
+	Digits      int64           `json:"digits"`
 }
 
 type FeesInfo struct {
@@ -830,6 +846,7 @@ type FeesInfo struct {
 	Fees        FeeInfo          `json:"fees"`
 	Taxes       FeeInfo          `json:"taxes"`
 	Combustion  combusionInfo    `json:"combustion"`
+	Digits      int64            `json:"digits"`
 }
 
 type UtxoExplorerInfo struct {
@@ -858,6 +875,7 @@ type UtxoExplorer struct {
 	BasisGasFee FeesInfo     `json:"basis_gas_fee"`
 	EcoGasFee   FeesInfo     `json:"eco_gas_fee"`
 	Size        string       `json:"size"`
+	Digits      int64        `json:"digits"`
 }
 
 type AccountTxListResponse struct {

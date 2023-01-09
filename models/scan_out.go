@@ -98,6 +98,7 @@ type ScanOutRet struct {
 	KeysInfo          KeysRet               `json:"keys_info"`
 	CandidateNodeInfo CandidateHonorNodeRet `json:"candidate_node_info"`
 	CastNodeInfo      CastNodeRet           `json:"cast_node_info"` //todo:Need Add
+	Digits            int64                 `json:"digits"`
 }
 
 type BlockRet struct {
@@ -226,7 +227,7 @@ func (m *ScanOut) InsertRedis() error {
 		Key:   ScanOutStPrefix + Latest,
 		Value: string(val),
 	}
-	err = rd.SetExpire(time.Millisecond * time.Duration(getTomorrowGapMilliseconds()))
+	err = rd.SetExpire(time.Hour * 1)
 	if err != nil {
 		return err
 	}
@@ -393,7 +394,6 @@ func (ret *ScanOut) Changes() error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -471,7 +471,6 @@ func processScanOutFirstBlocks() error {
 		so.CurrentVersion = strconv.FormatInt(int64(bdt.Header.Version), 10)
 		so.BlockTransactionSize = ts
 	}
-
 	err = so.InsertRedis()
 	if err != nil {
 		return err
@@ -532,6 +531,7 @@ func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	rets.EcoLibsInfo = m.EcoLibsInfo
 	rets.KeysInfo = m.KeysInfo
 	rets.CandidateNodeInfo = m.CandidateNodeInfo
+	rets.Digits = EcoDigits.GetInt64(1, 12)
 
 	return &rets, err
 }
@@ -1079,9 +1079,9 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
 (SELECT count(1) AS has_token_key FROM(
 	SELECT id FROM "1_keys" AS k1 WHERE (amount > 0 OR 
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') > 0 OR
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') > 0 OR 
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') > 0 OR
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') > 0 OR
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') > 0 OR 
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') > 0 OR
 			((SELECT balance_amount FROM "1_airdrop_info" WHERE account = k1.account) > 0)
 			) AND ecosystem = 1
 		UNION
@@ -1103,9 +1103,9 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
 (SELECT count(1) AS has_token_key FROM(
 	SELECT id FROM "1_keys" AS k1 WHERE (amount > 0 OR 
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999') > 0 OR
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999') > 0 OR 
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999') > 0 ) AND ecosystem = 1
+			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') > 0 OR
+			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') > 0 OR 
+			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') > 0 ) AND ecosystem = 1
 		UNION
 	SELECT output_key_id AS id FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = 1
 )AS v1),
@@ -1287,10 +1287,4 @@ COALESCE((SELECT pg_relation_size('transaction_relation')),0)
 	}
 	size = ToCapacityString(totalSize)
 	return
-}
-
-func getTomorrowGapMilliseconds() int64 {
-	d1 := time.Now()
-	tomorrow := time.Date(d1.Year(), d1.Month(), d1.Day(), 0, 0, 0, 0, d1.Location()).AddDate(0, 0, 1)
-	return tomorrow.Sub(d1).Milliseconds()
 }

@@ -75,6 +75,7 @@ type DashboardChartData struct {
 	EcoLibsChart      EcoListChart      `json:"eco_libs_chart"`
 	KeyChart          KeyInfoChart      `json:"key_chart"`
 	HonerNodeChart    HonorNodeChart    `json:"honer_node_chart"`
+	Digits            int64             `json:"digits"`
 }
 
 type DaysNumber struct {
@@ -203,6 +204,7 @@ func GetDashboardChartDataFromRedis() (*DashboardChartData, error) {
 
 	rets.NftMinerChart.UnStakingCount = rets.NftMinerChart.Count - stakingNum
 	rets.NftMinerChart.NowStakingCount = stakingNum
+	rets.Digits = EcoDigits.GetInt64(1, 12)
 
 	return rets, nil
 }
