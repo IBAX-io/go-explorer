@@ -29,6 +29,7 @@ const (
 	TopTenEcosystemTx          = "top_ten_ecosystem_tx_chart"
 	NodeVoteChange             = "node_vote_change_chart"
 	NodeStakingChange          = "node_staking_change_chart"
+	NewEcosystemChange         = "new_ecosystem_change_chart"
 
 	//realTime
 	NewKey           = "new_key_chart"
@@ -95,6 +96,7 @@ func DataChartHistoryServer() {
 	InsertRedis(NewNfTMinerChange, GetDataChart(GetNewNftMinerChangeChart()))
 	InsertRedis(NftMinerRewardChange, GetDataChart(GetNftMinerRewardChangeChart()))
 	InsertRedis(TopTenEcosystemTx, GetDataChart(GetTopTenEcosystemTxChart()))
+	InsertRedis(NewEcosystemChange, GetDataChart(GetHistoryNewEcosystemChangeChart()))
 
 	//node chart
 	InsertRedis(NodeVoteChange, GetDataChart(getNodeVoteChangeChangeChart()))
@@ -1007,7 +1009,7 @@ func GetHistoryNewEcosystemChangeChart() (DaysNumberResponse, error) {
 
 	sql := `
 SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,count(1)num FROM "1_history" 
-WHERE comment = 'taxes for execution of @1NewEcosystem contract' AND type = 1 GROUP BY days ORDER BY days ASC
+WHERE comment = 'taxes for execution of @1NewEcosystem contract' AND type = 1 AND ecosystem = 1 GROUP BY days ORDER BY days ASC
 `
 
 	list, err := FindDaysNumber(sql)
