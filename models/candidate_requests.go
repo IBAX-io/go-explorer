@@ -412,7 +412,6 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 		id     int64
 		bk     Block
 		bkList []Block
-		txList []LogTransaction
 	)
 
 	if order == "" {
@@ -441,7 +440,8 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 		return rets, err
 	}
 	if rets.Total > 0 {
-		err = GetDB(nil).Select("id,tx,time").Where("node_position = ? AND consensus_mode = 2", id).Offset((page - 1) * limit).Limit(limit).Order(order).Find(&bkList).Error
+		err = GetDB(nil).Select("id,tx,time").Where("node_position = ? AND consensus_mode = 2", id).
+			Offset((page - 1) * limit).Limit(limit).Order(order).Find(&bkList).Error
 		if err != nil {
 			log.WithFields(log.Fields{"err": err}).Warn("Get Node Block Block List Failed")
 			return rets, err
@@ -451,15 +451,6 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 			var rts NodeBlockListResponse
 			rts.BlockId = value.ID
 
-			err = GetDB(nil).Select("hash").Where("block = ?", value.ID).Find(&txList).Error
-			if err != nil {
-				log.WithFields(log.Fields{"err": err}).Warn("Get Node Block Tx List Failed")
-				return rets, err
-			}
-			var hashList [][]byte
-			for _, vue := range txList {
-				hashList = append(hashList, vue.Hash)
-			}
 			type txGasFee struct {
 				Amount    string
 				Ecosystem int64
@@ -467,12 +458,12 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 			var gasFee []txGasFee
 			err = GetDB(nil).Raw(`
 				SELECT v1.ecosystem,sum(v1.amount)as amount FROM(
-					SELECT ecosystem,sum(amount)amount FROM "1_history" WHERE txhash IN(?) AND type IN(1,2) GROUP BY ecosystem
+					SELECT ecosystem,sum(amount)amount FROM "1_history" WHERE block_id = ? AND type IN(1,2) GROUP BY ecosystem
 					UNION
-					SELECT ecosystem,sum(amount)amount FROM "spent_info_history" WHERE hash IN(?) AND type IN(3,4) GROUP BY ecosystem
+					SELECT ecosystem,sum(amount)amount FROM "spent_info_history" WHERE block = ? AND type IN(3,4) GROUP BY ecosystem
 				)AS v1
 				GROUP BY ecosystem
-			`, hashList, hashList).Find(&gasFee).Error
+			`, rts.BlockId, rts.BlockId).Find(&gasFee).Error
 			if err != nil {
 				log.WithFields(log.Fields{"err": err, "block_id": value.ID}).Warn("Get Node Block Tx List Failed")
 				return rets, err

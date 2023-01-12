@@ -144,6 +144,9 @@ func GetStakingAccountHandler(c *gin.Context) {
 		return
 	}
 
+	//server-timing
+	//c.Header("Server-Timing", fmt.Sprintf("db;dur=%d, app;dur=47.2", time.Now().Sub(t1).Milliseconds()))
+
 	ret.Return(&rets, CodeSuccess)
 	JsonResponse(c, ret)
 }
@@ -328,7 +331,7 @@ func NftMinerStakedChangeHandler(c *gin.Context) {
 
 func GetHistoryNewEcosystemHandler(c *gin.Context) {
 	ret := &Response{}
-	rets, err := models.GetHistoryNewEcosystemChangeChart()
+	rets, err := models.GetRedis(models.NewEcosystemChange)
 	if err != nil {
 		ret.ReturnFailureString("Get History New Ecosystem Handler Failed")
 		JsonResponse(c, ret)

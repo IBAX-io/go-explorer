@@ -262,7 +262,6 @@ func (ts *Key) GetKeys(id int64, page int, size int, order string) (*[]KeyHex, i
 }
 
 func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error) {
-	var si SpentInfo
 	d := EcosyKeyTotalHex{}
 	d.Ecosystem = m.Ecosystem
 	d.Wallet = m.Account
@@ -377,7 +376,8 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 	if m.Amount.GreaterThan(decimal.Zero) {
 		accountAmount = m.Amount
 	}
-	utxoAmount, err := si.GetAmountByKeyId(keyId, 1)
+	var s1 SpentInfoHistory
+	utxoAmount, err := s1.GetKeyBalance(keyId, 1)
 	if err != nil {
 		return nil, err
 	}
