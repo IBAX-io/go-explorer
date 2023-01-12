@@ -173,7 +173,7 @@ func (p *NftMinerItems) GetAccountDetailNftMinerInfo(keyid, order string, page, 
 	nowTime := time.Now().Unix()
 	for i := 0; i < len(list); i++ {
 		var stak NftMinerStaking
-		var stakeAmount int64
+		var stakeAmount decimal.Decimal
 		var cycle int64
 		f, err := stak.GetByTokenId(list[i].ID)
 		if err != nil {
@@ -354,7 +354,14 @@ func (p *NftMinerItems) NftMinerMetaverseList(page, limit int, order string) (Ge
 	var ret GeneralResponse
 	ret.Page = page
 	ret.Limit = limit
-	var list []NftMinerItems
+	var list []struct {
+		NftMinerItems
+		StartDated  int64
+		EndDated    int64
+		EnergyPower int64
+		StakeAmount decimal.Decimal
+		Sum         decimal.Decimal
+	}
 	err := GetDB(nil).Table(p.TableName()).Where("merge_status = 1").Count(&ret.Total).Error
 	if err != nil {
 		if err != gorm.ErrRecordNotFound {
@@ -362,7 +369,10 @@ func (p *NftMinerItems) NftMinerMetaverseList(page, limit int, order string) (Ge
 		}
 		return ret, err
 	}
-	err = GetDB(nil).Where("merge_status = 1").Offset((page - 1) * limit).Limit(limit).Order(order).Find(&list).Error
+	err = GetDB(nil).Table(p.TableName()).
+		Select(`"1_nft_miner_items".*,v2.start_dated,v2.end_dated,v2.energy_power,v2.stake_amount`).
+		Joins(`left join "1_nft_miner_staking" AS v2 ON v2.token_id = "1_nft_miner_items".id AND v2.staking_status = 1`).
+		Where(`"1_nft_miner_items".merge_status = 1`).Offset((page - 1) * limit).Limit(limit).Order(order).Find(&list).Error
 	if err != nil {
 		if err != gorm.ErrRecordNotFound {
 			log.Info("get nft miner metaverse list err:", err.Error())
@@ -378,18 +388,11 @@ func (p *NftMinerItems) NftMinerMetaverseList(page, limit int, order string) (Ge
 		rets[i].Time = list[i].DateCreated
 		rets[i].EnergyPoint = list[i].EnergyPoint
 		rets[i].Owner = list[i].Owner
-		var stak NftMinerStaking
-		f, err := stak.GetNftStakeByTokenId(list[i].ID)
-		if err != nil {
-			log.Info("get nft miner metaverse list err:", err.Error(), " nft miner id:", list[i].ID)
-		} else {
-			if f {
-				if nowTime >= stak.StartDated && nowTime < stak.EndDated {
-					rets[i].EnergyPower = stak.EnergyPower
-				}
-				rets[i].StakeAmount = stak.StakeAmount
-			}
+		if !(nowTime >= list[i].StartDated && nowTime < list[i].EndDated) {
+			list[i].EnergyPower = 0
 		}
+		rets[i].EnergyPower = list[i].EnergyPower
+		rets[i].StakeAmount = list[i].StakeAmount
 
 		var nftIns SumAmount
 		var his History

@@ -74,13 +74,13 @@ type AccountNftMinerListResult struct {
 }
 
 type AccountNftMinerList struct {
-	ID          int64  `json:"id"`
-	EnergyPoint int    `json:"energy_point"`
-	Hash        string `json:"hash"` //hash
-	Time        int64  `json:"time"` //create time
-	StakeAmount int64  `json:"stake_amount"`
-	Cycle       int64  `json:"cycle"`
-	Ins         string `json:"ins"`
+	ID          int64           `json:"id"`
+	EnergyPoint int             `json:"energy_point"`
+	Hash        string          `json:"hash"` //hash
+	Time        int64           `json:"time"` //create time
+	StakeAmount decimal.Decimal `json:"stake_amount"`
+	Cycle       int64           `json:"cycle"`
+	Ins         string          `json:"ins"`
 }
 
 type NftMinerInfoRequest struct {
@@ -95,14 +95,14 @@ type NftMinerInfoResponse struct {
 	Hash        string          `json:"hash"` //NFT Miner hash
 	EnergyPoint int             `json:"energy_point"`
 	StakeCount  int64           `json:"stake_count"`
-	StakeAmount int64           `json:"stake_amount"` //starking
+	StakeAmount decimal.Decimal `json:"stake_amount"` //starking
 	Owner       string          `json:"owner"`        //owner account
 	Creator     string          `json:"creator"`      //owner account
 	RewardCount int64           `json:"reward_count"`
 	Cycle       int64           `json:"cycle"`
 	DateCreated int64           `json:"date_created"` //create time
 	Ins         string          `json:"ins"`
-	EnergyPower decimal.Decimal `json:"energy_power"`
+	EnergyPower int64           `json:"energy_power"`
 }
 
 type NftMinerTxInfoResponse struct {
@@ -130,8 +130,8 @@ type NftMinerListResponse struct {
 	Hash        string          `json:"hash"`
 	EnergyPoint int             `json:"energy_point"`
 	Owner       string          `json:"owner"`
-	StakeAmount int64           `json:"stake_amount"`
-	EnergyPower decimal.Decimal `json:"energy_power"`
+	StakeAmount decimal.Decimal `json:"stake_amount"`
+	EnergyPower int64           `json:"energy_power"`
 	Time        int64           `json:"time"`
 	Ins         string          `json:"ins"`
 }

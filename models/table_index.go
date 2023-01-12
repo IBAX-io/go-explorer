@@ -47,9 +47,28 @@ func FormatIndexMethod(method int) string {
 	return IndexBTree
 }
 
-func createExtension(extensionName string) error {
+func extensionExist(extensionName string) (bool, error, string) {
 	var extname string
 	f, err := isFound(GetDB(nil).Table("pg_extension").Select("extname").Where("extname = ?", extensionName).Take(&extname))
+	return f, err, extname
+}
+
+func deleteExtension(extensionName string) error {
+	f, err, _ := extensionExist(extensionName)
+	if err != nil {
+		return err
+	}
+	if f {
+		err = GetDB(nil).Exec(fmt.Sprintf("DROP EXTENSION %s", extensionName)).Error
+		if err != nil {
+			return fmt.Errorf("delete extension failed:%s", err.Error())
+		}
+	}
+	return nil
+}
+
+func createExtension(extensionName string) error {
+	f, err, _ := extensionExist(extensionName)
 	if err != nil {
 		return err
 	}
@@ -80,8 +99,8 @@ func createTableIndex(tableName, indexName, rows string, method int) error {
 	switch method {
 	case 0, 1, 3:
 		err = GetDB(nil).Exec(fmt.Sprintf(`
-CREATE INDEX %s
-             ON %s using %s (%s)
+CREATE INDEX "%s"
+             ON "%s" using %s (%s)
 `, indexName, tableName, FormatIndexMethod(method), rows)).Error
 		if err != nil {
 			return fmt.Errorf("create table index failed:%s", err.Error())
@@ -118,11 +137,44 @@ func CreateIndexMain() error {
 		return err
 	}
 
+	var sph SpentInfoHistory
+	err = createTableIndex(sph.TableName(), sph.TableName()+"_sender_id_recipient_id_ecosystem_idx",
+		`"sender_id","recipient_id","ecosystem"`, ParseIndexMethod(IndexBTree))
+	if err != nil {
+		return err
+	}
+
 	var lg LogTransaction
 	err = createTableIndex(lg.TableName(), lg.TableName()+"_ecosystem_id_block_timestamp_idx",
 		`"ecosystem_id","block","timestamp"`, ParseIndexMethod(IndexBTree))
 	if err != nil {
 		return err
 	}
+
+	var h1 History
+	err = createTableIndex(h1.TableName(), h1.TableName()+"_recipient_id_type_comment_idx",
+		`"recipient_id","type","comment"`, ParseIndexMethod(IndexBTree))
+	if err != nil {
+		return err
+	}
+
+	//must be set Database UTF-8 Format
+	err = createExtension("btree_gin")
+	if err != nil {
+		return err
+	}
+
+	err = createExtension("pg_trgm")
+	if err != nil {
+		return err
+	}
+
+	var txr TransactionRelation
+	err = createTableIndex(txr.TableName(), txr.TableName()+"_sender_ids_recipient_ids_idx",
+		`"sender_ids" GIN_TRGM_OPS,"recipient_ids" GIN_TRGM_OPS`, ParseIndexMethod(IndexGIN))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
