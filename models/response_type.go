@@ -6,7 +6,6 @@
 package models
 
 import (
-	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
 	"github.com/shopspring/decimal"
 )
 
@@ -167,6 +166,11 @@ type NftMinerStakeInfoResponse struct {
 	StakeStatus bool   `json:"stake_status"`
 }
 
+type FeeModeFlag struct {
+	Flag           string `json:"flag"`
+	ConversionRate string `json:"conversion_rate,omitempty"`
+}
+
 type EcosystemDetailInfoResponse struct {
 	EcosystemId     int64  `json:"ecosystem_id"`
 	Ecosystem       string `json:"ecosystem"`
@@ -191,10 +195,10 @@ type EcosystemDetailInfoResponse struct {
 	FeeModel        int    `json:"fee_model"`
 	FeeModeAccount  string `json:"fee_mode_account"`
 
-	FeeModelVmcost  sqldb.FeeModeFlag `json:"vmcost"`
-	FeeModeStorage  sqldb.FeeModeFlag `json:"storage"`
-	FeeModeElement  sqldb.FeeModeFlag `json:"element"`
-	FeeModeExpedite sqldb.FeeModeFlag `json:"expedite"`
+	FeeModelVmcost  FeeModeFlag `json:"vmcost"`
+	FeeModeStorage  FeeModeFlag `json:"storage"`
+	FeeModeElement  FeeModeFlag `json:"element"`
+	FeeModeExpedite FeeModeFlag `json:"expedite"`
 
 	WithholdingMode   int     `json:"withholding_mode"`
 	IsCombustion      bool    `json:"is_combustion"`

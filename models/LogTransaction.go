@@ -547,7 +547,6 @@ func (lt *LogTransaction) GetEcosystemAccountTransaction(ecosystem int64, page i
 				where["created_at <="] = (val + dayTime) * 1000
 			}
 		}
-		//where["recipient_ids like"] = keyIdLike
 	}
 	type accountTxList struct {
 		Hash         []byte

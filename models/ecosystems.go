@@ -618,7 +618,6 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 	rets.FeeModeElement.Flag = "1"
 	rets.FeeModeStorage.ConversionRate = "100"
 	rets.FeeModeStorage.Flag = "1"
-	rets.FeeModeExpedite.ConversionRate = "100"
 	rets.FeeModeExpedite.Flag = "1"
 	if eco.FeeModeInfo != "" {
 		var feeInfo FeeModeInfo
@@ -660,7 +659,6 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 					rets.FeeModel = 2
 					rets.FeeModeAccount = getFeeModeAccount(eco.ID)
 				}
-				rets.FeeModeExpedite.ConversionRate = value.ConversionRate
 				rets.FeeModeExpedite.Flag = value.Flag
 			}
 		}

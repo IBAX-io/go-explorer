@@ -179,6 +179,15 @@ func (p *EcosystemInfoMap) GetInt64(ecosystem int64, defaultValue int64) int64 {
 	return defaultValue
 }
 
+func (p *EcosystemInfoMap) Len() int {
+	var count int
+	p.Range(func(key, value any) bool {
+		count++
+		return true
+	})
+	return count
+}
+
 func (p *ecoAmountObject) Get(ecosystem int64) (decimal.Decimal, error) {
 	if p == nil {
 		return decimal.Zero, errors.New("eco amount object null")

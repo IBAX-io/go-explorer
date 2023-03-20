@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type NodeInfo struct {
@@ -65,7 +66,7 @@ type nodePkg struct {
 var (
 	HonorNodes []storage.HonorNodeModel
 	geoIpDb    *geoip2.Reader
-	flagIcon   map[string]string
+	flagIcon   sync.Map
 )
 
 func GeoIpDatabaseInit() error {
@@ -734,7 +735,6 @@ func SyncNationalFlagIcon() {
 	defer func() {
 		HistoryWG.Done()
 	}()
-	flagIcon = make(map[string]string)
 
 	road, _ := os.Getwd()
 	logodir := path.Join(road, "logodir")
@@ -747,27 +747,33 @@ func SyncNationalFlagIcon() {
 	for _, v := range dir {
 		fileName := v.Name()
 		if strings.HasSuffix(fileName, ".png") {
-			flagIcon[fileName] = fileName
+			flagIcon.Store(fileName, fileName)
 		}
 	}
 }
 
 func getFlagIcon(name string) string {
 	name += ".png"
-	if _, ok := flagIcon[name]; ok {
-		return flagIcon[name]
+	if v, ok := flagIcon.Load(name); ok {
+		return v.(string)
 	} else {
-		for _, fileName := range flagIcon {
-			f1 := strings.Replace(fileName, " ", "", -1)
-			f1 = strings.Replace(f1, "_", "", -1)
+		return func() string {
+			var flag = "default.png"
+			flagIcon.Range(func(key, value any) bool {
+				fileName := value.(string)
+				f1 := strings.Replace(fileName, " ", "", -1)
+				f1 = strings.Replace(f1, "_", "", -1)
 
-			f2 := strings.Replace(name, " ", "", -1)
-			f2 = strings.Replace(f2, "_", "", -1)
-			if strings.EqualFold(f1, f2) {
-				return fileName
-			}
-		}
+				f2 := strings.Replace(name, " ", "", -1)
+				f2 = strings.Replace(f2, "_", "", -1)
+				if strings.EqualFold(f1, f2) {
+					flag = fileName
+					return false
+				}
+
+				return true
+			})
+			return flag
+		}()
 	}
-
-	return "default.png"
 }

@@ -367,9 +367,6 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 		if fuel.ExpediteFee.Flag == 2 || fuel.ExpediteFee.Flag == 1 {
 			det.ExpediteFee.Amount = getFeeAmount(fuel.ExpediteFee)
 			det.ExpediteFee.SenderId = senderid
-			if isExchange {
-				det.ExpediteFee.Scale = fuel.ExpediteFee.ConversionRate
-			}
 		}
 		if fuel.FuelRate != "" {
 			combustion, _ := decimal.NewFromString(fuel.FuelRate)
@@ -581,6 +578,14 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 		ecoInfo.GasFee.Digits = ecoInfo.Taxes.Digits
 		tss.EcoDetail = &ecoInfo
 	}
+	//if not eco pay fee and has expedited fee need show eco pay Fuel Rate
+	if ecoInfo.GasFee.Amount.IsZero() && ecoInfo.Combustion.Amount.IsZero() {
+		if ecoInfo.Exchange.ExpediteFee.FuelRate != 0 && ecoInfo.Detail.ExpediteFee.FuelRate == 0 {
+			ecoInfo.Detail.ExpediteFee.FuelRate = ecoInfo.Exchange.ExpediteFee.FuelRate
+			ecoInfo.GasFee.TokenSymbol = ecoInfo.Exchange.TokenSymbol
+		}
+	}
+
 	if tss.EcoDetail != nil {
 		if isEcosystemPaid {
 			tss.EcoDetail.EcosystemPay = &ecoPaid
