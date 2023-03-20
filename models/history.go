@@ -72,11 +72,10 @@ type CombustionDetail struct {
 		Before  string `json:"before"`
 		Percent int    `json:"percent"`
 	} `json:"combustion"`
-	VmCostFee   string `json:"vmCost_fee"`
-	ElementFee  string `json:"element_fee"`
-	StorageFee  string `json:"storage_fee"`
-	ExpediteFee string `json:"expedite_fee"`
-	TokenSymbol string `json:"token_symbol"`
+	VmCostFee   decimal.Decimal `json:"vmCost_fee"`
+	ElementFee  decimal.Decimal `json:"element_fee"`
+	StorageFee  decimal.Decimal `json:"storage_fee"`
+	ExpediteFee decimal.Decimal `json:"expedite_fee"`
 }
 
 type HistoryHex struct {
@@ -130,13 +129,22 @@ type HistoryItem struct {
 	Digits      int64           `json:"digits"`
 }
 
+type DetailItem struct {
+	SenderId   string          `json:"sender_id"`
+	Amount     decimal.Decimal `json:"amount"`
+	Flag       int             `json:"flag"`
+	Scale      float64         `json:"scale,omitempty"`
+	FuelRate   int64           `json:"fuel_rate,omitempty"`
+	Combustion string          `json:"combustion,omitempty"`
+}
+
 type transDetail struct {
-	TokenSymbol string      `json:"token_symbol"`
-	Digits      int64       `json:"digits"`
-	VmCostFee   HistoryItem `json:"vmCost_fee"`
-	ElementFee  HistoryItem `json:"element_fee"`
-	StorageFee  HistoryItem `json:"storage_fee"`
-	ExpediteFee HistoryItem `json:"expedite_fee"`
+	TokenSymbol string     `json:"token_symbol"`
+	Digits      int64      `json:"digits"`
+	VmCostFee   DetailItem `json:"vmCost_fee"`
+	ElementFee  DetailItem `json:"element_fee"`
+	StorageFee  DetailItem `json:"storage_fee"`
+	ExpediteFee DetailItem `json:"expedite_fee"`
 }
 
 type ecoExplorer struct {
@@ -337,31 +345,28 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 		var det transDetail
 		if fuel.VmCostFee.Flag == 2 || fuel.VmCostFee.Flag == 1 {
 			det.VmCostFee.Amount = getFeeAmount(fuel.VmCostFee)
-			det.VmCostFee.Senderid = senderid
+			det.VmCostFee.SenderId = senderid
 			if isExchange {
 				det.VmCostFee.Scale = fuel.VmCostFee.ConversionRate
 			}
 		}
 		if fuel.ElementFee.Flag == 2 || fuel.ElementFee.Flag == 1 {
 			det.ElementFee.Amount = getFeeAmount(fuel.ElementFee)
-			det.ElementFee.Senderid = senderid
+			det.ElementFee.SenderId = senderid
 			if isExchange {
 				det.ElementFee.Scale = fuel.ElementFee.ConversionRate
 			}
 		}
 		if fuel.StorageFee.Flag == 2 || fuel.StorageFee.Flag == 1 {
 			det.StorageFee.Amount = getFeeAmount(fuel.StorageFee)
-			det.StorageFee.Senderid = senderid
+			det.StorageFee.SenderId = senderid
 			if isExchange {
 				det.StorageFee.Scale = fuel.StorageFee.ConversionRate
 			}
 		}
 		if fuel.ExpediteFee.Flag == 2 || fuel.ExpediteFee.Flag == 1 {
 			det.ExpediteFee.Amount = getFeeAmount(fuel.ExpediteFee)
-			det.ExpediteFee.Senderid = senderid
-			if isExchange {
-				det.ExpediteFee.Scale = fuel.ExpediteFee.ConversionRate
-			}
+			det.ExpediteFee.SenderId = senderid
 		}
 		if fuel.FuelRate != "" {
 			combustion, _ := decimal.NewFromString(fuel.FuelRate)
@@ -438,10 +443,10 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 					}
 					det.TokenSymbol = item.TokenSymbol
 					det.Digits = item.Digits
-					det.VmCostFee.Senderid = item.Senderid
-					det.ElementFee.Senderid = item.Senderid
-					det.StorageFee.Senderid = item.Senderid
-					det.ExpediteFee.Senderid = item.Senderid
+					det.VmCostFee.SenderId = item.Senderid
+					det.ElementFee.SenderId = item.Senderid
+					det.StorageFee.SenderId = item.Senderid
+					det.ExpediteFee.SenderId = item.Senderid
 					det.VmCostFee.Amount = getFeeAmount(fuel.VmCostFee)
 					det.ElementFee.Amount = getFeeAmount(fuel.ElementFee)
 					det.StorageFee.Amount = getFeeAmount(fuel.StorageFee)
@@ -453,16 +458,16 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 					if val.Ecosystem != 1 {
 						dtl := getEcoExchangeDetail(fuel, item.Senderid, false)
 						ecoInfo.Detail.ElementFee.Amount = dtl.ElementFee.Amount
-						ecoInfo.Detail.ElementFee.Senderid = dtl.ElementFee.Senderid
+						ecoInfo.Detail.ElementFee.SenderId = dtl.ElementFee.SenderId
 						ecoInfo.Detail.ElementFee.FuelRate = dtl.ElementFee.FuelRate
 						ecoInfo.Detail.VmCostFee.Amount = dtl.VmCostFee.Amount
-						ecoInfo.Detail.VmCostFee.Senderid = dtl.VmCostFee.Senderid
+						ecoInfo.Detail.VmCostFee.SenderId = dtl.VmCostFee.SenderId
 						ecoInfo.Detail.VmCostFee.FuelRate = dtl.VmCostFee.FuelRate
 						ecoInfo.Detail.StorageFee.Amount = dtl.StorageFee.Amount
-						ecoInfo.Detail.StorageFee.Senderid = dtl.StorageFee.Senderid
+						ecoInfo.Detail.StorageFee.SenderId = dtl.StorageFee.SenderId
 						ecoInfo.Detail.StorageFee.FuelRate = dtl.StorageFee.FuelRate
 						ecoInfo.Detail.ExpediteFee.Amount = dtl.ExpediteFee.Amount
-						ecoInfo.Detail.ExpediteFee.Senderid = dtl.ExpediteFee.Senderid
+						ecoInfo.Detail.ExpediteFee.SenderId = dtl.ExpediteFee.SenderId
 						ecoInfo.Detail.ExpediteFee.FuelRate = dtl.ExpediteFee.FuelRate
 						ecoInfo.Detail.TokenSymbol = item.TokenSymbol
 						ecoInfo.Detail.Digits = item.Digits
@@ -476,25 +481,25 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 						if det.VmCostFee.Flag != 0 {
 							tss.Detail.VmCostFee.Flag = det.VmCostFee.Flag
 							if (tss.Detail.VmCostFee.Flag == 1 && !isEcosystemPaid) || (tss.Detail.VmCostFee.Flag == 2 && isEcosystemPaid) {
-								tss.Detail.VmCostFee.Senderid = item.Senderid
+								tss.Detail.VmCostFee.SenderId = item.Senderid
 							}
 						}
 						if det.ElementFee.Flag != 0 {
 							tss.Detail.ElementFee.Flag = det.ElementFee.Flag
 							if (tss.Detail.ElementFee.Flag == 1 && !isEcosystemPaid) || (tss.Detail.ElementFee.Flag == 2 && isEcosystemPaid) {
-								tss.Detail.ElementFee.Senderid = item.Senderid
+								tss.Detail.ElementFee.SenderId = item.Senderid
 							}
 						}
 						if det.StorageFee.Flag != 0 {
 							tss.Detail.StorageFee.Flag = det.StorageFee.Flag
 							if (tss.Detail.StorageFee.Flag == 1 && !isEcosystemPaid) || (tss.Detail.StorageFee.Flag == 2 && isEcosystemPaid) {
-								tss.Detail.StorageFee.Senderid = item.Senderid
+								tss.Detail.StorageFee.SenderId = item.Senderid
 							}
 						}
 						if det.ExpediteFee.Flag != 0 {
 							tss.Detail.ExpediteFee.Flag = det.ExpediteFee.Flag
 							if (tss.Detail.ExpediteFee.Flag == 1 && !isEcosystemPaid) || (tss.Detail.ExpediteFee.Flag == 2 && isEcosystemPaid) {
-								tss.Detail.ExpediteFee.Senderid = item.Senderid
+								tss.Detail.ExpediteFee.SenderId = item.Senderid
 							}
 						}
 					}
@@ -558,10 +563,10 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 						}
 					}
 
-					ecoInfo.Detail.VmCostFee.Combustion = detail.VmCostFee
-					ecoInfo.Detail.ElementFee.Combustion = detail.ElementFee
-					ecoInfo.Detail.StorageFee.Combustion = detail.StorageFee
-					ecoInfo.Detail.ExpediteFee.Combustion = detail.ExpediteFee
+					ecoInfo.Detail.VmCostFee.Combustion = detail.VmCostFee.String()
+					ecoInfo.Detail.ElementFee.Combustion = detail.ElementFee.String()
+					ecoInfo.Detail.StorageFee.Combustion = detail.StorageFee.String()
+					ecoInfo.Detail.ExpediteFee.Combustion = detail.ExpediteFee.String()
 					ecoInfo.Combustion.Scale = float64(detail.Combustion.Percent)
 				}
 			}
@@ -573,6 +578,14 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 		ecoInfo.GasFee.Digits = ecoInfo.Taxes.Digits
 		tss.EcoDetail = &ecoInfo
 	}
+	//if not eco pay fee and has expedited fee need show eco pay Fuel Rate
+	if ecoInfo.GasFee.Amount.IsZero() && ecoInfo.Combustion.Amount.IsZero() {
+		if ecoInfo.Exchange.ExpediteFee.FuelRate != 0 && ecoInfo.Detail.ExpediteFee.FuelRate == 0 {
+			ecoInfo.Detail.ExpediteFee.FuelRate = ecoInfo.Exchange.ExpediteFee.FuelRate
+			ecoInfo.GasFee.TokenSymbol = ecoInfo.Exchange.TokenSymbol
+		}
+	}
+
 	if tss.EcoDetail != nil {
 		if isEcosystemPaid {
 			tss.EcoDetail.EcosystemPay = &ecoPaid

@@ -349,7 +349,7 @@ func GetAccountTransactionHistory(c *gin.Context) {
 	}
 
 	lt := &models.LogTransaction{}
-	rets, err := lt.GetEcosystemAccountTransaction(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Order, req.Where)
+	rets, err := lt.GetEcosystemAccountTransaction(req.Ecosystem, req.Page, req.Limit, req.Wallet, req.Where)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)

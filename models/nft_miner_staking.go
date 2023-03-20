@@ -19,8 +19,8 @@ import (
 type NftMinerStaking struct {
 	ID            int64           `gorm:"primary_key;not null"`         //ID
 	TokenId       int64           `gorm:"column:token_id;not null"`     //NFT Miner ID
-	StakeAmount   int64           `gorm:"column:stake_amount;not null"` //starking
-	EnergyPower   decimal.Decimal `gorm:"column:energy_power;not null"`
+	StakeAmount   decimal.Decimal `gorm:"column:stake_amount;not null"` //starking
+	EnergyPower   int64           `gorm:"column:energy_power;not null"`
 	EnergyPoint   int64           `gorm:"column:energy_point;not null"`
 	Source        int64           `gorm:"column:source;not null"`      //source
 	StartDated    int64           `gorm:"column:start_dated;not null"` //start time
