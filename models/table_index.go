@@ -129,6 +129,7 @@ DROP INDEX %s
 	return nil
 }
 
+// CreateIndexMain Indexes cannot be added to the ecological table, which will cause synchronization failure
 func CreateIndexMain() error {
 	var sp SpentInfo
 	err := createTableIndex(sp.TableName(), sp.TableName()+"_input_tx_hash_output_key_id_ecosystem_idx",
@@ -147,13 +148,6 @@ func CreateIndexMain() error {
 	var lg LogTransaction
 	err = createTableIndex(lg.TableName(), lg.TableName()+"_ecosystem_id_block_timestamp_idx",
 		`"ecosystem_id","block","timestamp"`, ParseIndexMethod(IndexBTree))
-	if err != nil {
-		return err
-	}
-
-	var h1 History
-	err = createTableIndex(h1.TableName(), h1.TableName()+"_recipient_id_type_comment_idx",
-		`"recipient_id","type","comment"`, ParseIndexMethod(IndexBTree))
 	if err != nil {
 		return err
 	}
