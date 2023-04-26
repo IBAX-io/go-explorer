@@ -115,6 +115,7 @@ func InitEcosystemInfo() {
 	allKeyAmount = &ecoAmountObject{}
 	EcoTxCount = &EcosystemInfoMap{}
 	EcoDigits = &EcosystemInfoMap{}
+	EcoFuelRate = &EcosystemInfoMap{}
 
 	for k, v := range countryMap {
 		countrys.Store(k, v)
