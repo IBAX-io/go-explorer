@@ -267,7 +267,7 @@ const docTemplate = `{
                 "block_transcation_size": {
                     "type": "integer"
                 },
-                "block_transcations": {
+                "block_transactions": {
                     "type": "integer"
                 },
                 "candidate_node_info": {
