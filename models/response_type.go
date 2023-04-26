@@ -185,7 +185,7 @@ type EcosystemDetailInfoResponse struct {
 	EcoIntroduction string `json:"eco_introduction"`
 	Time            int64  `json:"time"`
 	GovernModel     int64  `json:"govern_model"`
-	GovernCommittee string `json:"govern_committee"` //TODO: need add
+	GovernCommittee string `json:"govern_committee"`
 	TokenSymbol     string `json:"token_symbol"`
 	TotalAmount     string `json:"total_amount"`
 	IsWithdraw      bool   `json:"is_withdraw"`

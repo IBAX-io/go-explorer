@@ -626,7 +626,7 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 			log.Info("Get Ecosystem Detail feeInfo json failed:", err.Error())
 			return nil, err
 		}
-		rets.FollowFuel = feeInfo.FollowFuel * 100
+		rets.FollowFuel, _ = decimal.NewFromFloat(feeInfo.FollowFuel).Mul(decimal.NewFromInt(100)).Float64()
 		for key, value := range feeInfo.FeeModeDetail {
 			switch key {
 			case "vmCost_fee":
@@ -734,8 +734,6 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 		}
 		rets.Hash = hex.EncodeToString(ts.Hash)
 	}
-
-	//todo:need add rets.GovernCommittee
 
 	return &rets, nil
 }

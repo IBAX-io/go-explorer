@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/shopspring/decimal"
@@ -30,6 +31,7 @@ var (
 	allKeyAmount *ecoAmountObject //key:ecosystem value:decimal.Decimal all keys circulations and staking amount
 	EcoTxCount   *EcosystemInfoMap
 	EcoDigits    *EcosystemInfoMap
+	EcoFuelRate  *EcosystemInfoMap
 )
 
 var countryMap = map[int]string{
@@ -179,6 +181,21 @@ func (p *EcosystemInfoMap) GetInt64(ecosystem int64, defaultValue int64) int64 {
 	return defaultValue
 }
 
+func (p *EcosystemInfoMap) GetFloat64(ecosystem int64, defaultValue float64) float64 {
+	if p == nil {
+		return 0
+	}
+	value, ok := p.Load(ecosystem)
+	if ok {
+		if cp, ok := value.(float64); !ok {
+			return 0
+		} else {
+			return cp
+		}
+	}
+	return defaultValue
+}
+
 func (p *EcosystemInfoMap) Len() int {
 	var count int
 	p.Range(func(key, value any) bool {
@@ -209,7 +226,7 @@ func GetAllEcosystemInfo() {
 		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id total failed")
 		return
 	}
-	err = GetDB(nil).Select("id,token_symbol,name,digits").Find(&list).Error
+	err = GetDB(nil).Select("id,token_symbol,name,digits,fee_mode_info").Find(&list).Error
 	if err != nil {
 		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id list failed")
 		return
@@ -220,6 +237,17 @@ func GetAllEcosystemInfo() {
 		Tokens.Store(v.ID, v.TokenSymbol)
 		EcoNames.Store(v.ID, v.Name)
 		EcoDigits.Store(v.ID, v.Digits)
+		if v.FeeModeInfo != "" {
+			var feeInfo FeeModeInfo
+			err := json.Unmarshal([]byte(v.FeeModeInfo), &feeInfo)
+			if err == nil {
+				followFuel, _ := decimal.NewFromFloat(feeInfo.FollowFuel).Mul(decimal.NewFromInt(100)).Float64()
+				EcoFuelRate.Store(v.ID, followFuel)
+			} else {
+				log.Info("get all ecosystem fee mode failed:", err.Error())
+				return
+			}
+		}
 	}
 }
 
