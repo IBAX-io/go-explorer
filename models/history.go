@@ -134,7 +134,7 @@ type DetailItem struct {
 	Amount     decimal.Decimal `json:"amount"`
 	Flag       int             `json:"flag"`
 	Scale      float64         `json:"scale,omitempty"`
-	FuelRate   int64           `json:"fuel_rate,omitempty"`
+	FuelRate   float64         `json:"fuel_rate,omitempty"`
 	Combustion string          `json:"combustion,omitempty"`
 }
 
@@ -324,9 +324,11 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 
 	ecoTokenSymbol := make(map[int64]string)
 	ecoDigits := make(map[int64]int64)
+	ecoFuelRate := make(map[int64]float64)
 	for _, value := range ecoIdList {
 		ecoTokenSymbol[value.Ecosystem] = Tokens.Get(value.Ecosystem)
 		ecoDigits[value.Ecosystem] = EcoDigits.GetInt64(value.Ecosystem, 0)
+		ecoFuelRate[value.Ecosystem] = EcoFuelRate.GetFloat64(value.Ecosystem, 0)
 	}
 	getFeeRate := func(fe FeeDetail) (float64, int) {
 		if fe.Flag == 0 {
@@ -341,7 +343,7 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 		ret, _ := decimal.NewFromString(fe.Value)
 		return ret
 	}
-	getEcoExchangeDetail := func(fuel fuelDetail, senderid string, isExchange bool) transDetail {
+	getEcoExchangeDetail := func(fuel fuelDetail, senderid string, isExchange bool, ecosystem int64) transDetail {
 		var det transDetail
 		if fuel.VmCostFee.Flag == 2 || fuel.VmCostFee.Flag == 1 {
 			det.VmCostFee.Amount = getFeeAmount(fuel.VmCostFee)
@@ -368,16 +370,11 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 			det.ExpediteFee.Amount = getFeeAmount(fuel.ExpediteFee)
 			det.ExpediteFee.SenderId = senderid
 		}
-		if fuel.FuelRate != "" {
-			combustion, _ := decimal.NewFromString(fuel.FuelRate)
-			rate := decimal.NewFromInt(1e4)
-			if !combustion.IsZero() {
-				det.VmCostFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-				det.ElementFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-				det.StorageFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-				det.ExpediteFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-			}
-		}
+		fuelRate := ecoFuelRate[ecosystem]
+		det.VmCostFee.FuelRate = fuelRate
+		det.ElementFee.FuelRate = fuelRate
+		det.StorageFee.FuelRate = fuelRate
+		det.ExpediteFee.FuelRate = fuelRate
 		return det
 	}
 
@@ -456,7 +453,7 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 					det.StorageFee.Scale, det.StorageFee.Flag = getFeeRate(fuel.StorageFee)
 					det.ExpediteFee.Scale, det.ExpediteFee.Flag = getFeeRate(fuel.ExpediteFee)
 					if val.Ecosystem != 1 {
-						dtl := getEcoExchangeDetail(fuel, item.Senderid, false)
+						dtl := getEcoExchangeDetail(fuel, item.Senderid, false, val.Ecosystem)
 						ecoInfo.Detail.ElementFee.Amount = dtl.ElementFee.Amount
 						ecoInfo.Detail.ElementFee.SenderId = dtl.ElementFee.SenderId
 						ecoInfo.Detail.ElementFee.FuelRate = dtl.ElementFee.FuelRate
@@ -535,7 +532,7 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 					if err := json.Unmarshal([]byte(val.ValueDetail), &fuel); err != nil {
 						return nil, errors.New("get ecosystem paid value detail failed:" + err.Error())
 					}
-					det = getEcoExchangeDetail(fuel, item.Senderid, true)
+					det = getEcoExchangeDetail(fuel, item.Senderid, true, val.Ecosystem)
 					det.TokenSymbol = item.TokenSymbol
 					det.Digits = item.Digits
 					ecoInfo.Exchange = det
@@ -552,16 +549,11 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 					if err := json.Unmarshal([]byte(val.ValueDetail), &detail); err != nil {
 						return nil, errors.New("get ecosystem combustion value detail failed:" + err.Error())
 					}
-					if detail.FuelRate != "" {
-						combustion, _ := decimal.NewFromString(detail.FuelRate)
-						rate := decimal.NewFromInt(1e4)
-						if !combustion.IsZero() {
-							ecoInfo.Detail.VmCostFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-							ecoInfo.Detail.ElementFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-							ecoInfo.Detail.StorageFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-							ecoInfo.Detail.ExpediteFee.FuelRate = combustion.DivRound(rate, 0).IntPart()
-						}
-					}
+					fuelRate := ecoFuelRate[val.Ecosystem]
+					ecoInfo.Detail.VmCostFee.FuelRate = fuelRate
+					ecoInfo.Detail.ElementFee.FuelRate = fuelRate
+					ecoInfo.Detail.StorageFee.FuelRate = fuelRate
+					ecoInfo.Detail.ExpediteFee.FuelRate = fuelRate
 
 					ecoInfo.Detail.VmCostFee.Combustion = detail.VmCostFee.String()
 					ecoInfo.Detail.ElementFee.Combustion = detail.ElementFee.String()
