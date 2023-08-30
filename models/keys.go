@@ -488,20 +488,10 @@ func (m *Key) GetWalletTotalBasisEcosystem(wallet string) (*EcosyKeyTotalHex, er
 func GetWalletTokenChangeBasis(account string) (*AccountHistoryChart, error) {
 	var (
 		ret AccountHistoryChart
-		ft  Key
 		his History
 	)
 	kid := converter.StringToAddress(account)
 	if kid != 0 || account == BlackHoleAddr {
-		f, err := isFound(GetDB(nil).Table("1_keys").Where("id = ? and ecosystem = ?", kid, 1).First(&ft))
-		if err != nil {
-			return &ret, err
-		}
-		if !f {
-			if account != BlackHoleAddr {
-				return nil, errors.New("account doesn't not exist")
-			}
-		}
 		chart, err := his.GetWalletTimeLineHistoryTotals(1, kid, 30)
 		if err != nil {
 			return &ret, err
