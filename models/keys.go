@@ -1123,19 +1123,26 @@ func GetAccountTotalAmount(ecosystem int64, account string) (AccountTotalAmountC
 		return rets, errors.New("account invalid:" + account + " in ecosystem:" + strconv.FormatInt(ecosystem, 10))
 	}
 	if (NftMinerReady || NodeReady) && ecosystem == 1 {
-		f, err = isFound(GetDB(nil).Table(`"1_keys" as k1`).Select(`k1.amount +
-COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k1.ecosystem AND output_key_id = k1.id),0)
-AS amount,
+		f, err = isFound(GetDB(nil).Raw(`
+			SELECT sum(amount) AS amount,sum(stake_amount) AS stake_amount FROM(
+				SELECT k1.amount,
+				to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
+						to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
+						to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')as stake_amount FROM "1_keys" AS k1 WHERE ecosystem = ? and id = ?
+				UNION 
+				SELECT sum(output_value)AS amount,0 AS stake_amount FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? AND output_key_id = ?
+			)AS v1
+`, ecosystem, keyId, ecosystem, keyId).Take(&rets))
 
-to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')as stake_amount`).
-			Where("ecosystem = ? and id = ?", ecosystem, keyId).Take(&rets))
 	} else {
-		f, err = isFound(GetDB(nil).Table(`"1_keys" as k1`).Select(`k1.amount +
-			COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = k1.ecosystem AND output_key_id = k1.id),0)
-		AS amount`).
-			Where("ecosystem = ? and id = ?", ecosystem, keyId).Take(&rets))
+		f, err = isFound(GetDB(nil).Raw(`
+			SELECT sum(amount) AS amount,sum(stake_amount) AS stake_amount FROM(
+				SELECT k1.amount,
+				0 AS stake_amount FROM "1_keys" AS k1 WHERE ecosystem = ? and id = ?
+				UNION 
+				SELECT sum(output_value)AS amount,0 AS stake_amount FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? AND output_key_id = ?		
+			)AS v1
+`, ecosystem, keyId, ecosystem, keyId).Take(&rets))
 	}
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Account Total Amount Chart Failed")
