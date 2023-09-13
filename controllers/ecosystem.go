@@ -269,7 +269,6 @@ func GetEcosystemDetailTokenHandler(c *gin.Context) {
 func GetEcosystemDetailMemberHandler(c *gin.Context) {
 	var req EcosytemTranscationHistoryFind
 	ret := &Response{}
-	var key models.Key
 
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		ret.ReturnFailureString(err.Error())
@@ -282,7 +281,7 @@ func GetEcosystemDetailMemberHandler(c *gin.Context) {
 		return
 	}
 
-	rets, err := key.GetEcosystemDetailMemberList(req.Page, req.Limit, req.Order, req.Ecosystem)
+	rets, err := models.GetEcosystemDetailMemberList(req.Page, req.Limit, req.Order, req.Ecosystem)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 	} else {

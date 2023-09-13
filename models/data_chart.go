@@ -329,15 +329,13 @@ func GetAccountChangeChart() (AccountChangeChartResponse, error) {
 		nowTotal int64
 	)
 	err := GetDB(nil).Raw(`
-WITH rollback_tx AS(
-	SELECT to_char(to_timestamp(log.time), 'yyyy-mm-dd') AS days,count(1) num
-	FROM (SELECT tx_hash,table_id FROM rollback_tx WHERE table_name = '1_keys' AND table_id like '%,1' AND data = '') AS rb LEFT JOIN (
-		SELECT timestamp/1000 as time,hash FROM log_transactions 
-	)AS log ON (log.hash = rb.tx_hash) GROUP BY days ORDER BY days ASC
+WITH account_detail AS(
+	SELECT to_char(to_timestamp(join_time), 'yyyy-mm-dd') AS days,count(1) num
+	FROM account_detail WHERE join_time > 0 AND ecosystem = 1 GROUP BY days ORDER BY days ASC
 )
-SELECT rk1.days,
-(SELECT SUM(num)+5 FROM rollback_tx s2 WHERE s2.days <= rk1.days) as num
-FROM rollback_tx AS rk1
+SELECT a1.days,
+(SELECT SUM(num) FROM account_detail AS a2 WHERE a2.days <= a1.days) AS num
+FROM account_detail AS a1
 `).Find(&acList).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Account Change Chart acList Failed")
@@ -637,7 +635,6 @@ FROM (
 func GetNewKeysChart() (NewKeyHistoryChart, error) {
 	var (
 		keyChart    NewKeyHistoryChart
-		idList      []int64
 		bk          Block
 		blockIdList []DaysNumber
 		total       CountInt64
@@ -668,7 +665,6 @@ func GetNewKeysChart() (NewKeyHistoryChart, error) {
 		}
 		for startTime.Unix() <= today.Unix() {
 			keyChart.Time = append(keyChart.Time, startTime.Format(layout))
-			idList = append(idList, GetDaysNumberLike(startTime.Unix(), blockIdList, false, "asc"))
 			startTime = addTimeFromLayout(layout, startTime)
 		}
 	}
@@ -679,11 +675,14 @@ func GetNewKeysChart() (NewKeyHistoryChart, error) {
 		return keyChart, err
 	}
 
-	for i := 0; i < len(idList); i++ {
-		if i == len(idList)-1 {
-			keyChart.NewKey = append(keyChart.NewKey, getNewKeyNumber(idList[i], bk.ID, 1))
+	for i := 0; i < len(keyChart.Time); i++ {
+		var stTime, edTime time.Time
+		stTime, _ = time.ParseInLocation(layout, keyChart.Time[i], time.Local)
+		if i == len(keyChart.Time)-1 {
+			keyChart.NewKey = append(keyChart.NewKey, getNewKeyNumber(stTime.Unix(), bk.ID, 1))
 		} else {
-			keyChart.NewKey = append(keyChart.NewKey, getNewKeyNumber(idList[i], idList[i+1], 1))
+			edTime, _ = time.ParseInLocation(layout, keyChart.Time[i+1], time.Local)
+			keyChart.NewKey = append(keyChart.NewKey, getNewKeyNumber(stTime.Unix(), edTime.Unix(), 1))
 		}
 	}
 
@@ -1255,7 +1254,7 @@ func GetTopTenMaxKeysEcosystem() ([]EcosystemKeysRatioResponse, error) {
 	}
 	err = GetDB(nil).Raw(`
 SELECT ecosystem as id,count(1) number,(SELECT name AS name FROM "1_ecosystems" as es WHERE es.id = k1.ecosystem) 
-FROM "1_keys" as k1 GROUP BY ecosystem ORDER BY number desc,id asc limit 10
+FROM "1_keys" as k1 WHERE length(pub) = 64 GROUP BY ecosystem ORDER BY number desc,id asc limit 10
 `).Find(&rets).Error
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Get Top Ten Max Keys Ecosystem Failed")

@@ -10,6 +10,7 @@ import (
 	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -794,92 +795,34 @@ func getEcoTopTenHasTokenAccount(ecosystem int64) (*EcoTopTenHasTokenResponse, e
 		rets EcoTopTenHasTokenResponse
 	)
 	type accountHold struct {
-		KeyId       int64
-		Amount      decimal.Decimal
+		Id          int64
+		TotalAmount decimal.Decimal
 		StakeAmount decimal.Decimal
 	}
 	totalAmount, err := allKeyAmount.Get(ecosystem)
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get Eco TopTen HasToken Total Amount Failed")
 		return nil, err
 	}
-	var list []accountHold
-	if ecosystem == 1 && (NftMinerReady || NodeReady) {
-		if AirdropReady {
-			err = GetDB(nil).Raw(`
-SELECT v1.key_id,COALESCE(v2.amount,0)+
-	COALESCE(v2.stake_amount,0)+
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.key_id),0)
-	AS amount,COALESCE(v2.stake_amount,0)AS stake_amount 
-FROM(							
-	SELECT id AS key_id,ecosystem FROM "1_keys" AS k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0 AND amount +
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
-			COALESCE((SELECT sum(stake_amount) FROM "1_airdrop_info" WHERE account = k1.account),0)	>0
-		UNION
-	SELECT output_key_id AS key_id,ecosystem FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? GROUP BY output_key_id,ecosystem
+	var (
+		list     []accountHold
+		sqlQuery *gorm.DB
+	)
+
+	if ecosystem == 1 && AirdropReady {
+		sqlQuery = GetDB(nil).Raw(`
+SELECT * FROM(
+	SELECT ad.id,ad.total_amount+COALESCE(ai.stake_amount,0)AS total_amount,ad.stake_amount+COALESCE(ai.stake_amount,0) AS stake_amount 
+	FROM account_detail AS ad LEFT JOIN "1_airdrop_info" AS ai ON(ai.account = ad.account) WHERE ecosystem = 1
 )AS v1
-LEFT JOIN(
-		SELECT id,amount,ecosystem,
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')  +
-			COALESCE((SELECT sum(stake_amount) FROM "1_airdrop_info" WHERE account = k1.account),0)
-			AS stake_amount
-		FROM "1_keys" AS k1
-)AS v2 ON(v2.id = v1.key_id AND v2.ecosystem = v1.ecosystem)
-ORDER BY amount DESC
-`, ecosystem, ecosystem).Find(&list).Error
-		} else {
-			err = GetDB(nil).Raw(`
-SELECT v1.key_id,COALESCE(v2.amount,0)+
-	COALESCE(v2.stake_amount,0)+
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.key_id),0)
-	AS amount,COALESCE(v2.stake_amount,0)AS stake_amount 
-FROM(							
-	SELECT id AS key_id,ecosystem FROM "1_keys" WHERE ecosystem = ? AND blocked = 0 AND deleted = 0 AND amount +
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')>0
-		UNION
-	SELECT output_key_id AS key_id,ecosystem FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? GROUP BY output_key_id,ecosystem
-)AS v1
-LEFT JOIN(
-		SELECT id,amount,ecosystem,
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
-		FROM "1_keys"
-)AS v2 ON(v2.id = v1.key_id AND v2.ecosystem = v1.ecosystem)
-ORDER BY amount DESC
-`, ecosystem, ecosystem).Find(&list).Error
-		}
+WHERE total_amount > 0
+ORDER BY total_amount DESC
+`)
 	} else {
-		err = GetDB(nil).Raw(`
-SELECT v1.key_id,COALESCE(v2.amount,0)+
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.key_id),0)
-	AS amount
-FROM(							
-	SELECT id AS key_id,ecosystem FROM "1_keys" WHERE ecosystem = ? AND blocked = 0 AND deleted = 0 AND amount > 0
-		UNION
-	SELECT output_key_id AS key_id,ecosystem FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = ? GROUP BY output_key_id,ecosystem
-)AS v1
-LEFT JOIN(
-		SELECT id,amount,ecosystem FROM "1_keys"
-)AS v2 ON(v2.id = v1.key_id AND v2.ecosystem = v1.ecosystem)
-ORDER BY amount DESC
-`, ecosystem, ecosystem).Find(&list).Error
-		if ecosystem == 1 && AirdropReady {
-			for k, v := range list {
-				airdrop := &AirdropInfo{}
-				v.StakeAmount = airdrop.GetStaking(converter.AddressToString(v.KeyId))
-				list[k] = v
-			}
-		}
+		sqlQuery = GetDB(nil).Model(AccountDetail{}).Select("id,total_amount,stake_amount").
+			Where("ecosystem = ? AND total_amount > 0", ecosystem).Order("total_amount DESC")
 	}
+	err = sqlQuery.Find(&list).Error
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Get Eco TopTen HasToken Account Chart Failed")
 		return nil, err
 	}
 
@@ -887,14 +830,14 @@ ORDER BY amount DESC
 	otherStaking := decimal.Zero
 	for key, val := range list {
 		if key >= 10 {
-			otherAmount = otherAmount.Add(val.Amount)
+			otherAmount = otherAmount.Add(val.TotalAmount)
 			otherStaking = otherStaking.Add(val.StakeAmount)
 		} else {
 			var rt accountRatio
-			rt.Account = converter.AddressToString(val.KeyId)
+			rt.Account = converter.AddressToString(val.Id)
 			rt.StakeAmount = val.StakeAmount.String()
-			rt.Amount = val.Amount.String()
-			rt.AccountedFor = val.Amount.Mul(decimal.NewFromInt(100)).DivRound(totalAmount, 2)
+			rt.Amount = val.TotalAmount.String()
+			rt.AccountedFor = val.TotalAmount.Mul(decimal.NewFromInt(100)).DivRound(totalAmount, 2)
 			rets.List = append(rets.List, rt)
 		}
 	}

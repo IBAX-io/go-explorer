@@ -100,6 +100,7 @@ type EcosyKeyTotalDetail struct {
 	Name        string          `json:"name"`
 	JoinTime    int64           `json:"join_time"`
 	TokenSymbol string          `json:"token_symbol"`
+	Amount      string          `json:"amount"`
 	TotalAmount decimal.Decimal `json:"total_amount"`
 	LockAmount  decimal.Decimal `json:"lock_amount"`
 	StakeAmount decimal.Decimal `json:"stake_amount"`
@@ -127,6 +128,7 @@ type EcosyKeyList struct {
 	Account      string          `json:"account"`
 	AccountName  string          `json:"account_name"`
 	Amount       string          `json:"amount"`
+	TotalAmount  decimal.Decimal `json:"total_amount"`
 	AccountedFor decimal.Decimal `json:"accounted_for"`
 	StakeAmount  decimal.Decimal `json:"stake_amount"`
 	LockAmount   decimal.Decimal `json:"lock_amount"`
@@ -521,38 +523,15 @@ func (m *Key) GetWalletTotalEcosystem(page, limit int, order string, wallet stri
 
 	wid := converter.StringToAddress(wallet)
 	if wid != 0 || wallet == BlackHoleAddr {
-		err := GetDB(nil).Table("1_keys").
-			Where("id = ?", wid).
-			Count(&total).Error
+		err := GetDB(nil).Model(AccountDetail{}).Where("id = ?", wid).Count(&total).Error
 		if err != nil {
 			return &ret, err
 		}
-		if NftMinerReady || NodeReady {
-			err = GetDB(nil).Table(`"1_keys" AS k1`).Select(`account,ecosystem,
-	(SELECT hash AS logo_hash FROM "1_binaries" as bs WHERE bs.id = coalesce((SELECT cast(es.info->>'logo' as numeric) FROM "1_ecosystems" as es WHERE es.id = k1.ecosystem LIMIT 1),0)),
-	(SELECT array_to_string(array(SELECT rs.role->>'name' FROM "1_roles_participants" as rs 
-	WHERE rs.ecosystem=k1.ecosystem and rs.member->>'account' = k1.account AND rs.deleted = 0),' / '))as roles_name,
-	(SELECT time from block_chain b WHERE b.id = coalesce((SELECT rt.block_id FROM rollback_tx rt WHERE table_name = '1_keys' AND table_id = cast(k1.id as VARCHAR) 
-	|| ','||  cast(k1.ecosystem as VARCHAR) AND data = '' LIMIT 1),1)) AS join_time,
-	k1.amount +(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx_hash is null AND output_key_id = k1.id AND ecosystem = k1.ecosystem)+ 
-		to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999')as total_amount,
 
-	to_number(coalesce(NULLIF(k1.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
-		to_number(coalesce(NULLIF(k1.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount`).
-				Where("id = ?", wid).Offset((page - 1) * limit).Limit(limit).Order(order).Find(&da).Error
-		} else {
-			err = GetDB(nil).Table(`"1_keys" AS k1`).Select(`account,ecosystem,
-(SELECT hash AS logo_hash FROM "1_binaries" as bs WHERE bs.id = coalesce((SELECT cast(es.info->>'logo' as numeric) FROM "1_ecosystems" as es WHERE es.id = k1.ecosystem LIMIT 1),0)),
-(SELECT array_to_string(array(SELECT rs.role->>'name' FROM "1_roles_participants" as rs 
-WHERE rs.ecosystem=k1.ecosystem and rs.member->>'account' = k1.account AND rs.deleted = 0),' / '))as roles_name,
-(SELECT time from block_chain b WHERE b.id = coalesce((SELECT rt.block_id FROM rollback_tx rt WHERE table_name = '1_keys' AND table_id = cast(k1.id as VARCHAR) 
-|| ','||  cast(k1.ecosystem as VARCHAR) AND data = '' LIMIT 1),1)) AS join_time,
-k1.amount+(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx_hash is null AND output_key_id = k1.id AND ecosystem = k1.ecosystem) as total_amount`).
-				Where("id = ?", wid).Offset((page - 1) * limit).Limit(limit).Order(order).Find(&da).Error
-		}
+		err = GetDB(nil).Table("account_detail AS ad").
+			Select(`account,ecosystem,logo_hash,(SELECT array_to_string(array(SELECT rs.role->>'name' FROM "1_roles_participants" as rs 
+	WHERE rs.ecosystem=ad.ecosystem and rs.member->>'account' = ad.account AND rs.deleted = 0),' / '))as roles_name,join_time,total_amount,stake_amount`).
+			Where("id = ?", wid).Offset((page - 1) * limit).Limit(limit).Order(order).Find(&da).Error
 		if err != nil {
 			return &ret, err
 		}
@@ -583,6 +562,7 @@ k1.amount+(SELECT COALESCE(sum(output_value),0) FROM "spent_info" WHERE input_tx
 			da[k].Name = EcoNames.Get(v.Ecosystem)
 			da[k].TokenSymbol = Tokens.Get(v.Ecosystem)
 			da[k].Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
+			da[k].Amount = da[k].TotalAmount.Sub(da[k].StakeAmount).String()
 		}
 		ret.List = da
 		return &ret, nil
@@ -650,89 +630,29 @@ func (m *Key) GetStakeAmount() (string, error) {
 func (m *Key) GetAccountList(page, limit int, ecosystem int64) (*KeysListResult, error) {
 
 	var (
-		total int64
-		ret   KeysListResult
+		ret KeysListResult
 	)
 	ret.Limit = limit
 	ret.Page = page
-
-	err := GetDB(nil).Table("1_keys").
-		Where("ecosystem = ?", ecosystem).
-		Count(&total).Error
-	if err != nil {
-		return nil, err
-	}
-	ret.Total = total
 
 	totalAmount, err := allKeyAmount.Get(ecosystem)
 	if err != nil {
 		return &ret, nil
 	}
 
-	if (NftMinerReady || NodeReady) && ecosystem == 1 {
-		if AirdropReady {
-			err = GetDB(nil).Raw(`
-SELECT v1.account,v1.ecosystem,v1.amount+
-	v1.stake_amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-v1.stake_amount FROM(
-	SELECT id,account,ecosystem,
-		amount,
-
-		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
-		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
-		AS stake_amount
-
-		FROM "1_keys" AS k1 WHERE ecosystem = ?
- )AS v1
- ORDER BY amount desc OFFSET ? LIMIT ?
-`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
-		} else {
-			err = GetDB(nil).Raw(`
-SELECT v1.account,v1.ecosystem,v1.amount+
-	v1.stake_amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-v1.stake_amount FROM(
-	SELECT id,account,ecosystem,
-		amount,
-
-		to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-		to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
-
-		FROM "1_keys" WHERE ecosystem = ?
- )AS v1
- ORDER BY amount desc OFFSET ? LIMIT ?
-`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
-		}
+	err = GetDB(nil).Model(AccountDetail{}).Where("ecosystem = ?", ecosystem).Count(&ret.Total).Error
+	if err != nil {
+		return nil, err
+	}
+	if ecosystem == 1 && AirdropReady {
+		err = GetDB(nil).Table("account_detail as ad").
+			Select("ad.account,ad.total_amount+COALESCE(ai.stake_amount,0) AS total_amount,ad.stake_amount+COALESCE(ai.stake_amount,0) AS stake_amount").
+			Joins(`LEFT JOIN "1_airdrop_info" AS ai ON(ai.account = ad.account)`).
+			Where("ecosystem = ?", ecosystem).Offset((page - 1) * limit).Limit(limit).Order("total_amount desc,account ASC").Find(&ret.Rets).Error
 	} else {
-		if AirdropReady && ecosystem == 1 {
-			err = GetDB(nil).Raw(`
-SELECT v1.account,v1.ecosystem,v1.amount + v1.stake_amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
-	v1.stake_amount
-FROM(
-	SELECT id,account,ecosystem,
-		amount,
-		COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
-		FROM "1_keys" as k1 WHERE ecosystem = ?
-)AS v1
-ORDER BY amount desc OFFSET ? LIMIT ?
-`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
-		} else {
-			err = GetDB(nil).Raw(`
-SELECT v1.account,v1.ecosystem,v1.amount +
-	COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-FROM(
-	SELECT id,account,ecosystem,
-		k1.amount
-		FROM "1_keys" as k1 WHERE ecosystem = ?
-)AS v1
-ORDER BY amount desc OFFSET ? LIMIT ?
-`, ecosystem, (page-1)*limit, limit).Find(&ret.Rets).Error
-		}
+		err = GetDB(nil).Model(AccountDetail{}).
+			Select("account,total_amount,stake_amount").
+			Where("ecosystem = ?", ecosystem).Offset((page - 1) * limit).Limit(limit).Order("total_amount desc,account ASC").Find(&ret.Rets).Error
 	}
 	if err != nil {
 		return nil, err
@@ -740,6 +660,7 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 	tokenSymbol := Tokens.Get(ecosystem)
 	digits := EcoDigits.GetInt64(ecosystem, 0)
 	for i := 0; i < len(ret.Rets); i++ {
+		ret.Rets[i].Ecosystem = ecosystem
 		if ecosystem == 1 {
 			if AssignReady {
 				ag := &AssignInfo{}
@@ -759,6 +680,7 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 		}
 		ret.Rets[i].TokenSymbol = tokenSymbol
 		ret.Rets[i].Digits = digits
+		ret.Rets[i].Amount = ret.Rets[i].TotalAmount.Sub(ret.Rets[i].StakeAmount).String()
 
 		amount, _ := decimal.NewFromString(ret.Rets[i].Amount)
 		if amount.GreaterThan(decimal.Zero) {
@@ -811,138 +733,17 @@ func (k *Key) GetEcosystemTokenSymbolList(page, limit int, ecosystem int64) (*Ge
 	digits := EcoDigits.GetInt64(ecosystem, 0)
 
 	var ret []EcosystemTokenSymbolList
-	var (
-		querySql *gorm.DB
-		countSql *gorm.DB
-	)
-	if (NftMinerReady || NodeReady) && ecosystem == 1 {
+	var querySql *gorm.DB
+	if ecosystem == 1 {
 		if AirdropReady {
-			countSql = GetDB(nil).Raw(`
-SELECT COUNT(1) FROM(
-	SELECT v1.amount+
-		v1.stake_amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount 
-	FROM(
-		SELECT id,account,ecosystem,
-			amount,
-	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
-			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
-			AS stake_amount
-	
-			FROM "1_keys" AS k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
-	 )AS v1
-)AS v2
-WHERE amount > 0
-`)
-			querySql = GetDB(nil).Raw(`
-SELECT * FROM(
-	SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
-		v1.stake_amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount 
-	FROM(
-		SELECT id,account,ecosystem,
-			amount,
-	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') +
-			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0)
-			AS stake_amount
-	
-			FROM "1_keys" AS k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
-	)AS v1
-)AS v2
-WHERE amount > 0
-ORDER BY amount desc OFFSET ? LIMIT ?
-`, (page-1)*limit, limit)
+			querySql = GetDB(nil).Table(`"account_detail" as ad`).Select(`id,account,ecosystem,total_amount +
+			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = ad.account),0) as amount`).Where("ecosystem = 1 AND total_amount > 0")
 		} else {
-			countSql = GetDB(nil).Raw(`
-SELECT COUNT(1) FROM(
-	SELECT v1.amount+
-		v1.stake_amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-	FROM(
-		SELECT id,account,ecosystem,
-			amount,
-	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
-	
-			FROM "1_keys" WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
-	 )AS v1
-)AS v2
-WHERE amount > 0
-`)
-			querySql = GetDB(nil).Raw(`
-SELECT * FROM(
-	SELECT v1.id,v1.account,v1.ecosystem,v1.amount+
-		v1.stake_amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-	FROM(
-		SELECT id,account,ecosystem,
-			amount,
-	
-			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') +
-			to_number(coalesce(NULLIF(lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999') AS stake_amount
-	
-			FROM "1_keys" WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
-	)AS v1
-)AS v2
-WHERE amount > 0
-ORDER BY amount desc OFFSET ? LIMIT ?
-`, (page-1)*limit, limit)
+			querySql = GetDB(nil).Model(AccountDetail{}).Select(`id,account,ecosystem,total_amount as amount`).Where("ecosystem = 1 AND total_amount > 0")
 		}
 	} else {
-		if AirdropReady && ecosystem == 1 {
-			countSql = GetDB(nil).Raw(`
-SELECT COUNT(1) FROM(
-	SELECT v1.amount + v1.stake_amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-	FROM(
-		SELECT id,account,ecosystem,
-			amount,
-			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
-			FROM "1_keys" as k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
-	)AS v1
-)AS v2
-WHERE amount > 0
-`)
-			querySql = GetDB(nil).Raw(`
-SELECT * FROM(
-	SELECT v1.account,v1.ecosystem,v1.amount + v1.stake_amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-	FROM(
-		SELECT id,account,ecosystem,
-			amount,
-			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = k1.account),0) AS stake_amount
-			FROM "1_keys" as k1 WHERE ecosystem = 1 AND blocked = 0 AND deleted = 0
-	)AS v1
-)AS v2
-WHERE amount > 0
-ORDER BY amount desc OFFSET ? LIMIT ?
-`, (page-1)*limit, limit)
-		} else {
-			countSql = GetDB(nil).Raw(`
-SELECT COUNT(1) FROM(
-	SELECT v1.amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-	FROM(
-		SELECT id,account,ecosystem,
-			k1.amount
-			FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
-	)AS v1
-)AS v2
-WHERE amount > 0
-`, ecosystem)
-			querySql = GetDB(nil).Raw(`
-SELECT * FROM(
-	SELECT v1.id,v1.account,v1.ecosystem,v1.amount +
-		COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount,
+		querySql = GetDB(nil).Raw(`
+SELECT v1.id,CASE WHEN v1.join_time > 0 THEN TRUE ELSE FALSE END AS activation,v1.account,v1.ecosystem,v1.total_amount AS amount,
 	CASE WHEN (SELECT control_mode FROM "1_ecosystems" WHERE id = v1.ecosystem AND id > 1) = 2 THEN
 		CASE WHEN (
 			SELECT count(1) FROM "1_votings_participants" WHERE
@@ -956,18 +757,13 @@ SELECT * FROM(
 	ELSE
 	 FALSE
 	END AS front_committee
-	FROM(
-		SELECT id,account,ecosystem,
-			k1.amount
-			FROM "1_keys" as k1 WHERE ecosystem = ? AND blocked = 0 AND deleted = 0
-	)AS v1
-)AS v2
-WHERE amount > 0
+FROM(
+	SELECT id,account,ecosystem,total_amount,join_time FROM "account_detail" WHERE ecosystem = ? AND total_amount > 0
+)AS v1
 ORDER BY amount desc OFFSET ? LIMIT ?
 `, ecosystem, (page-1)*limit, limit)
-		}
 	}
-	err = countSql.Take(&rets.Total).Error
+	err = GetDB(nil).Model(AccountDetail{}).Where("ecosystem = ? AND total_amount > 0", ecosystem).Count(&rets.Total).Error
 	if err != nil {
 		return nil, err
 	}
@@ -981,16 +777,54 @@ ORDER BY amount desc OFFSET ? LIMIT ?
 	var committeeList []ids
 	if ecosystem > 1 {
 		err = GetDB(nil).Raw(`
-SELECT * FROM(
-	SELECT v1.id,amount + COALESCE((SELECT sum(output_value) FROM spent_info WHERE input_tx_hash is NULL AND ecosystem = v1.ecosystem AND output_key_id = v1.id),0) AS amount
-	FROM(
-		SELECT id,amount,ecosystem FROM "1_keys" AS k1 
-		WHERE (SELECT control_mode FROM "1_ecosystems" WHERE id = k1.ecosystem AND id > 1) = 2 AND ecosystem = ? AND deleted = 0 AND blocked = 0 
-	)AS v1
-)AS v2
-WHERE amount > 0
-ORDER BY row_number() OVER (ORDER BY amount DESC) <= 50
-`, ecosystem).Find(&committeeList).Error
+select
+  id
+from
+  (
+  select sum(amount) as amount,
+    id,CASE 
+    WHEN true THEN dense_rank() OVER (ORDER BY sum ( amount )  DESC)
+    ELSE rank() OVER (ORDER BY sum (amount)  DESC) END AS rank
+  
+  
+   from
+    (
+    select
+      output_value as amount,
+      output_key_id as id 
+    from
+      spent_info
+      left join "1_keys" on spent_info.ecosystem = "1_keys".ecosystem 
+      and id = spent_info.output_key_id 
+    where
+      input_tx_hash is null 
+      and "spent_info".ecosystem = ?
+      and blocked = 0 
+      and deleted = 0 
+      and length ( pub ) > 0 union
+    select
+      amount,
+    id 
+    from
+      "1_keys" 
+    where
+      ecosystem = ? 
+      and blocked = 0 
+      and deleted = 0 
+      and amount > 0 
+      and length ( pub ) > 0 
+    ) tmp 
+  group by
+  id 
+  order by
+  rank asc 
+  ) r 
+where
+  rank <= 50
+order by
+  rank,
+  id;
+`, ecosystem, ecosystem).Find(&committeeList).Error
 		if err != nil {
 			return nil, err
 		}
@@ -1017,95 +851,26 @@ ORDER BY row_number() OVER (ORDER BY amount DESC) <= 50
 	return &rets, err
 }
 
-func (m *Key) GetEcosystemDetailMemberList(page, limit int, order string, ecosystem int64) (*GeneralResponse, error) {
-	var (
-		total int64
-		rets  GeneralResponse
-	)
-	if order == "" {
-		order = "join_time desc"
-	}
-	rets.Limit = limit
-	rets.Page = page
-
-	err := GetDB(nil).Table(m.TableName()).
-		Where("ecosystem = ?", ecosystem).
-		Count(&total).Error
-	if err != nil {
-		return nil, err
-	}
-	rets.Total = total
-
-	var ret []EcosystemMemberList
-	err = GetDB(nil).Table(`"1_keys" as k1`).Select(
-		`account,
-(SELECT array_to_string(array(SELECT rs.role->>'name' FROM "1_roles_participants" as rs 
-WHERE rs.ecosystem=k1.ecosystem and rs.member->>'account' = k1.account AND rs.deleted = 0),' / '))
-as roles_name,
-
-(SELECT time from block_chain b WHERE b.id = coalesce((SELECT rt.block_id FROM rollback_tx rt WHERE table_name = '1_keys' AND table_id = cast(k1.id as VARCHAR) 
-|| ','||  cast(k1.ecosystem as VARCHAR) AND data = '' LIMIT 1),1)) AS join_time`).
-		Where("ecosystem = ?", ecosystem).
-		Order(order).Offset((page - 1) * limit).Limit(limit).
-		Find(&ret).Error
-	if INameReady {
-		for k, v := range ret {
-			ie := &IName{}
-			f, err := ie.Get(v.Account)
-			if err == nil && f {
-				ret[k].AccountName = ie.Name
-			}
-		}
-	}
-	rets.List = ret
-
-	return &rets, err
-}
-
 func getEcosystemNewKeyChart(ecosystem int64, getDay int) KeyInfoChart {
 	var rets KeyInfoChart
-	var bk Block
 	tz := time.Unix(GetNowTimeUnix(), 0)
-	today := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
 	t1 := yesterday.AddDate(0, 0, -1*getDay)
 
 	rets.Time = make([]int64, getDay)
 	rets.NewKey = make([]int64, getDay)
-	idList := make([]int64, getDay)
 
-	var daysId []DaysNumber
-	for i := 0; i < len(rets.Time); i++ {
-		rets.Time[i] = t1.AddDate(0, 0, i+1).Unix()
-		if i == 0 {
-			err := GetDB(nil).Raw(fmt.Sprintf(`SELECT to_char(to_timestamp(time),'yyyy-MM-dd') AS days,min(id) num 
-FROM block_chain WHERE time >= %d and time < %d GROUP BY days ORDER BY days asc
-`, rets.Time[i], today.Unix())).Find(&daysId).Error
-			if err != nil {
-				log.WithFields(log.Fields{"error": err}).Warn("Get ecosystem New Key Chart Days Id List Failed")
-				return rets
-			}
-		}
-		id := GetDaysNumberLike(rets.Time[i], daysId, false, "asc")
-		if id != 0 {
-			idList[i] = id
-		}
-		_, err := bk.GetByTimeBlockId(nil, today.Unix())
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Warn("get Ecosystem New Key Chart Today Block Failed")
-			return rets
-		}
-		//if !f {
-		//	return rets
-		//}
+	var keyList []DaysNumber
+	err := GetDB(nil).Model(AccountDetail{}).Select("to_char(to_timestamp(join_time),'yyyy-MM-dd') days,count(1) num").Group("days").
+		Where("ecosystem = ? AND join_time >= ?", ecosystem, t1.Unix()).Find(&keyList).Error
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "t1": t1.Unix()}).Warn("get Ecosystem New Key Chart Failed")
+		return rets
 	}
 
-	for i := 0; i < len(idList); i++ {
-		if i == len(idList)-1 {
-			rets.NewKey[i] = getNewKeyNumber(idList[i], bk.ID, ecosystem)
-		} else {
-			rets.NewKey[i] = getNewKeyNumber(idList[i], idList[i+1], ecosystem)
-		}
+	for i := 0; i < len(rets.Time); i++ {
+		rets.Time[i] = t1.AddDate(0, 0, i+1).Unix()
+		rets.NewKey[i] = GetDaysNumber(rets.Time[i], keyList)
 	}
 	rets.Name = EcoNames.Get(ecosystem)
 

@@ -86,6 +86,7 @@ type EcosystemTotalResponse struct {
 	TotalAmount string `json:"total_amount"`
 	Member      int64  `json:"member"`
 	Contract    int64  `json:"contract"`
+	ChainName   string `json:"chain_name"`
 }
 
 // EcosystemTotalResult example
@@ -263,8 +264,8 @@ FROM "log_transactions" WHERE ecosystem_id = 1 AND timestamp >= ? GROUP BY days`
 	}
 
 	var keyList []DaysNumber
-	err = GetDB(nil).Raw(`SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days,count(*) num FROM "1_history" WHERE ecosystem = 1 
-AND comment = 'New User' AND type = 4 AND created_at >= ? GROUP BY days`, t1.UnixMilli()).Find(&keyList).Error
+	err = GetDB(nil).Model(AccountDetail{}).Select("to_char(to_timestamp(join_time),'yyyy-MM-dd') days,count(1) num").Group("days").
+		Where("ecosystem = 1 AND join_time >= ?", t1.Unix()).Find(&keyList).Error
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +288,6 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 	type ecoListResponse struct {
 		Ecosystem
 		Creator  string `json:"creator"`
-		Member   int64  `json:"member"`
 		Contract int64  `json:"contract"`
 	}
 	var ecoList []ecoListResponse
@@ -326,7 +326,6 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 			return 0, nil, err
 		}
 		if err := GetDB(nil).Table(`"1_ecosystems" AS e`).Select(`*,
-(SELECT count(*) from "1_keys" AS k WHERE k.ecosystem = e.id)as member,
 (SELECT count(*) from "1_contracts" AS c WHERE c.ecosystem = e.id)as contract,
 (SELECT value from "1_parameters" AS p WHERE p.name = 'founder_account' AND e.id = p.ecosystem LIMIT 1)as creator`).
 			Order(order).Offset((page - 1) * limit).Limit(limit).Find(&ecoList).Error; err != nil {
@@ -342,7 +341,6 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 		}
 
 		if err := GetDB(nil).Table(`"1_ecosystems" AS e`).Select(`*,
-(SELECT count(*) from "1_keys" AS k WHERE k.ecosystem = e.id)as member,
 (SELECT count(*) from "1_contracts" AS c WHERE c.ecosystem = e.id)as contract,
 (SELECT value from "1_parameters" AS p WHERE p.name = 'founder_account' AND e.id = p.ecosystem LIMIT 1)as creator`).
 			Where(cond, vals...).Order(order).Offset((page - 1) * limit).Limit(limit).Find(&ecoList).Error; err != nil {
@@ -426,12 +424,18 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 			return 0, nil, errors.New("get ecosystem creator keyId invalid")
 		}
 		list[i].Creator = converter.AddressToString(keyId)
-		var key Key
-		if err := GetDB(nil).Table(key.TableName()).Where("ecosystem = ?", list[i].ID).Count(&list[i].Member).Error; err != nil {
+		if err := GetDB(nil).Model(AccountDetail{}).Where("ecosystem = ? AND join_time > 0", list[i].ID).Count(&list[i].Member).Error; err != nil {
 			return 0, nil, err
 		}
 		var crt Contract
 		list[i].Contract = crt.GetContractsByEcoLibs(list[i].ID)
+		if BridgeReady {
+			birgeToken := &BridgeToken{}
+			f, err := birgeToken.Get(list[i].ID)
+			if err == nil && f {
+				list[i].ChainName = birgeToken.ChainName
+			}
+		}
 	}
 
 	return total, &list, nil
@@ -685,6 +689,10 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 	rets.Circulations = cir
 
 	rets.GovernModel = eco.ControlMode
+	rets.BridgeInfo = getBridgeInfo(eco.ID)
+	if rets.BridgeInfo != nil {
+		rets.GovernModel = 3
+	}
 	creatorId, err := strconv.ParseInt(eco.Creator, 10, 64)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "creator:": eco.Creator}).Error("Get Ecosystem Creator Failed")

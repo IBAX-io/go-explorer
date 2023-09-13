@@ -71,20 +71,6 @@ func (sp *PlatformParameter) ToMap() map[string]string {
 	return result
 }
 
-// Update is update model
-func (sp PlatformParameter) Update(value string) error {
-	return conf.GetDbConn().Conn().Model(sp).Where("name = ?", sp.Name).Update(`value`, value).Error
-}
-
-// SaveArray is saving array
-func (sp *PlatformParameter) SaveArray(list [][]string) error {
-	ret, err := json.Marshal(list)
-	if err != nil {
-		return err
-	}
-	return sp.Update(string(ret))
-}
-
 func (sp *PlatformParameter) FindAppParameters(page int, size int, name, order string) (num int64, rets []PlatformParameter, err error) {
 	ns := "%" + name + "%"
 	if err := GetDB(nil).Table(sp.TableName()).Where("name like ?", ns).Count(&num).Error; err != nil {
