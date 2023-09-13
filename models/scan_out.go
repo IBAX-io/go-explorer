@@ -274,6 +274,7 @@ func InitGlobalSwitch() {
 	AssignReady = AssignTableExist()
 	AirdropReady = AirdropTableExist()
 	INameReady = INameTableExist()
+	BridgeReady = BridgeTableExist()
 }
 
 func (ret *ScanOut) Changes() error {
@@ -1055,7 +1056,7 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 	nowDay := time.Date(tz.Year(), tz.Month(), tz.Day(), 0, 0, 0, 0, tz.Location())
 	t1 := nowDay.AddDate(0, 0, -1*30)
 
-	sqlQuery := GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
+	sqlQuery := GetDB(nil).Table(key.TableName()).Select(`
 (SELECT count(1) AS has_token_key FROM(
 	SELECT id FROM "1_keys" WHERE amount > 0 AND ecosystem = ?
 		UNION
@@ -1076,7 +1077,7 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 	if ecosystem == 1 {
 		if NftMinerReady || NodeReady {
 			if AirdropReady {
-				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
+				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`
 (SELECT count(1) AS has_token_key FROM(
 	SELECT id FROM "1_keys" AS k1 WHERE (amount > 0 OR 
 			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') > 0 OR
@@ -1100,7 +1101,7 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 ) AS tt)`, t1.UnixMilli(), t1.UnixMilli(), t1.UnixMilli(), t1.UnixMilli()).
 					Where("ecosystem = 1")
 			} else {
-				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
+				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`
 (SELECT count(1) AS has_token_key FROM(
 	SELECT id FROM "1_keys" AS k1 WHERE (amount > 0 OR 
 			to_number(coalesce(NULLIF(lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999') > 0 OR
@@ -1124,7 +1125,7 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 			}
 		} else {
 			if AirdropReady {
-				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`count(1) AS key_count,
+				sqlQuery = GetDB(nil).Table(key.TableName()).Select(`
 (SELECT count(1) AS has_token_key FROM(
 	SELECT id FROM "1_keys" AS k1 WHERE (amount > 0 OR
 			((SELECT balance_amount FROM "1_airdrop_info" WHERE account = k1.account) > 0)
@@ -1147,29 +1148,23 @@ func getScanOutKeyInfo(ecosystem int64) (KeysRet, error) {
 			}
 		}
 	}
+	err = GetDB(nil).Model(AccountDetail{}).Where("ecosystem = ? AND join_time > 0", ecosystem).Count(&ret.KeyCount).Error
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err, "ecosystem:": ecosystem}).Warn("getScanOutKeyInfo ecosystem key count failed")
+		return ret, err
+	}
 	err = sqlQuery.Take(&ret).Error
 	if err != nil {
 		log.WithFields(log.Fields{"warn": err, "ecosystem:": ecosystem}).Warn("getScanOutKeyInfo ecosystem keysRet failed")
 		return ret, err
 	}
 
-	bk := &Block{}
-	f, err := bk.GetByTimeBlockId(nil, nowDay.Unix())
+	err = GetDB(nil).Model(AccountDetail{}).Where("join_time >= ? AND ecosystem = ?", nowDay.Unix(), ecosystem).Count(&ret.TwentyFourKey).Error
 	if err != nil {
-		log.WithFields(log.Fields{"warn": err, "ecosystem": ecosystem}).Warn("getScanOutKeyInfo nowDay block failed")
+		log.WithFields(log.Fields{"warn": err, "ecosystem": ecosystem}).Warn("getScanOutKeyInfo TwentyFourKey failed")
 		return ret, err
 	}
 
-	var rk sqldb.RollbackTx
-	req := GetDB(nil).Table(rk.TableName())
-	like := "%," + strconv.FormatInt(ecosystem, 10)
-	if f {
-		if err := req.Where("table_name = '1_keys' AND data = '' AND block_id >= ? AND table_id like ?", bk.ID, like).
-			Count(&ret.TwentyFourKey).Error; err != nil {
-			log.WithFields(log.Fields{"warn": err, "ecosystem": ecosystem}).Warn("getScanOutKeyInfo rollback oneDay failed")
-			return ret, err
-		}
-	}
 	return ret, nil
 }
 

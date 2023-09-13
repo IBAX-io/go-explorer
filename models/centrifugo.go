@@ -42,7 +42,7 @@ func SendAllWebsocketData() {
 	} else {
 		err := SendDashboardDataToWebsocket(ret1, ChannelStatistical)
 		if err != nil {
-			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelStatistical)
+			//log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelStatistical)
 		}
 	}
 
@@ -52,7 +52,7 @@ func SendAllWebsocketData() {
 	} else {
 		err = SendTpsListToWebsocket(ret2)
 		if err != nil {
-			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockTpsList)
+			//log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockTpsList)
 		}
 	}
 
@@ -62,7 +62,7 @@ func SendAllWebsocketData() {
 	} else {
 		err = SendTransactionListToWebsocket(ret3)
 		if err != nil {
-			log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockTransactionList)
+			//log.Info("Send Websocket Failed:", err.Error(), "cmd:", ChannelBlockTransactionList)
 		}
 	}
 
@@ -71,7 +71,7 @@ func SendAllWebsocketData() {
 		log.Info("Get Transaction Block From Redis Failed:", err.Error())
 	} else {
 		if err := SendBlockListToWebsocket(&ret4.List); err != nil {
-			log.WithFields(log.Fields{"INFO": err, " channel": ChannelBlockList}).Info("Send Websocket Failed")
+			//log.WithFields(log.Fields{"INFO": err, " channel": ChannelBlockList}).Info("Send Websocket Failed")
 		}
 	}
 
@@ -81,7 +81,7 @@ func SendAllWebsocketData() {
 	} else {
 		err = SendDashboardDataToWebsocket(ret5, ChannelNodeMap)
 		if err != nil {
-			log.WithFields(log.Fields{"INFO": err, " channel": ChannelNodeMap}).Info("Send Websocket Failed")
+			//log.WithFields(log.Fields{"INFO": err, " channel": ChannelNodeMap}).Info("Send Websocket Failed")
 		}
 	}
 
@@ -92,7 +92,7 @@ func SendAllWebsocketData() {
 	} else {
 		err = SendDashboardDataToWebsocket(ret6.List, ChannelNodePkgRate)
 		if err != nil {
-			log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodePkgRate}).Info("Send Websocket Failed")
+			//log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodePkgRate}).Info("Send Websocket Failed")
 		}
 	}
 
@@ -103,7 +103,7 @@ func SendAllWebsocketData() {
 	} else {
 		err = SendDashboardDataToWebsocket(ret7.List, ChannelNodeNewest)
 		if err != nil {
-			log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodeNewest}).Info("Send Websocket Failed")
+			//log.WithFields(log.Fields{"INFO": err, " cmd": ChannelNodeNewest}).Info("Send Websocket Failed")
 		}
 	}
 }

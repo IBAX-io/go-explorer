@@ -92,8 +92,6 @@ func WhereBuild(where map[string]any) (whereSQL string, vals []any, err error) {
 	return
 }
 
-//
-//
 func FilteredSQLInject(to_match_str string) bool {
 
 	str := `(?:')|(?:--)|(/\\*(?:.|[\\n\\r])*?\\*/)|(\b(select|update|and|or|delete|insert|trancate|char|chr|into|substr|ascii|declare|exec|count|master|into|drop|execute)\b)`

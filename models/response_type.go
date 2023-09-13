@@ -214,6 +214,7 @@ type EcosystemDetailInfoResponse struct {
 	WebPage          string            `json:"web_page"`
 	Social           map[string]string `json:"social"`
 	Digits           int64             `json:"digits"`
+	BridgeInfo       *bridgeInfo       `json:"bridge_info"`
 }
 
 type EcosystemTxList struct {
@@ -247,6 +248,7 @@ type EcosystemTokenSymbolList struct {
 	Digits         int64           `json:"digits"`
 	FrontCommittee bool            `json:"front_committee"`
 	Committee      bool            `json:"committee"`
+	Activation     bool            `json:"activation"`
 }
 
 type EcosystemMemberList struct {

@@ -9,11 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/IBAX-io/go-explorer/storage"
-	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
 	log "github.com/sirupsen/logrus"
 	"github.com/vmihailenco/msgpack/v5"
 	"sort"
-	"strconv"
 	"time"
 )
 
@@ -295,13 +293,10 @@ SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') days , recipient_id a
 			idList[i] = bks.ID
 		}
 		keyChart.ActiveKey[i] = GetDaysNumber(keyChart.Time[i], activeList)
-
-	}
-	for i := 0; i < len(idList); i++ {
-		if i == len(idList)-1 {
-			keyChart.NewKey[i] = getNewKeyNumber(idList[i], 0, 1)
+		if i == len(keyChart.Time)-1 {
+			keyChart.NewKey[i] = getNewKeyNumber(keyChart.Time[i], 0, 1)
 		} else {
-			keyChart.NewKey[i] = getNewKeyNumber(idList[i], idList[i+1], 1)
+			keyChart.NewKey[i] = getNewKeyNumber(keyChart.Time[i], keyChart.Time[i+1], 1)
 		}
 	}
 	rets.KeyChart = keyChart
@@ -442,35 +437,25 @@ func GetDaysAmountResponse(list []DaysAmount) DaysAmountResponse {
 	return rets
 }
 
-func getNewKeyNumber(startId, endId int64, ecosystem int64) int64 {
-	var rk sqldb.RollbackTx
+func getNewKeyNumber(startTime, endTime int64, ecosystem int64) int64 {
 	var number int64
-	var like string
-	if ecosystem != 0 {
-		like = "%," + strconv.FormatInt(ecosystem, 10)
-	}
-
-	req := GetDB(nil).Table(rk.TableName())
-	if endId == 0 {
-		if startId == 0 {
+	req := GetDB(nil).Model(AccountDetail{}).Where("ecosystem = ?", ecosystem)
+	if endTime == 0 {
+		if startTime == 0 {
 			return number
 		}
-		if err := req.Where("table_name = '1_keys' AND data = '' AND block_id >= ? AND table_id like ?", startId, like).Count(&number).Error; err != nil {
-			log.WithFields(log.Fields{"warn": err}).Warn("get New Key Number err")
-			return 0
-		}
+		req = req.Where("join_time >= ?", startTime)
 	} else {
-		if startId == endId {
-			if err := req.Where("table_name = '1_keys' AND data = '' AND block_id >= ? AND block_id <= ? AND table_id like ?", startId, endId, like).Count(&number).Error; err != nil {
-				log.WithFields(log.Fields{"warn": err}).Warn("get New Key Number err")
-				return 0
-			}
+		if startTime == endTime {
+			req = req.Where("join_time >= ? AND join_time <= ?", startTime, endTime)
 		} else {
-			if err := req.Where("table_name = '1_keys' AND data = '' AND block_id >= ? AND block_id < ? AND table_id like ?", startId, endId, like).Count(&number).Error; err != nil {
-				log.WithFields(log.Fields{"warn": err}).Warn("get New Key Number err")
-				return 0
-			}
+			req = req.Where("join_time >= ? AND join_time < ?", startTime, endTime)
 		}
+	}
+	err := req.Count(&number).Error
+	if err != nil {
+		log.WithFields(log.Fields{"warn": err, "startTime": startTime, "endTime": endTime, "ecosystem": ecosystem}).Warn("get New Key Number err")
+		return 0
 	}
 	return number
 }

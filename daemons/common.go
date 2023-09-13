@@ -49,6 +49,12 @@ func StartDaemons(ctx context.Context) {
 	//		ExitCh <- err
 	//	}
 	//}()
+	go func() {
+		err := models.InitDBTrigger()
+		if err != nil {
+			ExitCh <- fmt.Errorf("InitDBTrigger err:%s", err.Error())
+		}
+	}()
 
 	go SyncCentrifugoWork(ctx)
 

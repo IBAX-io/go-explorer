@@ -80,7 +80,7 @@ func GetLatestDaoVoting() (VotingResponse, error) {
 		total int64
 		p     Voting
 	)
-	err := GetDB(nil).Table(p.TableName()).Where("deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%'").Count(&total).Error
+	err := GetDB(nil).Table(p.TableName()).Where("deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%' AND ecosystem = 1").Count(&total).Error
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Error("Get Last Dao Voting Total Failed")
 		return rets, err
@@ -91,7 +91,7 @@ func GetLatestDaoVoting() (VotingResponse, error) {
 SELECT vs.title,vs.id,vs.created,vs.voted_rate,sub.result_rate,sub.rejected_rate FROM(
 	select id,coalesce(voting->>'name','') AS title,date_started AS created,
 	CAST(coalesce(progress->>'percent_voters','0') as numeric)as voted_rate
-	from "1_votings" WHERE deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%' ORDER BY id DESC LIMIT 1
+	from "1_votings" WHERE deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%' AND ecosystem = 1 ORDER BY id DESC LIMIT 1
 )AS vs
 LEFT JOIN (
 	SELECT round(CAST(coalesce(results->>'percent_accepted','0') as numeric),2) AS result_rate,
@@ -199,7 +199,7 @@ ORDER BY id desc OFFSET ? LIMIT ?
 			return rets, err
 		}
 	} else {
-		err = GetDB(nil).Table(vote.TableName()).Where("voting->>'name' like '%voting_for_control_mode_template%'").Count(&rets.Total).Error
+		err = GetDB(nil).Table(vote.TableName()).Where("voting->>'name' like '%voting_for_control_mode_template%' AND ecosystem = 1").Count(&rets.Total).Error
 		if err != nil {
 			log.WithFields(log.Fields{"err": err}).Error("Get Dao Vote List Total Failed")
 			return rets, err
@@ -218,7 +218,7 @@ SELECT vs.title,vs.created,vs.voted_rate,sub.result_rate,sub.rejected_rate,vs.id
 					ELSE
 									3
 					END result
-					FROM "1_votings" WHERE deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%'
+					FROM "1_votings" WHERE deleted = 0 AND voting->>'name' like '%voting_for_control_mode_template%' AND ecosystem = 1
 				)AS vs
 LEFT JOIN (
         SELECT round(CAST(coalesce(results->>'percent_accepted','0') as numeric),2) AS result_rate,
@@ -249,7 +249,7 @@ func getDaoVoteChart() (DaoVoteChartResponse, error) {
 	err = GetDB(nil).Raw(`
 SELECT v1.date_ended AS time,v2.agree,v2.rejected,v2.did_not_vote FROM(
 	SELECT id,(SELECT max(decision_date) FROM "1_votings_participants" WHERE voting_id = vs.id)AS date_ended
-		FROM "1_votings" vs WHERE deleted = 0 AND voting->>'name' like '%%voting_for_control_mode_template%%' AND cast(progress->>'percent_success' as numeric) = 100
+		FROM "1_votings" vs WHERE deleted = 0 AND voting->>'name' like '%%voting_for_control_mode_template%%' AND ecosystem = 1 AND cast(progress->>'percent_success' as numeric) = 100
 )AS v1 
 LEFT JOIN(
 	SELECT sum(CASE WHEN decision = 1 THEN 1 ELSE 0 END)agree,
@@ -270,7 +270,7 @@ ORDER BY date_ended ASC
 	var decList []decision
 	err = GetDB(nil).Raw(`
 SELECT CAST(flags->>'decision' AS numeric)flags_decision,count(1) num
-	FROM "1_votings" vs WHERE deleted = 0 AND voting->>'name' like '%%voting_for_control_mode_template%%' GROUP BY flags_decision
+	FROM "1_votings" vs WHERE deleted = 0 AND voting->>'name' like '%%voting_for_control_mode_template%%' AND ecosystem = 1 GROUP BY flags_decision
 `).Find(&decList).Error
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Error("Get Dao Chart decision list To Redis Failed")

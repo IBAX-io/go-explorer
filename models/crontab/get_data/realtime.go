@@ -54,4 +54,5 @@ func realTimeDataServer() {
 	go models.GetNftMinerTotalSupply()
 	go models.GetAirdropLockAllTotal()
 	go models.GetMintNodeTotalBalance()
+	go models.UpdateAccountDetail()
 }

@@ -295,7 +295,7 @@ FROM "1_keys" WHERE ecosystem = ? AND id <> 0 AND id <> 5555
 		}
 		if AirdropReady {
 			var staking decimal.Decimal
-			err = GetDB(nil).Model(AirdropInfo{}).Select("sum(stake_amount)").Take(&staking).Error
+			err = GetDB(nil).Model(AirdropInfo{}).Select("coalesce(sum(stake_amount),0)").Take(&staking).Error
 			if err != nil {
 				return err
 			}
