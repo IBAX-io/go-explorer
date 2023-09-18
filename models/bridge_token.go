@@ -18,6 +18,7 @@ func (b *BridgeToken) TableName() string {
 
 type bridgeInfo struct {
 	From         string `json:"from"`
+	ChainId      int64  `json:"chain_id"`
 	TokenAddress string `json:"token_address"`
 	TokenName    string `json:"token_name"`
 	TokenSymbol  string `json:"token_symbol"`
@@ -45,7 +46,7 @@ func IsBridgeEcosystem(ecosystem int64) bool {
 
 func getBridgeInfo(ecosystem int64) *bridgeInfo {
 	var info bridgeInfo
-	b := BridgeToken{}
+	b := &BridgeToken{}
 	f, err := b.Get(ecosystem)
 	if err == nil && f {
 		info.From = b.ChainName
@@ -53,6 +54,11 @@ func getBridgeInfo(ecosystem int64) *bridgeInfo {
 		info.TokenName = b.TokenName
 		info.TokenSymbol = b.TokenSymbol
 		info.TokenDigits = b.TokenDigits
+		s := &BridgeSettings{}
+		f, err = s.Get(b.SettingId)
+		if err == nil && f {
+			info.ChainId = s.ChainId
+		}
 		return &info
 	}
 	return nil
