@@ -716,7 +716,8 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 		}
 		rets.BlockId = rk.BlockID
 		newEcosystemComment := "taxes for execution of @1NewEcosystem contract"
-		if err := GetDB(nil).Select("created_at,txhash").Where("type = 1 AND comment = ? AND block_id = ?", newEcosystemComment, rets.BlockId).First(&his).Error; err != nil {
+		newBridgeEcosystemComment := "taxes for execution of @1NewBridgeEcosystem contract"
+		if err := GetDB(nil).Select("created_at,txhash").Where("type = 1 AND (comment = ? OR comment = ?) AND block_id = ?", newEcosystemComment, newBridgeEcosystemComment, rets.BlockId).First(&his).Error; err != nil {
 			log.Info("Get Ecosystem Detail New Ecosystem history Failed:", err)
 			return nil, errors.New("get ecosystem detail Create Time Failed")
 		}
