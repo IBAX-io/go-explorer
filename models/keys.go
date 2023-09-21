@@ -737,9 +737,9 @@ func (k *Key) GetEcosystemTokenSymbolList(page, limit int, ecosystem int64) (*Ge
 	if ecosystem == 1 {
 		if AirdropReady {
 			querySql = GetDB(nil).Table(`"account_detail" as ad`).Select(`id,account,ecosystem,total_amount +
-			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = ad.account),0) as amount`).Where("ecosystem = 1 AND total_amount > 0")
+			COALESCE((SELECT stake_amount FROM "1_airdrop_info" WHERE account = ad.account),0) as amount`).Where("ecosystem = 1 AND total_amount > 0").Offset((page - 1) * limit).Limit(limit)
 		} else {
-			querySql = GetDB(nil).Model(AccountDetail{}).Select(`id,account,ecosystem,total_amount as amount`).Where("ecosystem = 1 AND total_amount > 0")
+			querySql = GetDB(nil).Model(AccountDetail{}).Select(`id,account,ecosystem,total_amount as amount`).Where("ecosystem = 1 AND total_amount > 0").Offset((page - 1) * limit).Limit(limit)
 		}
 	} else {
 		querySql = GetDB(nil).Raw(`

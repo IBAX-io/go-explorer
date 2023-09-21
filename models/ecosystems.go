@@ -87,6 +87,7 @@ type EcosystemTotalResponse struct {
 	Member      int64  `json:"member"`
 	Contract    int64  `json:"contract"`
 	ChainName   string `json:"chain_name"`
+	ChainId     int64  `json:"chain_id"`
 }
 
 // EcosystemTotalResult example
@@ -434,6 +435,11 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 			f, err := birgeToken.Get(list[i].ID)
 			if err == nil && f {
 				list[i].ChainName = birgeToken.ChainName
+			}
+			birgeSetting := &BridgeSettings{}
+			f, err = birgeSetting.Get(birgeToken.SettingId)
+			if err == nil && f {
+				list[i].ChainId = birgeSetting.ChainId
 			}
 		}
 	}
