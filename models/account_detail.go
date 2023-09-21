@@ -115,20 +115,24 @@ RETURNS TRIGGER AS $$
 DECLARE
 	logo_id BIGINT;
 	action_type INT;
-	stake_amount NUMERIC;
+	stake NUMERIC;
 BEGIN
-		stake_amount = 0;
+		stake = 0;
 		IF TG_OP = 'DELETE' THEN
 			action_type = 1;
 		ELSE
 			action_type = 2;
 			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '1_keys' AND column_name = 'lock') THEN
-				stake_amount:=to_number(coalesce(NULLIF(NEW.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
+				stake:=to_number(coalesce(NULLIF(NEW.lock->>'nft_miner_stake',''),'0'),'999999999999999999999999999999')+ 
 				to_number(coalesce(NULLIF(NEW.lock->>'candidate_referendum',''),'0'),'999999999999999999999999999999') + 
 				to_number(coalesce(NULLIF(NEW.lock->>'candidate_substitute',''),'0'),'999999999999999999999999999999');
 			END IF;
 		END IF;
-		PERFORM insert_delete_account_detail(NEW.ecosystem,NEW.id, NEW.account, NEW.amount, action_type, stake_amount);
+		IF NOT EXISTS (SELECT 1 FROM account_detail WHERE id = NEW.id AND ecosystem = NEW.ecosystem) THEN
+			PERFORM insert_delete_account_detail(NEW.ecosystem,NEW.id, NEW.account, NEW.amount, action_type, stake);
+		ELSE
+			UPDATE account_detail SET amount = NEW.amount, account = NEW.account,stake_amount = stake WHERE id = NEW.id AND ecosystem = NEW.ecosystem;
+		END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -163,7 +167,7 @@ $$ LANGUAGE plpgsql;
 -- ----------------------------
 DO $$
 DECLARE
-  row record;
+  	row record;
 	create_key_id BIGINT;
 	block_time BIGINT;
 	join_time BIGINT;
