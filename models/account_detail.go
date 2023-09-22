@@ -180,7 +180,7 @@ BEGIN
 				SELECT id,account,ecosystem,amount,pub FROM "1_keys"
 		LOOP
 			join_time = 0; -- default
-			IF (row.id = -110277540701013350 OR row.id = create_key_id OR length(row.pub) = 64) AND row.ecosystem = 1 THEN
+			IF (row.id = -110277540701013350 OR row.id = create_key_id) AND length(row.pub) = 64 AND row.ecosystem = 1 THEN
 				join_time = block_time;
 			END IF;
 			
@@ -364,6 +364,9 @@ BEGIN
 				key_id := CAST(SPLIT_PART(NEW.table_id, ',', 1)AS BIGINT);
 				ecosystem_id := CAST(SPLIT_PART(NEW.table_id, ',', 2)AS BIGINT);
 				SELECT COALESCE((SELECT timestamp/1000 FROM log_transactions WHERE hash = NEW.tx_hash),0) INTO join_t;
+				if NOT EXISTS (SELECT 1 FROM "1_keys" WHERE id = key_id AND ecosystem = ecosystem_id AND LENGTH(pub) = 64) THEN
+					join_t = 0;
+				END IF;
 				UPDATE account_detail SET join_time = join_t WHERE id = key_id AND ecosystem = ecosystem_id;
 			END IF;
 		END IF;
