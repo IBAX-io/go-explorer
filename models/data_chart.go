@@ -1008,7 +1008,7 @@ func GetHistoryNewEcosystemChangeChart() (DaysNumberResponse, error) {
 
 	sql := `
 SELECT to_char(to_timestamp(created_at/1000),'yyyy-MM-dd') AS days,count(1)num FROM "1_history" 
-WHERE comment = 'taxes for execution of @1NewEcosystem contract' AND type = 1 AND ecosystem = 1 GROUP BY days ORDER BY days ASC
+WHERE (comment = 'taxes for execution of @1NewEcosystem contract' OR comment = 'taxes for execution of @1NewBridgeEcosystem contract') AND type = 1 AND ecosystem = 1 GROUP BY days ORDER BY days ASC
 `
 
 	list, err := FindDaysNumber(sql)

@@ -252,7 +252,7 @@ func GetDashboardChartData() (*DashboardChartData, error) {
 	rets.TxChart = txChart
 
 	var his []History
-	if err := GetDB(nil).Select("created_at,id").Where("created_at >= ? AND comment = 'taxes for execution of @1NewEcosystem contract' AND type = 1", t1.UnixMilli()).Find(&his).Error; err != nil {
+	if err := GetDB(nil).Select("created_at,id").Where("created_at >= ? AND (comment = 'taxes for execution of @1NewEcosystem contract' OR comment = 'taxes for execution of @1NewBridgeEcosystem contract') AND type = 1", t1.UnixMilli()).Find(&his).Error; err != nil {
 		return &rets, err
 	}
 	ecoChart.Time = make([]int64, getWeek)
