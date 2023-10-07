@@ -435,11 +435,13 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 			f, err := birgeToken.Get(list[i].ID)
 			if err == nil && f {
 				list[i].ChainName = birgeToken.ChainName
+				list[i].GovernModel = 3
 			}
 			birgeSetting := &BridgeSettings{}
 			f, err = birgeSetting.Get(birgeToken.SettingId)
 			if err == nil && f {
 				list[i].ChainId = birgeSetting.ChainId
+				list[i].GovernModel = 3
 			}
 		}
 	}

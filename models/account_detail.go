@@ -116,6 +116,7 @@ DECLARE
 	logo_id BIGINT;
 	action_type INT;
 	stake NUMERIC;
+	now_time BIGINT;
 BEGIN
 		stake = 0;
 		IF TG_OP = 'DELETE' THEN
@@ -129,7 +130,12 @@ BEGIN
 			END IF;
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM account_detail WHERE id = NEW.id AND ecosystem = NEW.ecosystem) THEN
-			PERFORM insert_delete_account_detail(NEW.ecosystem,NEW.id, NEW.account, NEW.amount, action_type, stake);
+			IF NEW.id = -110277540701013350	THEN -- GuestKey
+				SELECT EXTRACT(EPOCH FROM NOW() AT TIME ZONE 'UTC')::INTEGER INTO now_time;
+				INSERT INTO account_detail(id,account,ecosystem,amount,stake_amount,join_time) VALUES (NEW.id, NEW.account, NEW.ecosystem, NEW.amount, stake, now_time);
+			ELSE
+				PERFORM insert_delete_account_detail(NEW.ecosystem,NEW.id, NEW.account, NEW.amount, action_type, stake);
+			END IF;
 		ELSE
 			UPDATE account_detail SET amount = NEW.amount, account = NEW.account,stake_amount = stake WHERE id = NEW.id AND ecosystem = NEW.ecosystem;
 		END IF;
@@ -180,7 +186,7 @@ BEGIN
 				SELECT id,account,ecosystem,amount,pub FROM "1_keys"
 		LOOP
 			join_time = 0; -- default
-			IF (row.id = -110277540701013350 OR row.id = create_key_id) AND length(row.pub) = 64 AND row.ecosystem = 1 THEN
+			IF (row.id = -110277540701013350 OR row.id = create_key_id OR length(row.pub) = 64) THEN -- GuestKey AND CreateKey AND CreateNodeKey
 				join_time = block_time;
 			END IF;
 			
