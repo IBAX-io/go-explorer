@@ -16,6 +16,7 @@ import (
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 	"github.com/vmihailenco/msgpack/v5"
+	"gorm.io/gorm"
 	"reflect"
 	"strconv"
 	"strings"
@@ -755,29 +756,35 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 	return &rets, nil
 }
 
-func EcosystemSearch(search string, account string) (*[]EcosystemSearchResponse, error) {
-	var list []Ecosystem
-	var rets []EcosystemSearchResponse
+func EcosystemSearch(search string, account string, page, limit int) (rets GeneralResponse, err error) {
+	var ecos []Ecosystem
+	var list []EcosystemSearchResponse
+	rets.Page, rets.Limit = page, limit
 	like := "%" + search + "%"
 	wid := converter.StringToAddress(account)
+	var sqlQuery *gorm.DB
 	if account != "" {
-		if err := GetDB(nil).Select("name,id").Where(`id in(SELECT ecosystem FROM "1_keys" WHERE 
-id = ?) and name like ?`, wid, like).Limit(10).Find(&list).Error; err != nil {
-			log.Info("EcosystemSearch failed:", err, " like:", like, " account:", account)
-			return nil, errors.New("search account ecosystem failed")
-		}
+		sqlQuery = GetDB(nil).Model(Ecosystem{}).Select("name,id").Where(`id in(SELECT ecosystem FROM "1_keys" WHERE 
+id = ?) and name like ?`, wid, like)
 	} else {
-		if err := GetDB(nil).Select("id,name").Where("name like ?", like).Limit(10).Find(&list).Error; err != nil {
-			log.Info("EcosystemSearch failed:", err, " like:", like)
-			return nil, errors.New("search ecosystem failed")
-		}
+		sqlQuery = GetDB(nil).Model(Ecosystem{}).Select("id,name").Where("name like ?", like)
 	}
-	rets = make([]EcosystemSearchResponse, len(list))
-	for i, value := range list {
-		rets[i].Id = value.ID
-		rets[i].Name = value.Name
+	err = sqlQuery.Count(&rets.Total).Error
+	if err != nil {
+		log.Info("EcosystemSearch total failed:", err, " like:", like, " account:", account)
+		return rets, errors.New("search ecosystem total failed")
 	}
-	return &rets, nil
+	if err = sqlQuery.Offset((page - 1) * limit).Limit(limit).Find(&ecos).Error; err != nil {
+		log.Info("EcosystemSearch failed:", err, " like:", like, " account:", account)
+		return rets, errors.New("search ecosystem failed")
+	}
+	list = make([]EcosystemSearchResponse, len(ecos))
+	for i, value := range ecos {
+		list[i].Id = value.ID
+		list[i].Name = value.Name
+	}
+	rets.List = &list
+	return rets, nil
 }
 
 // GetEcosystemDatabase
