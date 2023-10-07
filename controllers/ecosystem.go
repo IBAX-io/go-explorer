@@ -229,8 +229,13 @@ func EcosystemSearchHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
+	if req.Page <= 0 || req.Limit <= 0 {
+		ret.ReturnFailureString("request params invalid!")
+		JsonResponse(c, ret)
+		return
+	}
 
-	rets, err := models.EcosystemSearch(req.Search, req.Wallet)
+	rets, err := models.EcosystemSearch(req.Search, req.Wallet, req.Page, req.Limit)
 	if err != nil {
 		ret.ReturnFailureString(err.Error())
 		JsonResponse(c, ret)
