@@ -764,8 +764,10 @@ func EcosystemSearch(search string, account string, page, limit int) (rets Gener
 	wid := converter.StringToAddress(account)
 	var sqlQuery *gorm.DB
 	if account != "" {
-		sqlQuery = GetDB(nil).Model(Ecosystem{}).Select("name,id").Where(`id in(SELECT ecosystem FROM "1_keys" WHERE 
-id = ?) and name like ?`, wid, like)
+		sqlQuery = GetDB(nil).Model(Ecosystem{}).Select("name,id").Where(`id in(
+SELECT ecosystem FROM spent_info WHERE output_key_id = ? GROUP BY ecosystem
+UNION SELECT ecosystem FROM "1_keys" WHERE id = ?
+) and name like ?`, wid, wid, like)
 	} else {
 		sqlQuery = GetDB(nil).Model(Ecosystem{}).Select("id,name").Where("name like ?", like)
 	}
