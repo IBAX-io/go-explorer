@@ -141,10 +141,10 @@ func (lt *LogTransaction) GetBlockTransactions(page int, limit int, order string
 					if bh.Ecosystemname == "" {
 						bh.Ecosystemname = SysEcosystemName
 					}
-					bh.Digits = EcoDigits.GetInt64(1, 12)
+					bh.Digits = EcoDigits.GetInt(1, 12)
 				} else {
 					bh.Token_symbol = rt.Transactions[j].TokenSymbol
-					bh.Digits = EcoDigits.GetInt64(bh.Ecosystem, 0)
+					bh.Digits = EcoDigits.GetInt(bh.Ecosystem, 0)
 				}
 				Ten := unsafe.Sizeof(rt.Transactions[j])
 				bh.Size = int64(Ten)

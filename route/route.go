@@ -232,10 +232,12 @@ func Run(host string) (err error) {
 	api.GET("/get_node_staking_change", controllers.GetNodeStakingChartHandler)
 	api.GET("/get_node_region", controllers.GetNodeRegionChartHandler)
 	api.GET("/get_node_statistical_change", controllers.GetNodeStatisticalChangeHandler)
+	api.GET("/token_price", controllers.GetTokenPriceHandler)
+	api.GET("/ecosystem_logo", controllers.GetEcosystemLogoHandler)
 
 	api.GET(`/get_redis/:name`, controllers.GetRedisKey) //get redis keys
 
-	api.StaticFS("/logo", http.Dir("./logodir"))
+	api.StaticFS("/flag", http.Dir("./flagdir"))
 
 	server = &http.Server{
 		Addr:    host,

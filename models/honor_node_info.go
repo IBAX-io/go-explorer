@@ -468,7 +468,7 @@ func FindNodeLocatedSave(list []NodeValue) (err error) {
 }
 
 func getIconNationalFlag(nationalName string) string {
-	return conf.GetEnvConf().Url.Base + getFlagIcon(nationalName)
+	return conf.GetEnvConf().Url.Base + ApiPath + "flag/" + getFlagIcon(nationalName)
 }
 
 func getCity(city string) string {

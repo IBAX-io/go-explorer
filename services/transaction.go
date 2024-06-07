@@ -76,7 +76,8 @@ func GetTransactionHeadInfoHash(hash string) (*models.TxDetailedInfoHeadResponse
 		return nil, err
 	}
 	rets.ContractCode = models.GetContractCodeByName(info.ContractName)
-	rets.LogoHash, rets.TokenSymbol = models.GetEcosystemLogoHash(info.Ecosystem)
+	rets.LogoHash = models.GetLogoHash(info.Ecosystem)
+	rets.TokenSymbol = models.Tokens.Get(info.Ecosystem)
 	rets.Hash = info.Hash
 	rets.Ecosystem = info.Ecosystem
 	rets.Time = info.Time

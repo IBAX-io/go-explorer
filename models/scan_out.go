@@ -98,7 +98,7 @@ type ScanOutRet struct {
 	KeysInfo          KeysRet               `json:"keys_info"`
 	CandidateNodeInfo CandidateHonorNodeRet `json:"candidate_node_info"`
 	CastNodeInfo      CastNodeRet           `json:"cast_node_info"` //todo:Need Add
-	Digits            int64                 `json:"digits"`
+	Digits            int                   `json:"digits"`
 }
 
 type BlockRet struct {
@@ -532,7 +532,7 @@ func (m *ScanOut) GetDashboardFromRedis() (*ScanOutRet, error) {
 	rets.EcoLibsInfo = m.EcoLibsInfo
 	rets.KeysInfo = m.KeysInfo
 	rets.CandidateNodeInfo = m.CandidateNodeInfo
-	rets.Digits = EcoDigits.GetInt64(1, 12)
+	rets.Digits = EcoDigits.GetInt(1, 12)
 
 	return &rets, err
 }

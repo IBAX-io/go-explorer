@@ -8,8 +8,11 @@ package controllers
 import (
 	"encoding/hex"
 	"encoding/json"
+	"github.com/IBAX-io/go-explorer/conf"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	//"encoding/json"
@@ -485,4 +488,48 @@ func GetEcosystemAttachmentExportHandler(c *gin.Context) {
 		JsonResponse(c, ret)
 		return
 	}
+}
+
+type ecosystemLogoInfo struct {
+	Ecosystem int64  `json:"ecosystem"`
+	LogoURI   string `json:"logoURI"`
+}
+
+func GetEcosystemLogoHandler(c *gin.Context) {
+	ret := &Response{}
+	str := c.Query("ecosystems")
+	if str == "" {
+		ret.ReturnFailureString("ecosystems cannot be empty")
+		JsonResponse(c, ret)
+		return
+	}
+	ecosystemList := strings.Split(str, ",")
+	var ecosystems = make([]int64, len(ecosystemList))
+	list := make([]ecosystemLogoInfo, len(ecosystems))
+	for i, v := range ecosystemList {
+		var err error
+		ecosystems[i], err = strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			ret.ReturnFailureString(fmt.Sprintf("ecosytem %s invalid", v))
+			JsonResponse(c, ret)
+			return
+		}
+		if ecosystems[i] <= 0 {
+			ret.ReturnFailureString(fmt.Sprintf("ecosytem %d invalid", ecosystems[i]))
+			JsonResponse(c, ret)
+			return
+		}
+		list[i].Ecosystem = ecosystems[i]
+		info := models.Info.Get(ecosystems[i])
+		if info.ChainName != "" {
+			list[i].LogoURI = info.LogoURI
+		} else {
+			if info.LogoHash != "" {
+				list[i].LogoURI = conf.GetEnvConf().Url.Base + models.ApiPath + "get_eco_attachment_export/" + info.LogoHash
+			}
+		}
+	}
+	ret.Return(list, CodeSuccess)
+	JsonResponse(c, ret)
+	return
 }

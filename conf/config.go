@@ -33,6 +33,12 @@ type EnvConf struct {
 	Centrifugo     *storage.CentrifugoConfig `yaml:"centrifugo"`
 	Crontab        *storage.Crontab          `yaml:"crontab"`
 	CryptoSettings storage.CryptoSettings    `yaml:"crypto_settings"`
+	Defi           defiInfo                  `yaml:"defi"`
+}
+
+type defiInfo struct {
+	Enable    bool  `yaml:"enable"`
+	Ecosystem int64 `yaml:"ecosystem"`
 }
 
 func GetEnvConf() *EnvConf {

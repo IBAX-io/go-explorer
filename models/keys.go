@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/IBAX-io/go-explorer/conf"
 	"github.com/IBAX-io/go-ibax/packages/storage/sqldb"
 	log "github.com/sirupsen/logrus"
@@ -90,7 +89,7 @@ type EcosyKeyTotalHex struct {
 	TotalAmount    decimal.Decimal `json:"total_amount"`
 	JoinTime       int64           `json:"join_time"`
 	RolesName      string          `json:"roles_name"`
-	Digits         int64           `json:"digits"`
+	Digits         int             `json:"digits"`
 }
 
 type EcosyKeyTotalDetail struct {
@@ -105,7 +104,7 @@ type EcosyKeyTotalDetail struct {
 	LockAmount  decimal.Decimal `json:"lock_amount"`
 	StakeAmount decimal.Decimal `json:"stake_amount"`
 	RolesName   string          `json:"roles_name"`
-	Digits      int64           `json:"digits"`
+	Digits      int             `json:"digits"`
 }
 
 type AccountHistoryChart struct {
@@ -113,7 +112,7 @@ type AccountHistoryChart struct {
 	Inamount    []string `json:"inamount"`
 	Outamount   []string `json:"outamount"`
 	TokenSymbol string   `json:"token_symbol"`
-	Digits      int64    `json:"digits"`
+	Digits      int      `json:"digits"`
 }
 
 type KeysResult struct {
@@ -133,7 +132,7 @@ type EcosyKeyList struct {
 	StakeAmount  decimal.Decimal `json:"stake_amount"`
 	LockAmount   decimal.Decimal `json:"lock_amount"`
 	TokenSymbol  string          `json:"token_symbol"`
-	Digits       int64           `json:"digits"`
+	Digits       int             `json:"digits"`
 }
 
 type KeysListResult struct {
@@ -289,10 +288,6 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 		}
 	}
 
-	escape := func(value any) string {
-		return strings.Replace(fmt.Sprint(value), `'`, `''`, -1)
-	}
-
 	//
 	ems := Ecosystem{}
 	f, err := ems.Get(m.Ecosystem)
@@ -302,29 +297,7 @@ func (m *Key) GetKeyDetail(keyId int64, wallet string) (*EcosyKeyTotalHex, error
 	if f {
 		d.Ecosystemname = ems.Name
 		d.IsValued = ems.IsValued
-
-		if ems.Info != "" {
-			minfo := make(map[string]any)
-			err := json.Unmarshal([]byte(ems.Info), &minfo)
-			if err != nil {
-				return &d, err
-			}
-			usid, ok := minfo["logo"]
-			if ok {
-				urid := escape(usid)
-				uid, err := strconv.ParseInt(urid, 10, 64)
-				if err != nil {
-					return &d, err
-				}
-
-				hash, err := GetFileHash(uid)
-				if err != nil {
-					return &d, err
-				}
-				d.LogoHash = hash
-
-			}
-		}
+		d.LogoHash = GetLogoHash(ems.ID)
 		d.TokenSymbol = ems.TokenSymbol
 		d.Digits = ems.Digits
 	}
@@ -561,7 +534,7 @@ func (m *Key) GetWalletTotalEcosystem(page, limit int, order string, wallet stri
 			}
 			da[k].Name = EcoNames.Get(v.Ecosystem)
 			da[k].TokenSymbol = Tokens.Get(v.Ecosystem)
-			da[k].Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
+			da[k].Digits = EcoDigits.GetInt(v.Ecosystem, 0)
 			da[k].Amount = da[k].TotalAmount.Sub(da[k].StakeAmount).String()
 		}
 		ret.List = da
@@ -658,7 +631,7 @@ func (m *Key) GetAccountList(page, limit int, ecosystem int64) (*KeysListResult,
 		return nil, err
 	}
 	tokenSymbol := Tokens.Get(ecosystem)
-	digits := EcoDigits.GetInt64(ecosystem, 0)
+	digits := EcoDigits.GetInt(ecosystem, 0)
 	for i := 0; i < len(ret.Rets); i++ {
 		ret.Rets[i].Ecosystem = ecosystem
 		if ecosystem == 1 {
@@ -730,7 +703,7 @@ func (k *Key) GetEcosystemTokenSymbolList(page, limit int, ecosystem int64) (*Ge
 		return &rets, nil
 	}
 	tokenSymbol := Tokens.Get(ecosystem)
-	digits := EcoDigits.GetInt64(ecosystem, 0)
+	digits := EcoDigits.GetInt(ecosystem, 0)
 
 	var ret []EcosystemTokenSymbolList
 	var querySql *gorm.DB
@@ -939,7 +912,7 @@ func GetAccountTotalAmount(ecosystem int64, account string) (AccountTotalAmountC
 	}
 
 	rets.TokenSymbol = Tokens.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 	rets.TotalAmount = rets.Amount.Add(rets.LockAmount).Add(rets.StakeAmount)
 	zeroDec := decimal.New(0, 0)
 	if rets.TotalAmount.GreaterThan(zeroDec) {

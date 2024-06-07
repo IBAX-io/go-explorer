@@ -1160,7 +1160,6 @@ func GetNewEcosystemChartList(page, limit int, order string) (GeneralResponse, e
 	type ecosystemInfo struct {
 		Id       int64  `json:"id"`
 		Name     string `json:"name"`
-		Info     string `json:"info"`
 		Contract int64  `json:"contract"`
 		Block    int64  `json:"block"`
 		Hash     []byte `json:"hash"`
@@ -1172,7 +1171,7 @@ func GetNewEcosystemChartList(page, limit int, order string) (GeneralResponse, e
 		return rets, err
 	}
 	err = GetDB(nil).Raw(`
-SELECT e.id,e.name,e.info,
+SELECT e.id,e.name,
 (SELECT count(*) from "1_contracts" AS c WHERE c.ecosystem = e.id)as contract,
 CASE WHEN rk.block > 0 THEN
 rk.block
@@ -1200,32 +1199,9 @@ ORDER BY ? OFFSET ? LIMIT ?
 		log.WithFields(log.Fields{"error": err}).Error("Get New Ecosystem Chart List Failed")
 		return rets, err
 	}
-	escape := func(value any) string {
-		return strings.Replace(fmt.Sprint(value), `'`, `''`, -1)
-	}
 	for i := 0; i < len(list); i++ {
 		var er EcosystemListResponse
-		if list[i].Info != "" {
-			minfo := make(map[string]any)
-			err := json.Unmarshal([]byte(list[i].Info), &minfo)
-			if err != nil {
-				return rets, err
-			}
-			usid, ok := minfo["logo"]
-			if ok {
-				urid := escape(usid)
-				uid, err := strconv.ParseInt(urid, 10, 64)
-				if err != nil {
-					return rets, err
-				}
-
-				hash, err := GetFileHash(uid)
-				if err != nil {
-					return rets, err
-				}
-				er.LogoHash = hash
-			}
-		}
+		er.LogoHash = GetLogoHash(list[i].Id)
 		er.Id = list[i].Id
 		er.Contract = list[i].Contract
 		er.Name = list[i].Name

@@ -474,7 +474,7 @@ func GetNodeBlockList(search any, page, limit int, order string) (GeneralRespons
 			rts.Tx = value.Tx
 			for _, vue := range gasFee {
 				tokenSymbol := Tokens.Get(vue.Ecosystem)
-				digits := EcoDigits.GetInt64(vue.Ecosystem, 0)
+				digits := EcoDigits.GetInt(vue.Ecosystem, 0)
 				if vue.Ecosystem == 1 {
 					rts.GasFee1.Amount = vue.Amount
 					rts.GasFee1.TokenSymbol = tokenSymbol

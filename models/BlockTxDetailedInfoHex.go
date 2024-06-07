@@ -52,7 +52,7 @@ type BlockTxDetailedInfoHex struct {
 	GasFee        decimal.Decimal `json:"gas_fee"`
 	Amount        decimal.Decimal `json:"amount"`
 	Status        int32           `json:"status"`
-	Digits        int64           `json:"digits"`
+	Digits        int             `json:"digits"`
 }
 
 type TxListRet struct {
