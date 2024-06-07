@@ -133,7 +133,7 @@ ORDER BY days ASC
 		}
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	return rets, nil
 }
@@ -337,7 +337,7 @@ LEFT JOIN(
 	}
 	ret.Circulations = nowChart.Circulations.String()
 	ret.TokenSymbol = nowChart.TokenSymbol
-	ret.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	ret.Digits = EcoDigits.GetInt(ecosystem, 0)
 	ret.StakeAmount = nowChart.StakeAmount.String()
 	ret.LockAmount = nowChart.LockAmount.String()
 	ret.NftBalanceSupply = nowChart.NftMinerBalance
@@ -850,7 +850,7 @@ ORDER BY total_amount DESC
 		rets.List = append(rets.List, rt)
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	return &rets, nil
 }
@@ -921,7 +921,7 @@ order by amount desc limit 10
 		rets.List = append(rets.List, qt)
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	return &rets, nil
 }
@@ -942,7 +942,7 @@ FROM "1_history" WHERE type IN(1,2) AND ecosystem = ?
 	}
 	rets.Name = EcoNames.Get(ecosystem)
 	rets.TokenSymbol = Tokens.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	return rets, nil
 }
@@ -1062,7 +1062,7 @@ ORDER BY time ASC
 	}
 
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	return rets, nil
 }
@@ -1098,7 +1098,7 @@ func getEco15DayTxAmountChart(ecosystem int64) (EcoTxAmountDiffResponse, error) 
 	}
 
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	for i := 0; i < len(rets.Time); i++ {
 		rets.Time[i] = t1.AddDate(0, 0, i+1).Unix()
@@ -1132,7 +1132,7 @@ ORDER BY days
 		return rets, err
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	rets.Time = make([]int64, getDays)
 	rets.EcoGasAmount = make([]string, getDays)

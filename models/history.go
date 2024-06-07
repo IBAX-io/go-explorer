@@ -126,7 +126,7 @@ type HistoryItem struct {
 	TokenSymbol string          `json:"token_symbol,omitempty"`
 	Combustion  string          `json:"combustion,omitempty"`
 	FuelRate    int64           `json:"fuel_rate,omitempty"`
-	Digits      int64           `json:"digits"`
+	Digits      int             `json:"digits"`
 }
 
 type DetailItem struct {
@@ -140,7 +140,7 @@ type DetailItem struct {
 
 type transDetail struct {
 	TokenSymbol string     `json:"token_symbol"`
-	Digits      int64      `json:"digits"`
+	Digits      int        `json:"digits"`
 	VmCostFee   DetailItem `json:"vmCost_fee"`
 	ElementFee  DetailItem `json:"element_fee"`
 	StorageFee  DetailItem `json:"storage_fee"`
@@ -151,7 +151,7 @@ type ecoExplorer struct {
 	GasFee struct {
 		Amount      decimal.Decimal `json:"amount"`
 		TokenSymbol string          `json:"token_symbol,omitempty"`
-		Digits      int64           `json:"digits"`
+		Digits      int             `json:"digits"`
 	} `json:"gas_fee"`
 	Fees         HistoryItem       `json:"fees"`
 	Taxes        HistoryItem       `json:"taxes"`
@@ -176,7 +176,7 @@ type HistoryExplorer struct {
 	Taxes  HistoryItem `json:"taxes"`
 	GasFee struct {
 		Amount      decimal.Decimal `json:"amount"`
-		Digits      int64           `json:"digits"`
+		Digits      int             `json:"digits"`
 		TokenSymbol string          `json:"token_symbol,omitempty"`
 	} `json:"gas_fee"`
 	Detail    transDetail  `json:"detail"`
@@ -323,11 +323,11 @@ func (th *History) GetExplorer(txHash []byte) (*HistoryExplorer, error) {
 	//}
 
 	ecoTokenSymbol := make(map[int64]string)
-	ecoDigits := make(map[int64]int64)
+	ecoDigits := make(map[int64]int)
 	ecoFuelRate := make(map[int64]float64)
 	for _, value := range ecoIdList {
 		ecoTokenSymbol[value.Ecosystem] = Tokens.Get(value.Ecosystem)
-		ecoDigits[value.Ecosystem] = EcoDigits.GetInt64(value.Ecosystem, 0)
+		ecoDigits[value.Ecosystem] = EcoDigits.GetInt(value.Ecosystem, 0)
 		ecoFuelRate[value.Ecosystem] = EcoFuelRate.GetFloat64(value.Ecosystem, 0)
 	}
 	getFeeRate := func(fe FeeDetail) (float64, int) {
@@ -989,7 +989,7 @@ func (th *History) GetWalletTimeLineHistoryTotals(ecosystem int64, keyId int64, 
 		t1  time.Time
 	)
 	ret.TokenSymbol = Tokens.Get(ecosystem)
-	ret.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	ret.Digits = EcoDigits.GetInt(ecosystem, 0)
 	tz := time.Unix(GetNowTimeUnix(), 0)
 	yesterday := time.Date(tz.Year(), tz.Month(), tz.Day()-1, 0, 0, 0, 0, tz.Location())
 	if getDay != 0 {
@@ -1469,7 +1469,7 @@ FROM "1_history" WHERE recipient_id = ? AND ecosystem = ? AND created_at >= ? AN
 	}
 
 	rets.TokenSymbol = Tokens.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 	return rets, nil
 }
 
@@ -1532,7 +1532,7 @@ func GetAmountChangeBarChart(ecosystem int64, account string, isDefault int) (Ac
 		return rets, err
 	}
 	rets.TokenSymbol, rets.Name = Tokens.Get(ecosystem), EcoNames.Get(ecosystem)
-	rets.Digits = EcoDigits.GetInt64(ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(ecosystem, 0)
 
 	lastBalance := decimal.Zero
 	var startTime time.Time
@@ -1647,7 +1647,7 @@ func GetContractTxDetailList(hashStr string, page, limit int) (*GeneralResponse,
 			info.TokenSymbol = Tokens.Get(val.Ecosystem)
 			info.Events = val.Type
 			info.Comment = val.Comment
-			info.Digits = EcoDigits.GetInt64(val.Ecosystem, 0)
+			info.Digits = EcoDigits.GetInt(val.Ecosystem, 0)
 			list = append(list, info)
 		}
 

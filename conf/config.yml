@@ -15,7 +15,7 @@ server:
   docs_api: http://127.0.0.1:8800 #docs api request address(explorer)
 
 url:
-  base_url: /api/v2/logo/
+  base_url: http://192.168.1.193:8802
 
 log:
   level: error
@@ -34,7 +34,7 @@ redis:
   enable: true  #
   address: 127.0.0.1 # address
   port: 6379       # address
-  password: ibax,&.0se # password
+  password: # password
   db: 0 #db
 
 centrifugo:
@@ -54,3 +54,7 @@ crontab:
 crypto_settings:
   cryptoer: "ECC_Secp256k1"
   hasher: "KECCAK256"
+
+defi:
+  enable: true
+  ecosystem: 31

@@ -46,4 +46,5 @@ func historyDataServer() {
 	//Delayed chart data
 	go models.SyncNationalFlagIcon()
 	go buffer.StartServer(buffer.GetBufferType(2))
+	go models.UpdatePairBuffer()
 }

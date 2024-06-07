@@ -278,7 +278,7 @@ func GetBlocksTransactionInfoByBlockInfo(mc *Block) (*BlockDetailedInfoHex, erro
 		}
 	}
 	if header.IconUrl == "" {
-		header.IconUrl = conf.GetEnvConf().Url.Base + "default.png"
+		header.IconUrl = conf.GetEnvConf().Url.Base + ApiPath + "flag/" + "default.png"
 	}
 
 	//prehash

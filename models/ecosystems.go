@@ -36,7 +36,7 @@ type Ecosystem struct {
 	TypeEmission   int64
 	TypeWithdraw   int64
 	ControlMode    int64
-	Digits         int64
+	Digits         int
 }
 
 type Combustion struct {
@@ -82,7 +82,7 @@ type EcosystemTotalResponse struct {
 	GovernModel int64  `json:"govern_model"`
 	FeeModel    int    `json:"fee_model"`
 	TokenSymbol string `json:"token_symbol"`
-	Digits      int64  `json:"digits"`
+	Digits      int    `json:"digits"`
 	Creator     string `json:"creator"`
 	TotalAmount string `json:"total_amount"`
 	Member      int64  `json:"member"`
@@ -117,6 +117,10 @@ func (sys *Ecosystem) Get(id int64) (bool, error) {
 
 func (sys *Ecosystem) GetTokenSymbol(id int64) (bool, error) {
 	return isFound(GetDB(nil).Select("token_symbol,name").First(sys, "id = ?", id))
+}
+
+func (sys *Ecosystem) GetInfo(id int64) (bool, error) {
+	return isFound(GetDB(nil).Select("info").Where("id = ?", id).First(sys))
 }
 
 func GetActiveEcoLibs() (string, error) {
@@ -187,28 +191,28 @@ func GetActiveEcoLibsFromRedis() (string, error) {
 	return rets, nil
 }
 
-func (p *Ecosystem) GetBasisEcosystem() (*BasisEcosystemResponse, error) {
+func (sys *Ecosystem) GetBasisEcosystem() (*BasisEcosystemResponse, error) {
 	var (
 		rets BasisEcosystemResponse
 		key  Key
 		lg   LogTransaction
 	)
-	f, err := p.Get(1)
+	f, err := sys.Get(1)
 	if err != nil {
 		return nil, err
 	}
 	if !f {
 		return nil, errors.New("get basis ecosystem doesn't exist")
 	}
-	rets.ID = p.ID
-	rets.Name = p.Name
+	rets.ID = sys.ID
+	rets.Name = sys.Name
 
 	escape := func(value any) string {
 		return strings.Replace(fmt.Sprint(value), `'`, `''`, -1)
 	}
-	if p.Info != "" {
+	if sys.Info != "" {
 		minfo := make(map[string]any)
-		err := json.Unmarshal([]byte(p.Info), &minfo)
+		err := json.Unmarshal([]byte(sys.Info), &minfo)
 		if err != nil {
 			return nil, err
 		}
@@ -240,7 +244,7 @@ func (p *Ecosystem) GetBasisEcosystem() (*BasisEcosystemResponse, error) {
 	return &rets, nil
 }
 
-func (p *Ecosystem) GetBasisEcosystemChart() (*BasisEcosystemChartDataResponse, error) {
+func (sys *Ecosystem) GetBasisEcosystemChart() (*BasisEcosystemChartDataResponse, error) {
 	var (
 		basis BasisEcosystemChartDataResponse
 	)
@@ -282,7 +286,7 @@ FROM "log_transactions" WHERE ecosystem_id = 1 AND timestamp >= ? GROUP BY days`
 	return &basis, nil
 }
 
-func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[string]any) (int64, *[]EcosystemTotalResponse, error) {
+func (sys *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[string]any) (int64, *[]EcosystemTotalResponse, error) {
 	var (
 		total int64
 		list  []EcosystemTotalResponse
@@ -324,7 +328,7 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 	}
 
 	if len(where) == 0 {
-		if err := GetDB(nil).Table(p.TableName()).Count(&total).Error; err != nil {
+		if err := GetDB(nil).Table(sys.TableName()).Count(&total).Error; err != nil {
 			return 0, nil, err
 		}
 		if err := GetDB(nil).Table(`"1_ecosystems" AS e`).Select(`*,
@@ -338,7 +342,7 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 		if err != nil {
 			return 0, nil, err
 		}
-		if err := GetDB(nil).Table(p.TableName()).Where(cond, vals...).Count(&total).Error; err != nil {
+		if err := GetDB(nil).Table(sys.TableName()).Where(cond, vals...).Count(&total).Error; err != nil {
 			return 0, nil, err
 		}
 
@@ -356,9 +360,6 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 		Type string          `json:"type"`
 	}
 	var emissionAmount []emsAmount
-	escape := func(value any) string {
-		return strings.Replace(fmt.Sprint(value), `'`, `''`, -1)
-	}
 	for i := 0; i < len(ecoList); i++ {
 		list[i].ID = ecoList[i].ID
 		list[i].TokenSymbol = ecoList[i].TokenSymbol
@@ -382,29 +383,7 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 			list[i].TotalAmount = TotalSupplyToken.String()
 		}
 
-		if ecoList[i].Info != "" {
-			minfo := make(map[string]any)
-			err := json.Unmarshal([]byte(ecoList[i].Info), &minfo)
-			if err != nil {
-				log.Info("json failed:", err.Error())
-				return 0, nil, err
-			}
-			usid, ok := minfo["logo"]
-			if ok {
-				urid := escape(usid)
-				uid, err := strconv.ParseInt(urid, 10, 64)
-				if err != nil {
-					return 0, nil, err
-				}
-
-				hash, err := GetFileHash(uid)
-				if err != nil {
-					return 0, nil, err
-				}
-				list[i].LogoHash = hash
-
-			}
-		}
+		list[i].LogoHash = GetLogoHash(ecoList[i].ID)
 		feeMode, err := getEcosystemFeeMode(ecoList[i].FeeModeInfo)
 		if err != nil {
 			return 0, nil, err
@@ -452,7 +431,7 @@ func (p *Ecosystem) GetEcoSystemList(limit, page int, order string, where map[st
 
 func getEcosystemFeeMode(info string) (int, error) {
 	var (
-		feeMode int = 1
+		feeMode = 1
 	)
 	if info != "" {
 		var feeInfo FeeModeInfo
@@ -521,9 +500,6 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 		Type string          `json:"type"`
 	}
 	var emissionAmount []emsAmount
-	escape := func(value any) string {
-		return strings.Replace(fmt.Sprint(value), `'`, `''`, -1)
-	}
 	rets.EcosystemId = eco.ID
 	rets.TokenSymbol = eco.TokenSymbol
 	rets.Digits = eco.Digits
@@ -564,20 +540,7 @@ func GetEcosystemDetailInfo(search any) (*EcosystemDetailInfoResponse, error) {
 			log.Info("Get Ecosystem Detail json failed:", err.Error())
 			return nil, err
 		}
-		usid, ok := minfo["logo"]
-		if ok {
-			urid := escape(usid)
-			uid, err := strconv.ParseInt(urid, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-
-			hash, err := GetFileHash(uid)
-			if err != nil {
-				return nil, err
-			}
-			rets.LogoHash = hash
-		}
+		rets.LogoHash = GetLogoHash(eco.ID)
 
 		for k, v := range minfo {
 			switch k {
@@ -991,49 +954,6 @@ INNER JOIN (
 	return rets, nil
 }
 
-func GetEcosystemLogoHash(ecosystem int64) (string, string) {
-	var tokenSymbol string
-	es := Ecosystem{}
-	escape := func(value any) string {
-		return strings.Replace(fmt.Sprint(value), `'`, `''`, -1)
-	}
-	if ecosystem == 1 {
-		tokenSymbol = SysTokenSymbol
-	}
-	f, err := es.Get(ecosystem)
-	if f && err == nil {
-		if ecosystem != 1 {
-			tokenSymbol = es.TokenSymbol
-		}
-		if es.Info != "" {
-			minfo := make(map[string]any)
-			err := json.Unmarshal([]byte(es.Info), &minfo)
-			if err != nil {
-				log.Info("GetEcosystemLogoHash json failed:", err.Error())
-				return "", tokenSymbol
-			}
-
-			usid, ok := minfo["logo"]
-			if ok {
-				urid := escape(usid)
-				uid, err := strconv.ParseInt(urid, 10, 64)
-				if err != nil {
-					log.Info("GetEcosystemLogoHash parse int failed:", err.Error())
-					return "", tokenSymbol
-				}
-
-				hash, err := GetFileHash(uid)
-				if err != nil {
-					log.Info("GetEcosystemLogoHash GetFileHash failed:", err.Error())
-					return "", tokenSymbol
-				}
-				return hash, tokenSymbol
-			}
-		}
-	}
-	return "", tokenSymbol
-}
-
 func getFeeModeAccount(ecosystem int64) string {
 	var (
 		param StateParameter
@@ -1069,4 +989,121 @@ func getEcosystemCombustion(ecosystem int64) string {
 	}
 
 	return sum1.Sum.Add(sum2.Sum).String()
+}
+
+const (
+	ecosystemLogoHash  = "ecosystem_logo_hash"
+	logoHashExpiration = 30 * 60 //30 minute
+)
+
+func GetLogoHashByInfo(ecosystemInfo string) string {
+	if ecosystemInfo != "" {
+		escape := func(value any) string {
+			return strings.Replace(fmt.Sprint(value), `'`, `''`, -1)
+		}
+		minfo := make(map[string]any)
+		err := json.Unmarshal([]byte(ecosystemInfo), &minfo)
+		if err != nil {
+			log.Info("GetEcosystemLogoHash json failed:", err.Error())
+			return ""
+		}
+
+		usid, ok := minfo["logo"]
+		if ok {
+			urid := escape(usid)
+			uid, err := strconv.ParseInt(urid, 10, 64)
+			if err != nil {
+				log.Info("GetEcosystemLogoHash parse int failed:", err.Error())
+				return ""
+			}
+
+			hash, err := GetFileHash(uid)
+			if err != nil {
+				log.Info("GetEcosystemLogoHash GetFileHash failed:", err.Error())
+				return ""
+			}
+			return hash
+		}
+	}
+	return ""
+}
+
+func GetLogoHash(ecosystem int64) (logoHash string) {
+	var exist bool
+	logoHash, exist = getLogoHashByRedis(ecosystem)
+	if !exist {
+		em := &Ecosystem{}
+		f, err := em.GetInfo(ecosystem)
+		if err == nil && f {
+			logoHash = GetLogoHashByInfo(em.Info)
+			cacheLogoHash(ecosystem, logoHash, logoHashExpiration)
+		}
+	}
+	return
+}
+
+func InitLogoHash() (err error) {
+	rh := &HashParams{
+		Hash: ecosystemLogoHash,
+	}
+	err = rh.HGetAll()
+	if err != nil {
+		return
+	}
+	for key, _ := range rh.ValueMap {
+		ecosystem, _ := strconv.ParseInt(key, 10, 64)
+		if ecosystem > 0 {
+			go cleanLogoHash(logoHashExpiration, ecosystem) //30 minute
+		}
+	}
+	return
+}
+
+func cacheLogoHash(ecosystem int64, logoHash string, expirationSecond int64) {
+	rh := &HashParams{
+		Hash: ecosystemLogoHash,
+	}
+	err := rh.HSet(strconv.FormatInt(ecosystem, 10), logoHash)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "hash": rh.Hash}).Info("cache logo hash failed")
+		return
+	}
+	if expirationSecond > 0 {
+		go cleanLogoHash(expirationSecond, ecosystem)
+	}
+}
+
+func cleanLogoHash(expirationSecond int64, ecosystem int64) {
+	select {
+	case <-time.After(time.Second * time.Duration(expirationSecond)):
+		rh := &HashParams{
+			Hash: ecosystemLogoHash,
+		}
+		err := rh.HDel(strconv.FormatInt(ecosystem, 10))
+		if err != nil {
+			log.WithFields(log.Fields{"error": err, "hash": rh.Hash, "ecosystem": ecosystem}).Info("clean logo hash failed")
+		}
+	}
+}
+
+func getLogoHashByRedis(ecosystem int64) (logoHash string, exist bool) {
+	rh := &HashParams{
+		Hash: ecosystemLogoHash,
+	}
+	var err error
+	exist, err = rh.HExists(strconv.FormatInt(ecosystem, 10))
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "hash": rh.Hash, "ecosystem": ecosystem}).Info("get logo hash by redis failed")
+		return
+	}
+	if exist {
+		err = rh.HGet(strconv.FormatInt(ecosystem, 10))
+		if err != nil {
+			log.WithFields(log.Fields{"error": err, "ecosystem": ecosystem}).Info("get logo hash by redis failed")
+			return
+		}
+		logoHash = rh.Value
+	}
+
+	return
 }

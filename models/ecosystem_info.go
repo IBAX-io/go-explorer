@@ -11,11 +11,29 @@ import (
 	"fmt"
 	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"sync"
 )
 
 type ecoAmountObject struct {
 	sync.Map
+}
+
+type EcosystemInfo struct {
+	Id           int64  `json:"id"`
+	Name         string `json:"name"`
+	TokenSymbol  string `json:"tokenSymbol"`
+	Digits       int    `json:"digits"`
+	LogoHash     string `json:"logoHash"`
+	ChainName    string `json:"chainName"`
+	TokenAddress string `json:"tokenAddress"`
+	chainId      int64
+	LogoURI      string `json:"logoURI"`
+}
+
+type ecosystemInfoObject struct {
+	m map[int64]EcosystemInfo
+	sync.RWMutex
 }
 
 type EcosystemInfoMap struct {
@@ -32,6 +50,7 @@ var (
 	registrationTypes *EcosystemInfoMap
 	registrations     *EcosystemInfoMap
 	EcosystemIdList   []int64
+	Info              *ecosystemInfoObject
 
 	allKeyAmount *ecoAmountObject //key:ecosystem value:decimal.Decimal all keys circulations and staking amount
 	EcoTxCount   *EcosystemInfoMap
@@ -121,6 +140,7 @@ func InitEcosystemInfo() {
 	EcoTxCount = &EcosystemInfoMap{}
 	EcoDigits = &EcosystemInfoMap{}
 	EcoFuelRate = &EcosystemInfoMap{}
+	Info = &ecosystemInfoObject{m: make(map[int64]EcosystemInfo)}
 
 	for k, v := range countryMap {
 		countrys.Store(k, v)
@@ -187,6 +207,21 @@ func (p *EcosystemInfoMap) GetInt64(ecosystem int64, defaultValue int64) int64 {
 	return defaultValue
 }
 
+func (p *EcosystemInfoMap) GetInt(ecosystem int64, defaultValue int) int {
+	if p == nil {
+		return 0
+	}
+	value, ok := p.Load(ecosystem)
+	if ok {
+		if cp, ok := value.(int); !ok {
+			return 0
+		} else {
+			return cp
+		}
+	}
+	return defaultValue
+}
+
 func (p *EcosystemInfoMap) GetFloat64(ecosystem int64, defaultValue float64) float64 {
 	if p == nil {
 		return 0
@@ -222,9 +257,34 @@ func (p *ecoAmountObject) Get(ecosystem int64) (decimal.Decimal, error) {
 	return decimal.Zero, fmt.Errorf("eco[%d] amount not exist", ecosystem)
 }
 
+func (e *ecosystemInfoObject) Set(info EcosystemInfo) {
+	e.Lock()
+	defer e.Unlock()
+	info.LogoURI = getLogoURI(info)
+	e.m[info.Id] = info
+}
+
+func (e *ecosystemInfoObject) Get(ecosystemId int64) EcosystemInfo {
+	e.RLock()
+	defer e.RUnlock()
+	return e.m[ecosystemId]
+}
+
+func (e *ecosystemInfoObject) Search(search string) (infos []EcosystemInfo) {
+	e.RLock()
+	defer e.RUnlock()
+	for _, info := range e.m {
+		if strings.Contains(strings.ToLower(info.TokenSymbol), strings.ToLower(search)) {
+			infos = append(infos, info)
+		} else if strings.Contains(strings.ToLower(info.Name), strings.ToLower(search)) {
+			infos = append(infos, info)
+		}
+	}
+	return
+}
+
 func GetAllEcosystemInfo() {
 	var (
-		list  []Ecosystem
 		total int64
 	)
 	err := GetDB(nil).Model(Ecosystem{}).Count(&total).Error
@@ -232,27 +292,53 @@ func GetAllEcosystemInfo() {
 		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id total failed")
 		return
 	}
-	err = GetDB(nil).Select("id,token_symbol,name,digits,fee_mode_info").Find(&list).Error
-	if err != nil {
-		log.WithFields(log.Fields{"INFO": err}).Info("get all ecosystem id list failed")
-		return
-	}
 	EcosystemIdList = nil
-	for _, v := range list {
-		EcosystemIdList = append(EcosystemIdList, v.ID)
-		Tokens.Store(v.ID, v.TokenSymbol)
-		EcoNames.Store(v.ID, v.Name)
-		EcoDigits.Store(v.ID, v.Digits)
-		if v.FeeModeInfo != "" {
-			var feeInfo FeeModeInfo
-			err := json.Unmarshal([]byte(v.FeeModeInfo), &feeInfo)
-			if err == nil {
-				followFuel, _ := decimal.NewFromFloat(feeInfo.FollowFuel).Mul(decimal.NewFromInt(100)).Float64()
-				EcoFuelRate.Store(v.ID, followFuel)
-			} else {
-				log.Info("get all ecosystem fee mode failed:", err.Error())
-				return
+	limit := 1000
+	for page := 1; int64((page-1)*limit) < total; page++ {
+		var list []Ecosystem
+		err = GetDB(nil).Select("id,token_symbol,digits,name,fee_mode_info").Offset((page - 1) * limit).Limit(limit).Find(&list).Error
+		if err != nil {
+			log.WithFields(log.Fields{"info": err, "page": page, "limit": limit}).Info("get all Ecosystem Info failed")
+			return
+		}
+		for _, v := range list {
+			EcosystemIdList = append(EcosystemIdList, v.ID)
+			Tokens.Store(v.ID, v.TokenSymbol)
+			EcoDigits.Store(v.ID, v.Digits)
+			EcoNames.Store(v.ID, v.Name)
+			EcoDigits.Store(v.ID, v.Digits)
+			if v.FeeModeInfo != "" {
+				var feeInfo FeeModeInfo
+				err := json.Unmarshal([]byte(v.FeeModeInfo), &feeInfo)
+				if err == nil {
+					followFuel, _ := decimal.NewFromFloat(feeInfo.FollowFuel).Mul(decimal.NewFromInt(100)).Float64()
+					EcoFuelRate.Store(v.ID, followFuel)
+				} else {
+					log.Info("get all ecosystem fee mode failed:", err.Error())
+					return
+				}
 			}
+			var in EcosystemInfo
+			in.Id = v.ID
+			in.Digits = v.Digits
+			in.Name = v.Name
+			in.TokenSymbol = v.TokenSymbol
+			in.LogoHash = GetLogoHash(v.ID)
+			if BridgeReady {
+				bt := &BridgeToken{}
+				var exist bool
+				exist, err = bt.Get(v.ID)
+				if err == nil && exist {
+					in.ChainName = bt.ChainName
+					in.TokenAddress = bt.TokenAddress
+					bs := &BridgeSettings{}
+					exist, err = bs.Get(bt.SettingId)
+					if err == nil && exist {
+						in.chainId = bs.ChainId
+					}
+				}
+			}
+			Info.Set(in)
 		}
 	}
 }
@@ -264,6 +350,7 @@ func SyncEcosystemInfo() {
 	}()
 	GetAllEcosystemInfo()
 	getEcosystemTxCount()
+	updateAllowRankEcosystem()
 }
 
 func GetAllKeysTotalAmount(ecosystem int64) error {

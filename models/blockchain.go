@@ -274,7 +274,7 @@ ORDER BY %s
 
 		rets = append(rets, rt)
 	}
-	ret.Digits = EcoDigits.GetInt64(1, 12)
+	ret.Digits = EcoDigits.GetInt(1, 12)
 
 	ret.List = rets
 

@@ -72,7 +72,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 	rets.Comment = info.Comment
 	rets.Expedite = info.Expedite
 	rets.TokenSymbol = info.TokenSymbol
-	rets.Digits = EcoDigits.GetInt64(info.Ecosystem, 0)
+	rets.Digits = EcoDigits.GetInt(info.Ecosystem, 0)
 	rets.Ecosystem = info.Ecosystem
 	rets.Size = strconv.FormatInt(info.Size, 10) + " Byte"
 
@@ -136,7 +136,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						basisGasFee.Fees.Recipient = recipient
 						basisGasFee.Fees.Sender = rets.Sender
 						basisGasFee.Fees.TokenSymbol = Tokens.Get(v.Ecosystem)
-						basisGasFee.Fees.Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
+						basisGasFee.Fees.Digits = EcoDigits.GetInt(v.Ecosystem, 0)
 
 						basisGasFee.TokenSymbol = basisGasFee.Fees.TokenSymbol
 						basisGasFee.Digits = basisGasFee.Fees.Digits
@@ -146,7 +146,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						basisGasFee.Taxes.Recipient = recipient
 						basisGasFee.Taxes.Sender = rets.Sender
 						basisGasFee.Taxes.TokenSymbol = Tokens.Get(v.Ecosystem)
-						basisGasFee.Taxes.Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
+						basisGasFee.Taxes.Digits = EcoDigits.GetInt(v.Ecosystem, 0)
 
 						basisGasFee.TokenSymbol = basisGasFee.Taxes.TokenSymbol
 						basisGasFee.Digits = basisGasFee.Taxes.Digits
@@ -155,7 +155,7 @@ func (si *SpentInfo) GetExplorer(txHash []byte) (*UtxoExplorer, error) {
 						var change utxoDetail
 						change.Address = recipient
 						change.TokenSymbol = Tokens.Get(v.Ecosystem)
-						change.Digits = EcoDigits.GetInt64(v.Ecosystem, 0)
+						change.Digits = EcoDigits.GetInt(v.Ecosystem, 0)
 						change.Amount = amount.String()
 						change.Hash = outputTxHash
 
@@ -292,7 +292,7 @@ func (si *SpentInfo) GetInputs(txHash []byte, page, limit int) (rlts []utxoDetai
 			Amount:      val.OutputValue,
 			Hash:        hex.EncodeToString(val.OutputTxHash),
 			TokenSymbol: Tokens.Get(val.Ecosystem),
-			Digits:      EcoDigits.GetInt64(val.Ecosystem, 0),
+			Digits:      EcoDigits.GetInt(val.Ecosystem, 0),
 		})
 	}
 	return
@@ -307,7 +307,7 @@ func (si *SpentInfo) GetOutputs(txHash []byte) (rlts []utxoDetail, list []SpentI
 			Amount:      val.OutputValue,
 			Hash:        hex.EncodeToString(val.OutputTxHash),
 			TokenSymbol: Tokens.Get(val.Ecosystem),
-			Digits:      EcoDigits.GetInt64(val.Ecosystem, 0),
+			Digits:      EcoDigits.GetInt(val.Ecosystem, 0),
 		})
 	}
 	return

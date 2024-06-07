@@ -81,6 +81,10 @@ func StartDaemons(ctx context.Context) {
 		if err != nil {
 			ExitCh <- fmt.Errorf("Create Table main err:%s\n", err.Error())
 		}
+		err = models.InitLogoHash()
+		if err != nil {
+			ExitCh <- fmt.Errorf("init logo hash %s", err.Error())
+		}
 	}()
 	err := models.InitCountryLocator()
 	if err != nil {
