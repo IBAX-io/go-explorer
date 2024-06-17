@@ -348,6 +348,7 @@ func SyncEcosystemInfo() {
 	defer func() {
 		RealtimeWG.Done()
 	}()
+	UpdateTokensTableStatus()
 	GetAllEcosystemInfo()
 	getEcosystemTxCount()
 	updateAllowRankEcosystem()
