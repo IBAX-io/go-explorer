@@ -6,10 +6,14 @@
 package controllers
 
 import (
+	"errors"
+	"fmt"
 	"github.com/IBAX-io/go-explorer/models"
 	"github.com/IBAX-io/go-explorer/services"
+	"github.com/IBAX-io/go-ibax/packages/converter"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"gorm.io/gorm"
 	"strconv"
 	"unicode/utf8"
 )
@@ -664,4 +668,69 @@ func GetContractTxDetailListHandler(c *gin.Context) {
 	ret.Return(rets, CodeSuccess)
 	JsonResponse(c, ret)
 
+}
+
+type getHistoryRequest struct {
+	Ecosystem int64 `json:"ecosystem"`
+	GeneralRequest
+	Account string `json:"account" example:"xxxx-xxxx-xxxx-xxxx-xxxx"`
+	Opt     string `json:"opt"`
+	keyId   int64
+}
+
+func (p *getHistoryRequest) Validate() error {
+	if p.Page <= 0 {
+		return fmt.Errorf("request params invalid! page:%d", p.Page)
+	}
+	if p.Limit <= 0 {
+		return fmt.Errorf("request params invalid! limit:%d", p.Limit)
+	}
+	if p.Opt != "send" && p.Opt != "recipient" && p.Opt != "all" {
+		return fmt.Errorf("params invalid! opt:%s", p.Opt)
+	}
+	if p.Account == "" {
+		return errors.New("account address Can not be empty")
+	}
+	p.keyId = converter.StringToAddress(p.Account)
+	if p.keyId == 0 {
+		return fmt.Errorf("account address %s invalid", p.Account)
+	}
+
+	if p.Ecosystem < 0 {
+		return errors.New("ecosystem id invalid")
+	}
+
+	return nil
+}
+
+func GetHistoryHandler(c *gin.Context) {
+	req := &getHistoryRequest{}
+	ret := &Response{}
+	err := c.ShouldBindWith(req, binding.JSON)
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+	err = req.Validate()
+	if err != nil {
+		ret.ReturnFailureString(err.Error())
+		JsonResponse(c, ret)
+		return
+	}
+
+	var rlt *models.GeneralResponse
+	rlt, err = models.GetAccountHistory(req.Page, req.Limit, req.keyId, req.Ecosystem, req.Opt, req.Where)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ret.Return(nil, CodeSuccess)
+		} else {
+			ret.Return(nil, CodeDBfinderr.Errorf(err))
+		}
+		JsonResponse(c, ret)
+		return
+	}
+
+	ret.Return(rlt, CodeSuccess)
+	JsonResponse(c, ret)
 }

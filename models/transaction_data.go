@@ -146,6 +146,7 @@ begin:
 	for _, val := range *bkList {
 		txList, err := UnmarshallBlockTxData(bytes.NewBuffer(val.Data), val.ID)
 		if err != nil {
+			log.WithFields(log.Fields{"error": err, "block": val.ID}).Error("Unmarshall Block Tx Data")
 			return err
 		}
 		for _, data := range txList {

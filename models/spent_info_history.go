@@ -622,3 +622,19 @@ func parseSpentInfoHistorySubType(subType int) string {
 	}
 	return ""
 }
+
+func compatibleContractAccountType(utxoType int) (contractType int) {
+	switch utxoType {
+	case 1:
+	case 2:
+		contractType = 3
+	case 3:
+		contractType = 1
+	case 4:
+		contractType = 2
+	case 5:
+	case 6:
+		contractType = 16
+	}
+	return
+}

@@ -737,10 +737,10 @@ func SyncNationalFlagIcon() {
 	}()
 
 	road, _ := os.Getwd()
-	logodir := path.Join(road, "logodir")
-	dir, err := os.ReadDir(logodir)
+	flagdir := path.Join(road, "flag")
+	dir, err := os.ReadDir(flagdir)
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "dir": logodir}).Error("Sync National Flag Icon Failed")
+		log.WithFields(log.Fields{"error": err, "dir": flagdir}).Error("Sync National Flag Icon Failed")
 		return
 	}
 

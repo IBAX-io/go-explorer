@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"github.com/IBAX-io/go-explorer/conf"
 	"github.com/IBAX-io/go-explorer/models"
 	"github.com/gin-gonic/gin"
 	"strconv"
@@ -55,6 +56,58 @@ func GetTokenPriceHandler(c *gin.Context) {
 		list[i].PriceInUsd = prices[ecosystem]
 	}
 	ret.Return(list, CodeSuccess)
+	JsonResponse(c, ret)
+	return
+}
+
+func GetTokenLogoHandler(c *gin.Context) {
+	ret := &Response{}
+	chainIdStr := c.Query("chainId")
+	tokenAddress := c.Query("tokenAddress")
+	ecosystem := c.Query("ecosystem")
+	if (chainIdStr == "" || tokenAddress == "") && ecosystem == "" {
+		ret.ReturnFailureString("param cannot be empty")
+		JsonResponse(c, ret)
+		return
+	}
+	var logoUri string
+	ecosystemId, err := strconv.ParseUint(ecosystem, 10, 64)
+	if err != nil {
+		ret.ReturnFailureString("ecosystem " + ecosystem + " invalid")
+		JsonResponse(c, ret)
+		return
+	}
+	if ecosystemId > 0 {
+		info := models.Info.Get(int64(ecosystemId))
+		if info.ChainName != "" {
+			logoUri = info.LogoURI
+		} else {
+			if info.LogoHash != "" {
+				logoUri = conf.GetEnvConf().Url.Base + models.ApiPath + "get_eco_attachment_export/" + info.LogoHash
+			}
+		}
+	} else {
+		chainId, err := strconv.ParseUint(chainIdStr, 10, 64)
+		if err != nil {
+			ret.ReturnFailureString("chainId " + chainIdStr + " invalid")
+			JsonResponse(c, ret)
+			return
+		}
+		if chainId == 0 {
+			ret.ReturnFailureString("param invalid")
+			JsonResponse(c, ret)
+			return
+		}
+		token := &models.TokensInfo{}
+		logoUri, _, err = token.GetLogoURI(chainIdStr, tokenAddress)
+		if err != nil {
+			ret.ReturnFailureString(err.Error())
+			JsonResponse(c, ret)
+			return
+		}
+	}
+
+	ret.Return(logoUri, CodeSuccess)
 	JsonResponse(c, ret)
 	return
 }

@@ -801,7 +801,7 @@ func getEcoTopTenHasTokenAccount(ecosystem int64) (*EcoTopTenHasTokenResponse, e
 	}
 	totalAmount, err := allKeyAmount.Get(ecosystem)
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	var (
 		list     []accountHold

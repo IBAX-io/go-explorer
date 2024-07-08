@@ -204,6 +204,9 @@ func getTopTenHasTokenAccountToRedis(ecosystem int64) {
 		log.WithFields(log.Fields{"error": err}).Error("get top ten holdings account failed")
 		return
 	}
+	if rets == nil {
+		return
+	}
 
 	key := TopTenHoldings + strconv.FormatInt(ecosystem, 10)
 	f := func() ([]byte, error) {

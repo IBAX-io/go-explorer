@@ -22,6 +22,7 @@ type ecoAmountObject struct {
 type EcosystemInfo struct {
 	Id           int64  `json:"id"`
 	Name         string `json:"name"`
+	TokenName    string `json:"tokenName"`
 	TokenSymbol  string `json:"tokenSymbol"`
 	Digits       int    `json:"digits"`
 	LogoHash     string `json:"logoHash"`
@@ -296,7 +297,7 @@ func GetAllEcosystemInfo() {
 	limit := 1000
 	for page := 1; int64((page-1)*limit) < total; page++ {
 		var list []Ecosystem
-		err = GetDB(nil).Select("id,token_symbol,digits,name,fee_mode_info").Offset((page - 1) * limit).Limit(limit).Find(&list).Error
+		err = GetDB(nil).Select("id,token_symbol,token_name,digits,name,fee_mode_info").Offset((page - 1) * limit).Limit(limit).Find(&list).Error
 		if err != nil {
 			log.WithFields(log.Fields{"info": err, "page": page, "limit": limit}).Info("get all Ecosystem Info failed")
 			return
@@ -322,6 +323,7 @@ func GetAllEcosystemInfo() {
 			in.Id = v.ID
 			in.Digits = v.Digits
 			in.Name = v.Name
+			in.TokenName = v.TokenName
 			in.TokenSymbol = v.TokenSymbol
 			in.LogoHash = GetLogoHash(v.ID)
 			if BridgeReady {
