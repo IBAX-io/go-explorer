@@ -88,6 +88,9 @@ var allPair pairList
 func UpdatePairBuffer() {
 	HistoryWG.Add(1)
 	defer HistoryWG.Done()
+	if !conf.GetEnvConf().Defi.Enable {
+		return
+	}
 	var pair Pair
 	var count int64
 	err := GetDB(nil).Table(pair.TableName()).Count(&count).Error
@@ -180,9 +183,9 @@ func UpdateTokensTableStatus() {
 	return
 }
 
-func (ti *TokensInfo) GetLogoURI(chainId string, chainName string, address string) (logoURI string, err error) {
-	err = GetDB(nil).Model(TokensInfo{}).Select("logoURI").
-		Where(`"chainId" = ? AND "chainName" = ? AND address = ?`, chainId, chainName, address).Take(&logoURI).Error
+func (ti *TokensInfo) GetLogoURI(chainId string, address string) (logoURI string, exist bool, err error) {
+	exist, err = isFound(GetDB(nil).Model(TokensInfo{}).Select("logoURI").
+		Where(`"chainId" = ? AND address = ?`, chainId, address).Take(&logoURI))
 	return
 }
 
@@ -194,8 +197,10 @@ func getLogoURI(info EcosystemInfo) (logoURI string) {
 		return
 	}
 	ti := &TokensInfo{}
-	var err error
-	logoURI, err = ti.GetLogoURI(strconv.FormatInt(info.chainId, 10), info.ChainName, info.TokenAddress)
+	var (
+		err error
+	)
+	logoURI, _, err = ti.GetLogoURI(strconv.FormatInt(info.chainId, 10), info.TokenAddress)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "info": info}).Info("Get Logo URL Failed")
 		return

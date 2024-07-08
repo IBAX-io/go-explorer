@@ -14,12 +14,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var LogoDir = "./logodir/"
+var Flagdir = "./flag/"
 var UploadDir = "./upload/"
 
 func init() {
-	if err := utils.MakeDirectory(LogoDir); err != nil {
-		log.WithFields(log.Fields{"error": err, "type": consts.IOError, "dir": LogoDir}).Error("can't create temporary directory")
+	if err := utils.MakeDirectory(Flagdir); err != nil {
+		log.WithFields(log.Fields{"error": err, "type": consts.IOError, "dir": Flagdir}).Error("can't create temporary directory")
 	}
 	if err := utils.MakeDirectory(UploadDir); err != nil {
 		log.WithFields(log.Fields{"error": err, "type": consts.IOError, "dir": UploadDir}).Error("can't create temporary directory")

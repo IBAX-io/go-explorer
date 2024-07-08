@@ -67,7 +67,7 @@ func prefix(s string) string {
 func Run(host string) (err error) {
 	r := gin.Default()
 	//Ten requests per second
-	limiter := tollbooth.NewLimiter(10, nil)
+	limiter := tollbooth.NewLimiter(100, nil)
 	r.Use(Cors(), tollbooth_gin.LimitHandler(limiter))
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -235,9 +235,14 @@ func Run(host string) (err error) {
 	api.GET("/token_price", controllers.GetTokenPriceHandler)
 	api.GET("/ecosystem_logo", controllers.GetEcosystemLogoHandler)
 
+	//common
+	common := api.Group("/common")
+	common.POST("/history", controllers.GetHistoryHandler)
+	common.GET("/token_logo", controllers.GetTokenLogoHandler)
+
 	api.GET(`/get_redis/:name`, controllers.GetRedisKey) //get redis keys
 
-	api.StaticFS("/flag", http.Dir("./flagdir"))
+	api.StaticFS("/flag", http.Dir("./flag"))
 
 	server = &http.Server{
 		Addr:    host,

@@ -11,8 +11,10 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/IBAX-io/go-explorer/conf"
@@ -203,6 +205,136 @@ type HistoryTransaction struct {
 	Ecosystemname string `json:"ecosystemname"`
 	ContractName  string `json:"contract_name"`
 	//Ecosystem     int64    `json:"ecosystem"`
+}
+
+const (
+	txTypePacking                = "Packing Fee"                                      //1
+	txTypeTax                    = "Tax"                                              //2
+	txTypeTransfer               = "Transfer"                                         //3
+	txTypeWallet                 = "Create Wallet"                                    //4
+	txTypeIssue                  = "Issue Token"                                      //6
+	txTypeDestroied              = "Destroied Token Amount"                           //7
+	txTypeFoundation             = "Foundation"                                       //8
+	txTypePartners               = "Eco-Partners"                                     //9
+	txTypeTeam                   = "R&D team"                                         //10
+	txTypePrivate1               = "Private Sales 1"                                  //11
+	txTypeNFTStaking             = "NFT Staking Reward"                               //12
+	txTypeStaking                = "New NFT Staking"                                  //13
+	txTypeWithdraw               = "Withdraw Staked amount"                           //14
+	txTypeWithholding            = "Withholding Redemption"                           //15
+	txTypeBurned                 = "Burned"                                           //16
+	txTypeRemoval                = "Account Removal"                                  //17
+	txTypeCandidateDeposit       = "Deposit paid by candidate node"                   //18
+	txTypeBehalfCandidateDeposit = "Deposit paid on behalf of candidate node"         //19
+	txTypeCandidateVoting        = "Candidate Node Voting"                            //20
+	txTypeCandidateWithdraw      = "Withdraw deposit of candidate node"               //21
+	txTypeCandidateVoteWithdraw  = "Withdraw vote for candidate node"                 //22
+	txTypeFaucet                 = "Get Test Coins"                                   //23
+	txTypeInternalTransfer       = "Internal transfer"                                //24
+	txTypePrivate2               = "Private Sales 2"                                  //25
+	txTypePublic                 = "Public Sales"                                     //26
+	txTypeReceivePrivate1        = "Receive remaining funds from Private Placement 1" //27
+	txTypeDeduction              = "Sub-account deduction"                            //28
+	txTypeAddIssuance            = "Additional issuance"                              //29
+	txTypeReceivePrivate2        = "Receive remaining funds from Private Placement 2" //30
+	txTypeRefunds                = "Refunds after team removes sub-accounts"          //31
+	txTypeAirdropDistribution    = "Airdrop distribution amount"                      //32
+	txTypeAirdropStake           = "Accelerate unlock stake amount"                   //33
+	txTypeAirdrop                = "Receive airdrop"                                  //34
+	txTypeAirdropUnstake         = "Receive airdrop stake"                            //35
+	txTypeAirdropLockUp          = "Airdrop lock-up amount"                           //36
+	txTypeCreateIName            = "Create iName"                                     //37
+	txTypeCrossChainMinting      = "Cross-chain minting"                              //38
+	txTypeCrossChainWithdraw     = "Cross-chain withdraw lock"                        //39
+	txTypeCrossChainRoolback     = "Cross-chain withdraw rollback"                    //40
+	txTypeCrossChainBurn         = "Cross-chain burn"                                 //41
+)
+
+func formatTxType(txType int) (txTypeStr string) {
+	txTypeStr = "unknown"
+	switch txType {
+	case 1:
+		return txTypePacking
+	case 2:
+		return txTypeTax
+	case 3:
+		return txTypeTransfer
+	case 4:
+		return txTypeWallet
+	case 6:
+		return txTypeIssue
+	case 7:
+		return txTypeDestroied
+	case 8:
+		return txTypeFoundation
+	case 9:
+		return txTypePartners
+	case 10:
+		return txTypeTeam
+	case 11:
+		return txTypePrivate1
+	case 12:
+		return txTypeNFTStaking
+	case 13:
+		return txTypeStaking
+	case 14:
+		return txTypeWithdraw
+	case 15:
+		return txTypeWithholding
+	case 16:
+		return txTypeBurned
+	case 17:
+		return txTypeRemoval
+	case 18:
+		return txTypeCandidateDeposit
+	case 19:
+		return txTypeBehalfCandidateDeposit
+	case 20:
+		return txTypeCandidateVoting
+	case 21:
+		return txTypeCandidateWithdraw
+	case 22:
+		return txTypeCandidateVoteWithdraw
+	case 23:
+		return txTypeFaucet
+	case 24:
+		return txTypeInternalTransfer
+	case 25:
+		return txTypePrivate2
+	case 26:
+		return txTypePublic
+	case 27:
+		return txTypeReceivePrivate1
+	case 28:
+		return txTypeDeduction
+	case 29:
+		return txTypeAddIssuance
+	case 30:
+		return txTypeReceivePrivate2
+	case 31:
+		return txTypeRefunds
+	case 32:
+		return txTypeAirdropDistribution
+	case 33:
+		return txTypeAirdropStake
+	case 34:
+		return txTypeAirdrop
+	case 35:
+		return txTypeAirdropUnstake
+	case 36:
+		return txTypeAirdropLockUp
+	case 37:
+		return txTypeCreateIName
+	case 38:
+		return txTypeCrossChainMinting
+	case 39:
+		return txTypeCrossChainWithdraw
+	case 40:
+		return txTypeCrossChainRoolback
+	case 41:
+		return txTypeCrossChainBurn
+	}
+	return
 }
 
 type Historys []History
@@ -1656,4 +1788,155 @@ func GetContractTxDetailList(hashStr string, page, limit int) (*GeneralResponse,
 	}
 
 	return nil, nil
+}
+
+type accountTxHistory struct {
+	Block        int64
+	Hash         []byte
+	Address      int64
+	SenderId     int64
+	RecipientId  int64
+	Type         int
+	CreatedAt    int64
+	Amount       string
+	Isutxo       bool
+	ContractName string
+	Ecosystem    int64
+	Status       int
+}
+
+func GetAccountHistory(page, limit int, keyId int64, ecosystem int64, opt string, where map[string]any) (*GeneralResponse, error) {
+	var (
+		rets   GeneralResponse
+		txList []AccountTxHistory
+	)
+	var list []accountTxHistory
+
+	var (
+		sqlQuery1 *gorm.DB
+		sqlQuery2 *gorm.DB
+	)
+	switch opt {
+	case "send":
+		sqlQuery1 = GetDB(nil).Where("sender_id = ?", keyId)
+		sqlQuery2 = GetDB(nil).Where("sender_id = ?", keyId)
+	case "recipient":
+		sqlQuery1 = GetDB(nil).Where("recipient_id = ?", keyId)
+		sqlQuery2 = GetDB(nil).Where("recipient_id = ?", keyId)
+	case "all":
+		sqlQuery1 = GetDB(nil).Where(GetDB(nil).Where("recipient_id = ?", keyId).Or("sender_id = ?", keyId))
+		sqlQuery2 = GetDB(nil).Where(GetDB(nil).Where("recipient_id = ?", keyId).Or("sender_id = ?", keyId))
+	}
+	if ecosystem > 0 {
+		sqlQuery1 = sqlQuery1.Where("ecosystem = ?", ecosystem)
+		sqlQuery2 = sqlQuery2.Where("ecosystem = ?", ecosystem)
+	}
+	if len(where) > 0 {
+		conversionWhere := make(map[string]any)
+		for column, v := range where {
+			k := column
+			ks := strings.Split(column, " ")
+			if len(ks) == 2 {
+				k = ks[0]
+			}
+			switch k {
+			case "block_id":
+				//Convert column names
+				if len(ks) == 2 {
+					conversionWhere[strings.Join([]string{"block", ks[1]}, " ")] = v
+				} else {
+					conversionWhere["block"] = v
+				}
+			case "txhash":
+				//Support txhash query
+				if hashStr, ok := v.(string); ok {
+					var err error
+					v, err = hex.DecodeString(hashStr)
+					if err != nil {
+						return nil, fmt.Errorf("txhash invalid %s", v.(string))
+					}
+					where[column] = v
+				}
+				//Convert column names
+				if len(ks) == 2 {
+					conversionWhere[strings.Join([]string{"hash", ks[1]}, " ")] = v
+				} else {
+					conversionWhere["hash"] = v
+				}
+			default:
+				conversionWhere[column] = v
+			}
+		}
+		cond, vals, err := WhereBuild(where)
+		if err != nil {
+			return nil, err
+		}
+		sqlQuery1 = sqlQuery1.Where(cond, vals...)
+
+		cond, vals, err = WhereBuild(conversionWhere)
+		if err != nil {
+			return nil, err
+		}
+		sqlQuery2 = sqlQuery2.Where(cond, vals...)
+	}
+
+	err := GetDB(nil).Debug().Raw("SELECT count(1) FROM(? UNION ALL ?)AS v1",
+		GetDB(nil).Select("FALSE AS isutxo").Where(sqlQuery1).Where("type <> 24").Table("1_history"),
+		GetDB(nil).Select("TRUE AS isutxo").Where(sqlQuery2).Where("type <> 1").Table("spent_info_history"),
+	).Take(&rets.Total).Error
+	if err != nil {
+		return nil, err
+	}
+
+	err = GetDB(nil).Debug().Raw(
+		`SELECT v1.*,v2.contract_name,v2.address,v2.status FROM(
+				SELECT * FROM(? UNION ALL ?) as v1 ORDER BY block DESC,created_at DESC,id DESC OFFSET ? LIMIT ?
+			)AS v1
+			LEFT JOIN (SELECT contract_name,hash,address,status FROM log_transactions)AS v2 ON(v2.hash = v1.hash)
+			ORDER BY block DESC,created_at DESC,id DESC
+	`,
+		GetDB(nil).Select("block_id AS block,id,txhash AS hash,sender_id,recipient_id,type,created_at,amount,false AS isutxo,ecosystem").
+			Where(sqlQuery1).Where("type <> 24").Table("1_history"),
+
+		GetDB(nil).Select("block,id,hash,sender_id,recipient_id,type,created_at,amount,true AS isutxo,ecosystem").Where(sqlQuery2).
+			Where("type <> 1").Table("spent_info_history"),
+		(page-1)*limit,
+		limit).Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for i, val := range list {
+		var rlt AccountTxHistory
+		rlt.Address = converter.AddressToString(val.Address)
+		rlt.Sender = converter.AddressToString(val.SenderId)
+		rlt.Recipient = converter.AddressToString(val.RecipientId)
+		rlt.BlockId = val.Block
+		rlt.Hash = hex.EncodeToString(val.Hash)
+		info := Info.Get(val.Ecosystem)
+		rlt.TokenSymbol = info.TokenSymbol
+		rlt.TokenName = info.TokenName
+		rlt.Ecosystem = val.Ecosystem
+		rlt.Digits = info.Digits
+		rlt.Amount = val.Amount
+		if val.Isutxo {
+			rlt.Type = formatTxType(compatibleContractAccountType(val.Type))
+			rlt.Contract = parseSpentInfoHistoryType(val.Type)
+		} else {
+			rlt.Type = formatTxType(val.Type)
+			rlt.Contract = val.ContractName
+		}
+		rlt.Status = "failed"
+		if val.Status == 0 {
+			rlt.Status = "success"
+		}
+		rlt.Timestamp = MsToSeconds(val.CreatedAt)
+		rlt.Index = i
+
+		txList = append(txList, rlt)
+	}
+	rets.List = txList
+	rets.Page = page
+	rets.Limit = limit
+	return &rets, nil
 }

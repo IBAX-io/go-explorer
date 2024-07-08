@@ -184,7 +184,7 @@ type TransactionHistoryHex struct {
 	Longitude float64 `json:"longitude,omitempty"`
 }
 
-//because of PublicKey is byte
+// because of PublicKey is byte
 type FullNodeCityJSON struct {
 	TCPAddress string `json:"tcp_address"`
 	APIAddress string `json:"api_address"`
@@ -197,7 +197,7 @@ type FullNodeCityJSON struct {
 	UnbanTime time.Time `json:"unbantime"`
 }
 
-//because of PublicKey is byte
+// because of PublicKey is byte
 type FullNodeCityJSONHex struct {
 	TCPAddress string `json:"tcp_address"`
 	APIAddress string `json:"api_address"`
@@ -271,4 +271,22 @@ type StatisticsData struct {
 	GuardNode          int64 `json:"node"`
 	StorageCapacity    int64 `json:"storage"`
 	EcosystemsNum      int64 `json:"ecosystems"`
+}
+
+type AccountTxHistory struct {
+	Index       int    `json:"index"`
+	Address     string `json:"address"`
+	BlockId     int64  `json:"block_id"`
+	Hash        string `json:"hash"`
+	Contract    string `json:"contract"`
+	Timestamp   int64  `json:"timestamp"`
+	TokenSymbol string `json:"token_symbol"`
+	TokenName   string `json:"token_name"`
+	Type        string `json:"type"`
+	Recipient   string `json:"recipient"`
+	Sender      string `json:"sender"`
+	Amount      string `json:"amount"`
+	Digits      int    `json:"digits"`
+	Status      string `json:"status"`
+	Ecosystem   int64  `json:"ecosystem"`
 }

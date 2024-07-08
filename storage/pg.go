@@ -47,8 +47,8 @@ func (d *DatabaseModel) GormInit() (err error) {
 		return err
 	}
 	sqlDB.SetConnMaxLifetime(time.Minute * 10)
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(200)
+	sqlDB.SetMaxIdleConns(d.MaxIdle)
+	sqlDB.SetMaxOpenConns(d.MaxOpen)
 	sqldb.DBConn = dbConn
 	if err = syspar.SysUpdate(nil); err != nil {
 		return err
@@ -77,24 +77,4 @@ func (d *DatabaseModel) Close() error {
 		dbConn = nil
 	}
 	return nil
-}
-
-func GormDBInit(engine, connect string) (*gorm.DB, error) {
-	conn, err := gorm.Open(postgres.New(postgres.Config{
-		DSN: connect,
-	}), &gorm.Config{
-		AllowGlobalUpdate: true,                                  //allow global update
-		Logger:            logger.Default.LogMode(logger.Silent), // start Logger,show detail log
-	})
-	if err != nil {
-		return nil, err
-	}
-	db, err := conn.DB()
-	if err != nil {
-		return nil, err
-	}
-	db.SetConnMaxLifetime(time.Minute * 5)
-	db.SetMaxIdleConns(5)
-	db.SetMaxOpenConns(20)
-	return conn, nil
 }
